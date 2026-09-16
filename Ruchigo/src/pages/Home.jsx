@@ -264,9 +264,14 @@ export default function Home() {
 
             <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
               {featuredDishes.map((item) => (
-                <div key={item.id} className="overflow-hidden rounded-[26px] border border-orange-100 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg">
+                <Link
+                  key={item.id}
+                  to={`/food-details/${item.id}`}
+                  aria-label={`View ${item.name}`}
+                  className="group block overflow-hidden rounded-[26px] border border-orange-100 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
                   <div className="relative h-48 overflow-hidden">
-                    <img src={item.image} onError={(event) => applyImageFallback(event, getFoodFallback(item.id))} alt={item.name} className="h-full w-full object-cover" />
+                    <img src={item.image} onError={(event) => applyImageFallback(event, getFoodFallback(item.id))} alt={item.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
                     <span className="absolute left-4 top-4 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white">Popular</span>
                   </div>
                   <div className="p-4">
@@ -280,7 +285,7 @@ export default function Home() {
                       {item.deliveryTime}
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </section>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Star, Clock3, ShoppingCart, SlidersHorizontal, X, UtensilsCrossed } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
@@ -242,8 +242,13 @@ export default function SearchPage() {
               {results.map((item) => (
                 <article
                   key={item.id}
-                  className="group overflow-hidden rounded-[28px] border border-orange-100 bg-white shadow-[0_18px_60px_-35px_rgba(255,107,53,0.45)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_70px_-30px_rgba(255,107,53,0.55)]"
+                  className="group relative overflow-hidden rounded-[28px] border border-orange-100 bg-white shadow-[0_18px_60px_-35px_rgba(255,107,53,0.45)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_70px_-30px_rgba(255,107,53,0.55)]"
                 >
+                  <Link
+                    to={`/food-details/${item.id}`}
+                    aria-label={`View ${item.name}`}
+                    className="absolute inset-0 z-10 rounded-[28px] focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
                   <div className="relative overflow-hidden">
                     <img
                       src={item.image}
@@ -294,7 +299,7 @@ export default function SearchPage() {
                             if (!isAuthenticated) navigate("/login", { state: { from: { pathname: "/search" } } });
                           }
                         }}
-                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:scale-[1.02]"
+                        className="relative z-20 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:scale-[1.02]"
                       >
                         <ShoppingCart size={16} />
                         Add to cart
