@@ -22,6 +22,7 @@ import { foodData } from "../data/foodData";
 
 import toast from "react-hot-toast";
 import { apiRequest } from "../lib/api.js";
+import { applyImageFallback, getFoodFallback, resolveFoodImage } from "../lib/images.js";
 
 export default function FoodDetails() {
   const { id } = useParams();
@@ -45,8 +46,8 @@ export default function FoodDetails() {
   useEffect(() => {
     Promise.all([apiRequest(`/menu-items/${id}/`), apiRequest("/menu-items/"), token ? apiRequest("/wishlist/", { token }) : Promise.resolve(null)])
       .then(([item, data, wishlistData]) => {
-        setFood({ id: item.id, restaurantId: item.restaurant, restaurant: item.restaurant_detail?.name || "Restaurant", category: item.category_name || "Menu", name: item.name, description: item.description, price: Number(item.price), rating: item.restaurant_detail?.average_rating || "New", isVeg: item.is_vegetarian, deliveryTime: `${item.preparation_minutes} min`, image: item.image || "/favicon.svg", imageAlt: item.name });
-        setAllFoods((data.results || data).map((entry) => ({ id: entry.id, restaurantId: entry.restaurant, restaurant: entry.restaurant_detail?.name || "Restaurant", name: entry.name, description: entry.description, price: Number(entry.price), image: entry.image || "/favicon.svg", imageAlt: entry.name, category: entry.category_name || "Menu", isVeg: entry.is_vegetarian, rating: entry.restaurant_detail?.average_rating || "New" })));
+        setFood({ id: item.id, restaurantId: item.restaurant, restaurant: item.restaurant_detail?.name || "Restaurant", category: item.category_name || "Menu", name: item.name, description: item.description, price: Number(item.price), rating: item.restaurant_detail?.average_rating || "New", isVeg: item.is_vegetarian, deliveryTime: `${item.preparation_minutes} min`, image: resolveFoodImage(item.image, item.id), imageAlt: item.name });
+        setAllFoods((data.results || data).map((entry) => ({ id: entry.id, restaurantId: entry.restaurant, restaurant: entry.restaurant_detail?.name || "Restaurant", name: entry.name, description: entry.description, price: Number(entry.price), image: resolveFoodImage(entry.image, entry.id), imageAlt: entry.name, category: entry.category_name || "Menu", isVeg: entry.is_vegetarian, rating: entry.restaurant_detail?.average_rating || "New" })));
         const wishlistEntry = wishlistData ? (wishlistData.results || wishlistData).find((entry) => entry.menu_item === item.id) : null;
         setWishlistId(wishlistEntry?.id || null);
         setLiked(Boolean(wishlistEntry));
@@ -158,6 +159,7 @@ export default function FoodDetails() {
 
               <img
                 src={food.image}
+                onError={(event) => applyImageFallback(event, getFoodFallback(food.id))}
                 alt={food.imageAlt}
                 className="h-[520px] w-full rounded-3xl object-cover transition duration-500 hover:scale-105"
               />
@@ -457,6 +459,7 @@ export default function FoodDetails() {
 
                     <img
                       src={item.image}
+                      onError={(event) => applyImageFallback(event, getFoodFallback(item.id))}
                       alt={item.imageAlt}
                       className="h-56 w-full object-cover transition duration-500 group-hover:scale-110"
                     />

@@ -2,7 +2,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function GuestRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, role } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -17,7 +17,14 @@ export default function GuestRoute({ children }) {
   }
 
   if (isAuthenticated) {
-    return <Navigate to={location.state?.from?.pathname || "/"} replace />;
+    const roleHome = role === "admin"
+      ? "/admin-dashboard"
+      : role === "restaurant"
+        ? "/restaurant-dashboard"
+        : role === "delivery"
+          ? "/delivery-dashboard"
+          : "/";
+    return <Navigate to={location.state?.from?.pathname || roleHome} replace />;
   }
 
   return children;

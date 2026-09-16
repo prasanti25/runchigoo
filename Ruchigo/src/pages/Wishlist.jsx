@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useCart } from "../context/CartContext.jsx";
 import { apiRequest } from "../lib/api.js";
+import { applyImageFallback, getFoodFallback, resolveFoodImage } from "../lib/images.js";
 import toast from "react-hot-toast";
 
 const favouriteRestaurants = [];
@@ -24,7 +25,7 @@ export default function Wishlist() {
   const { addToCart } = useCart();
 
   useEffect(() => {
-    apiRequest("/wishlist/", { token }).then((data) => setFavouriteFoods((data.results || data).map((entry) => ({ id: entry.id, menuItemId: entry.menu_item, name: entry.menu_item_detail?.name || "Menu item", restaurant: entry.menu_item_detail?.restaurant_detail?.name || "Restaurant", price: Number(entry.menu_item_detail?.price || 0), rating: entry.menu_item_detail?.restaurant_detail?.average_rating || "New", image: entry.menu_item_detail?.image || "/favicon.svg" })))).catch((error) => { setFavouriteFoods([]); toast.error(error.message); });
+    apiRequest("/wishlist/", { token }).then((data) => setFavouriteFoods((data.results || data).map((entry) => ({ id: entry.id, menuItemId: entry.menu_item, name: entry.menu_item_detail?.name || "Menu item", restaurant: entry.menu_item_detail?.restaurant_detail?.name || "Restaurant", price: Number(entry.menu_item_detail?.price || 0), rating: entry.menu_item_detail?.restaurant_detail?.average_rating || "New", image: resolveFoodImage(entry.menu_item_detail?.image, entry.menu_item) })))).catch((error) => { setFavouriteFoods([]); toast.error(error.message); });
   }, [token]);
 
   const removeFood = async (id) => {
@@ -212,7 +213,7 @@ export default function Wishlist() {
                 >
 
                   <div className="h-44 overflow-hidden bg-orange-100">
-                    <img src={food.image} alt={food.name} className="h-full w-full object-cover" />
+                    <img src={food.image} onError={(event) => applyImageFallback(event, getFoodFallback(food.menuItemId || food.id))} alt={food.name} className="h-full w-full object-cover" />
                   </div>
 
                   <div className="p-6">

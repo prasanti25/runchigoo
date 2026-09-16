@@ -1,9 +1,7 @@
-import { Mail, MapPin, Phone } from "lucide-react";
+import { Mail } from "lucide-react";
 
 const contactItems = [
-  { icon: Phone, title: "Call support", value: "+91 98765 43210" },
-  { icon: Mail, title: "Email us", value: "support@ruchigo.com" },
-  { icon: MapPin, title: "Head office", value: "Bengaluru, India" },
+  { icon: Mail, title: "Email us", value: "Support@ruchigo.online", href: "mailto:Support@ruchigo.online" },
 ];
 
 export default function ContactPage() {
@@ -17,15 +15,17 @@ export default function ContactPage() {
         </p>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">
-          {contactItems.map(({ icon: Icon, title, value }) => (
-            <div key={title} className="rounded-[24px] border border-orange-100 bg-orange-50 p-5">
+          {contactItems.map(({ icon: Icon, title, value, href }) => {
+            const Tag = href ? "a" : "div";
+            return (
+            <Tag key={title} href={href} className="rounded-[24px] border border-orange-100 bg-orange-50 p-5 transition hover:border-orange-300">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-orange-500 shadow-sm">
                 <Icon size={20} />
               </div>
               <p className="mt-4 text-sm text-gray-500">{title}</p>
               <p className="mt-1 text-base font-semibold text-gray-900">{value}</p>
-            </div>
-          ))}
+            </Tag>
+          );})}
         </div>
       </div>
     </main>

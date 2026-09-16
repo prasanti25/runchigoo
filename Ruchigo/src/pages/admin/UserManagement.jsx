@@ -326,7 +326,7 @@ export default function UserManagement() {
     <div className="min-h-screen bg-[#fffaf7]">
       <AdminSidebar />
 
-      <main className="ml-72 min-h-screen">
+      <main className="min-h-screen lg:ml-72">
         <section className="mx-auto max-w-7xl px-6 py-10">
 
           {/* Header */}

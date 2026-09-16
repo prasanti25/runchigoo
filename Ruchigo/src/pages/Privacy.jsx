@@ -3,8 +3,8 @@ import { ShieldCheck } from "lucide-react";
 const items = [
   "We only collect the minimum personal details needed to deliver your orders securely.",
   "Authentication and protected route checks help keep session access controlled.",
-  "Order history, addresses, and profile data are stored locally in the demo frontend flow for a seamless experience.",
-  "For production deployment, this frontend should be integrated with a secure backend privacy policy and data retention system.",
+  "Order history, saved addresses, and profile details are stored by the secured RuchiGo service to operate your account.",
+  "You can update your profile information and contact support for privacy or account-related requests.",
 ];
 
 export default function PrivacyPage() {
@@ -14,7 +14,7 @@ export default function PrivacyPage() {
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-orange-500">Privacy</p>
         <h1 className="mt-3 text-4xl font-black sm:text-5xl">Your data stays protected.</h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-gray-600">
-          This frontend implements a secure-by-design customer experience while keeping complex privacy workflows ready for backend integration.
+          RuchiGo uses your information to authenticate your account, fulfil orders, and provide support while limiting access by account role.
         </p>
 
         <div className="mt-8 space-y-4">

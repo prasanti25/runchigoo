@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
+import { applyImageFallback, getFoodFallback, resolveFoodImage } from "../lib/images.js";
 import toast from "react-hot-toast";
 
 const filterChips = [
@@ -67,7 +68,7 @@ export default function SearchPage() {
         rating: item.restaurant_detail?.average_rating || "New",
         isVeg: item.is_vegetarian,
         deliveryTime: `${item.preparation_minutes} min`,
-        image: item.image || "/favicon.svg",
+        image: resolveFoodImage(item.image, item.id),
         imageAlt: item.name,
       })));
     }).catch(() => toast.error("Unable to load the menu right now."));
@@ -246,6 +247,7 @@ export default function SearchPage() {
                   <div className="relative overflow-hidden">
                     <img
                       src={item.image}
+                      onError={(event) => applyImageFallback(event, getFoodFallback(item.id))}
                       alt={item.imageAlt}
                       className="h-56 w-full object-cover transition duration-500 group-hover:scale-105"
                     />

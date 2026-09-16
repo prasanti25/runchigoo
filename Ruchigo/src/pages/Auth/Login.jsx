@@ -10,7 +10,6 @@ import RoleSelector from "../../components/auth/RoleSelector";
 import AuthInput from "../../components/auth/AuthInput";
 import PasswordInput from "../../components/auth/PasswordInput";
 import AuthButton from "../../components/auth/AuthButton";
-import SocialLogin from "../../components/auth/SocialLogin";
 import AuthFooter from "../../components/auth/AuthFooter";
 
 const Login = () => {
@@ -67,10 +66,6 @@ const Login = () => {
     });
   };
 
-  const handleSocialLogin = () => {
-    // Social login placeholder for future providers.
-  };
-
   return (
     <AuthLayout title="Welcome Back!" subtitle="Login to order your favourite food.">
       <AuthTabs
@@ -121,8 +116,6 @@ const Login = () => {
           Login
         </AuthButton>
       </form>
-
-      <SocialLogin onSocialLogin={handleSocialLogin} />
 
       <div className="mt-8 text-center">
         <p className="text-sm text-gray-600">

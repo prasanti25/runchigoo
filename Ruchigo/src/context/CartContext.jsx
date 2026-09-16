@@ -21,13 +21,13 @@ function mapCart(cart) {
 }
 
 export function CartProvider({ children }) {
-  const { isAuthenticated, token } = useAuth();
+  const { isAuthenticated, token, role } = useAuth();
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [coupon, setCoupon] = useState(null);
 
   const loadCart = useCallback(async () => {
-    if (!isAuthenticated || !token) {
+    if (!isAuthenticated || !token || role !== "customer") {
       setCartItems([]);
       setCoupon(null);
       return;
@@ -42,7 +42,7 @@ export function CartProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, token]);
+  }, [isAuthenticated, role, token]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadCart(); }, 0);
@@ -51,11 +51,12 @@ export function CartProvider({ children }) {
 
   const addToCart = useCallback(async (food, quantity = 1) => {
     if (!isAuthenticated) throw new Error("Please log in to add items to your cart.");
+    if (role !== "customer") throw new Error("Only customer accounts can place orders.");
     const menuItemId = food.menuItemId || food.id;
     const cart = await apiRequest("/cart/items/", { token, method: "POST", body: { menu_item: menuItemId, quantity } });
     setCartItems(mapCart(cart));
     setCoupon(null);
-  }, [isAuthenticated, token]);
+  }, [isAuthenticated, role, token]);
 
   const updateQuantity = useCallback(async (id, quantity) => {
     if (quantity <= 0) return apiRequest(`/cart/items/${id}/`, { token, method: "DELETE" }).then((cart) => { setCartItems(mapCart(cart)); setCoupon(null); });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import DeliverySidebar from "../components/DeliverySidebar.jsx";
 import {
   Navigation,
@@ -10,7 +10,6 @@ import {
   ShoppingBag,
   Bike,
   LocateFixed,
-  ArrowUp,
   CornerUpRight,
   CheckCircle2,
   Bell,
@@ -18,35 +17,8 @@ import {
 import { apiRequest } from "../lib/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
-const routeSteps = [
-  {
-    id: 1,
-    instruction: "Continue straight on Main Road",
-    distance: "1.2 km",
-    icon: ArrowUp,
-  },
-  {
-    id: 2,
-    instruction: "Turn right at Lakshmipuram Junction",
-    distance: "650 m",
-    icon: CornerUpRight,
-  },
-  {
-    id: 3,
-    instruction: "Continue towards Customer Location",
-    distance: "1.4 km",
-    icon: ArrowUp,
-  },
-  {
-    id: 4,
-    instruction: "Destination will be on your left",
-    distance: "550 m",
-    icon: MapPin,
-  },
-];
-
 export default function DeliveryNavigation() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const orderId = params.get("orderId");
@@ -54,6 +26,19 @@ export default function DeliveryNavigation() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const customerName = order?.customer_detail
+    ? `${order.customer_detail.first_name || ""} ${order.customer_detail.last_name || ""}`.trim() || order.customer_detail.email
+    : "Customer";
+  const initials = `${user?.first_name?.[0] || ""}${user?.last_name?.[0] || ""}`.toUpperCase()
+    || user?.email?.[0]?.toUpperCase()
+    || "D";
+  const deliveryAddress = order?.delivery_address_detail
+    ? [order.delivery_address_detail.line1, order.delivery_address_detail.line2, order.delivery_address_detail.city, order.delivery_address_detail.state, order.delivery_address_detail.postal_code].filter(Boolean).join(", ")
+    : "Delivery address unavailable";
+  const routeSteps = [
+    { id: 1, instruction: `Pick up from ${order?.restaurant_detail?.name || "the restaurant"}`, distance: order?.restaurant_detail?.address || order?.restaurant_detail?.city || "Pickup location", icon: ShoppingBag },
+    { id: 2, instruction: `Deliver to ${customerName}`, distance: deliveryAddress, icon: MapPin },
+  ];
 
   const getStatusLabel = (status) => {
     if (status === "out_for_delivery") return "Out for delivery";
@@ -189,14 +174,14 @@ export default function DeliveryNavigation() {
               {getStatusLabel(order?.status)}
             </div>
 
-            <button className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
+            <Link to="/notifications" aria-label="Open notifications" className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
               <Bell size={20} />
 
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" />
-            </button>
+            </Link>
 
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-orange-500 font-bold text-white">
-              RK
+              {initials}
             </div>
           </div>
         </header>
@@ -246,7 +231,7 @@ export default function DeliveryNavigation() {
 
                   <div className="mt-2 rounded-xl bg-white px-3 py-2 text-center shadow">
                     <p className="text-xs font-bold text-gray-900">
-                      Paradise Biryani
+                      {order?.restaurant_detail?.name || "Restaurant"}
                     </p>
                   </div>
                 </div>
@@ -259,7 +244,7 @@ export default function DeliveryNavigation() {
 
                   <div className="mt-2 rounded-xl bg-white px-3 py-2 text-center shadow">
                     <p className="text-xs font-bold text-gray-900">
-                      Pavan K
+                      {customerName}
                     </p>
                   </div>
                 </div>
@@ -276,13 +261,13 @@ export default function DeliveryNavigation() {
                     </p>
 
                     <p className="mt-1 font-bold">
-                      Turn right at Lakshmipuram Junction
+                      Open live directions in Google Maps
                     </p>
                   </div>
                 </div>
 
                 {/* Location Button */}
-                <button className="absolute bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-orange-500 shadow-lg transition hover:bg-orange-50">
+                <button onClick={handleOpenMaps} disabled={!order?.delivery_address_detail} aria-label="Open route in Google Maps" className="absolute bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-orange-500 shadow-lg transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60">
                   <LocateFixed size={24} />
                 </button>
 
@@ -290,31 +275,31 @@ export default function DeliveryNavigation() {
                 <div className="absolute bottom-6 left-6 flex gap-8 rounded-2xl bg-white px-7 py-5 shadow-xl">
                   <div>
                     <p className="text-xs text-gray-400">
-                      ETA
+                      STATUS
                     </p>
 
                     <p className="mt-1 text-xl font-bold text-gray-900">
-                      12 min
+                      {getStatusLabel(order?.status)}
                     </p>
                   </div>
 
                   <div className="border-l border-gray-200 pl-8">
                     <p className="text-xs text-gray-400">
-                      DISTANCE
+                      ROUTE
                     </p>
 
                     <p className="mt-1 text-xl font-bold text-gray-900">
-                      3.8 km
+                      Google Maps
                     </p>
                   </div>
 
                   <div className="border-l border-gray-200 pl-8">
                     <p className="text-xs text-gray-400">
-                      ARRIVAL
+                      PAYMENT
                     </p>
 
                     <p className="mt-1 text-xl font-bold text-gray-900">
-                      7:42 PM
+                      {order?.payment?.method === "cod" ? "Cash on delivery" : order?.payment?.status || "—"}
                     </p>
                   </div>
                 </div>
@@ -363,15 +348,9 @@ export default function DeliveryNavigation() {
                 </div>
 
                 <div className="mt-5 grid grid-cols-2 gap-3">
-                  <button className="flex items-center justify-center gap-2 rounded-xl bg-green-50 px-4 py-3 font-semibold text-green-600 transition hover:bg-green-500 hover:text-white">
-                    <Phone size={18} />
-                    Call
-                  </button>
+                  {order?.customer_detail?.phone ? <a href={`tel:${order.customer_detail.phone}`} className="flex items-center justify-center gap-2 rounded-xl bg-green-50 px-4 py-3 font-semibold text-green-600 transition hover:bg-green-500 hover:text-white"><Phone size={18} />Call</a> : <span className="flex items-center justify-center gap-2 rounded-xl bg-gray-100 px-4 py-3 font-semibold text-gray-400"><Phone size={18} />No phone</span>}
 
-                  <button className="flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3 font-semibold text-blue-600 transition hover:bg-blue-500 hover:text-white">
-                    <MessageCircle size={18} />
-                    Message
-                  </button>
+                  {order?.customer_detail?.email ? <a href={`mailto:${order.customer_detail.email}`} className="flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3 font-semibold text-blue-600 transition hover:bg-blue-500 hover:text-white"><MessageCircle size={18} />Message</a> : <span className="flex items-center justify-center gap-2 rounded-xl bg-gray-100 px-4 py-3 font-semibold text-gray-400"><MessageCircle size={18} />No email</span>}
                 </div>
               </section>
 
@@ -412,7 +391,7 @@ export default function DeliveryNavigation() {
                     </div>
 
                     <span className="font-bold text-gray-900">
-                      {order?.delivery?.eta || "12 min"}
+                      Live route
                     </span>
                   </div>
 
@@ -429,7 +408,7 @@ export default function DeliveryNavigation() {
                     </div>
 
                     <span className="font-bold text-gray-900">
-                      {order?.delivery?.distance || "3.8 km"}
+                      Open Maps
                     </span>
                   </div>
                 </div>

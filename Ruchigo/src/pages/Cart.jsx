@@ -22,6 +22,7 @@ import { useCart } from "../context/CartContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
 import toast from "react-hot-toast";
+import { applyImageFallback, getFoodFallback, resolveFoodImage } from "../lib/images.js";
 
 export default function Cart() {
 
@@ -203,7 +204,8 @@ export default function Cart() {
                         <div className="relative h-36 w-36 shrink-0 overflow-hidden rounded-3xl">
 
                           <img
-                            src={item.image}
+                            src={resolveFoodImage(item.image, item.menuItemId || item.id)}
+                            onError={(event) => applyImageFallback(event, getFoodFallback(item.menuItemId || item.id))}
                             alt={item.name}
                             className="h-full w-full object-cover transition duration-500 group-hover:scale-110"
                           />

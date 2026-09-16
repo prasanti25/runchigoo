@@ -11,6 +11,7 @@ import {
 
 import { NavLink } from "react-router-dom";
 import Logo from "./common/Logo";
+import Navbar from "./Navbar.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const menuItems = [
@@ -55,7 +56,9 @@ export default function AdminSidebar() {
   const { logout } = useAuth();
 
   return (
-    <aside className="fixed left-0 top-0 z-50 flex h-screen w-72 flex-col border-r border-orange-100 bg-white p-6">
+    <>
+    <div className="lg:hidden"><Navbar /></div>
+    <aside className="fixed left-0 top-0 z-50 hidden h-screen w-72 flex-col border-r border-orange-100 bg-white p-6 lg:flex">
       {/* Logo */}
       <div className="flex items-center gap-3">
         <Logo type="icon" size="sm" />
@@ -136,5 +139,6 @@ export default function AdminSidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

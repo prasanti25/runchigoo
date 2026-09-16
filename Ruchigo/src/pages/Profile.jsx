@@ -124,11 +124,11 @@ export default function Profile() {
 
                   <User size={48} />
 
-                  <button className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-4 border-white bg-gray-900 text-white">
+                  <Link to="/settings" aria-label="Edit profile" className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-4 border-white bg-gray-900 text-white">
 
                     <Edit3 size={14} />
 
-                  </button>
+                  </Link>
 
                 </div>
 

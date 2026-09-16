@@ -16,7 +16,7 @@ export default function SupportPage() {
           <div className="rounded-[24px] border border-orange-100 bg-orange-50 p-5">
             <Mail className="text-orange-500" size={20} />
             <p className="mt-4 text-base font-semibold text-gray-900">Email support</p>
-            <p className="mt-2 text-sm text-gray-600">support@ruchigo.com</p>
+            <a href="mailto:Support@ruchigo.online" className="mt-2 block text-sm font-medium text-orange-600">Support@ruchigo.online</a>
           </div>
           <div className="rounded-[24px] border border-orange-100 bg-orange-50 p-5">
             <ShieldCheck className="text-orange-500" size={20} />

@@ -4,7 +4,7 @@ const points = [
   "Users must provide accurate account information during registration and login.",
   "Orders are subject to restaurant availability, delivery timing, and payment authorization.",
   "Platform usage should remain respectful, legal, and compliant with local commerce rules.",
-  "Any future production deployment should include formal legal terms signed by backend and operations teams.",
+  "Customers may cancel only while the order status and restaurant workflow permit cancellation.",
 ];
 
 export default function TermsPage() {
@@ -14,7 +14,7 @@ export default function TermsPage() {
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-orange-500">Terms</p>
         <h1 className="mt-3 text-4xl font-black sm:text-5xl">Platform terms of use.</h1>
         <p className="mt-4 max-w-2xl text-base leading-7 text-gray-600">
-          These frontend terms provide the structure needed to keep the experience aligned with a production-ready commerce flow.
+          By using RuchiGo, you agree to these conditions for account access, ordering, payment, delivery, and acceptable platform use.
         </p>
 
         <div className="mt-8 space-y-4">

@@ -14,7 +14,7 @@ function errorMessage(data) {
   return messages.join(" ") || "Request failed.";
 }
 
-export async function apiRequest(path, { token, method = "GET", body, signal } = {}) {
+export async function apiRequest(path, { token, method = "GET", body, signal, keepalive = false } = {}) {
   let response;
   try {
     response = await fetch(`${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`, {
@@ -26,6 +26,7 @@ export async function apiRequest(path, { token, method = "GET", body, signal } =
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       ...(signal ? { signal } : {}),
+      ...(keepalive ? { keepalive: true } : {}),
     });
   } catch (error) {
     if (error?.name === "AbortError") throw error;
@@ -34,7 +35,12 @@ export async function apiRequest(path, { token, method = "GET", body, signal } =
 
   if (response.status === 204) return null;
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(errorMessage(data));
+  if (!response.ok) {
+    const requestError = new Error(errorMessage(data));
+    requestError.status = response.status;
+    requestError.data = data;
+    throw requestError;
+  }
   return data;
 }
 

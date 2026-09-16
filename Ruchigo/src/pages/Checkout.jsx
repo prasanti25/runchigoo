@@ -15,6 +15,7 @@ import { useCart } from "../context/CartContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import toast from "react-hot-toast";
 import { apiRequest } from "../lib/api.js";
+import { applyImageFallback, getFoodFallback, resolveFoodImage } from "../lib/images.js";
 
 export default function Checkout() {
   const {
@@ -314,7 +315,7 @@ export default function Checkout() {
                       >
 
                         <div className="h-16 w-16 overflow-hidden rounded-xl bg-orange-100">
-                          <img src={item.image || "/favicon.svg"} alt={item.name} className="h-full w-full object-cover" />
+                          <img src={resolveFoodImage(item.image, item.menuItemId || item.id)} onError={(event) => applyImageFallback(event, getFoodFallback(item.menuItemId || item.id))} alt={item.name} className="h-full w-full object-cover" />
                         </div>
 
                         <div className="flex-1">

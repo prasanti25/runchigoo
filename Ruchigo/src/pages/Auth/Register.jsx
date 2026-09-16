@@ -9,7 +9,6 @@ import RoleSelector from "../../components/auth/RoleSelector";
 import AuthInput from "../../components/auth/AuthInput";
 import PasswordInput from "../../components/auth/PasswordInput";
 import AuthButton from "../../components/auth/AuthButton";
-import SocialLogin from "../../components/auth/SocialLogin";
 import AuthFooter from "../../components/auth/AuthFooter";
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -91,10 +90,6 @@ const Register = () => {
       password: formData.password,
       role: formData.role,
     });
-  };
-
-  const handleSocialLogin = () => {
-    // Social login is a placeholder for future integration.
   };
 
   return (
@@ -216,8 +211,6 @@ const Register = () => {
           Create Account
         </AuthButton>
       </form>
-
-      <SocialLogin onSocialLogin={handleSocialLogin} />
 
       <div className="mt-8 text-center">
         <p className="text-sm text-gray-600">

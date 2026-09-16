@@ -98,9 +98,7 @@ export function AuthProvider({ children }) {
   const { addNotification } = useNotifications();
   const [auth, setAuth] = useState(() => readStoredAuth());
   const [loading, setLoading] = useState(false);
-  const [sessionLoading, setSessionLoading] = useState(
-    () => Boolean(auth.refreshToken && auth.expiresAt && auth.expiresAt - Date.now() <= 60 * 1000)
-  );
+  const [sessionLoading, setSessionLoading] = useState(() => Boolean(auth.token && auth.user));
 
   const refreshSession = useCallback(async () => {
     if (!auth.refreshToken) return false;
@@ -132,17 +130,52 @@ export function AuthProvider({ children }) {
     persistAuth(auth);
   }, [auth]);
 
-  const logout = useCallback((message = "Logged out successfully.") => {
+  const logout = useCallback(async (message = "Logged out successfully.") => {
     const refreshToken = auth.refreshToken;
+    setLoading(true);
+    if (refreshToken) {
+      try {
+        await apiRequest("/auth/logout/", { method: "POST", token: auth.token, body: { refresh: refreshToken }, keepalive: true });
+      } catch {
+        // Always clear the local session, even if the token is already expired.
+      }
+    }
     setAuth(defaultAuthState);
     clearAuthStorage();
     setLoading(false);
-    if (refreshToken) {
-      apiRequest("/auth/logout/", { method: "POST", token: auth.token, body: { refresh: refreshToken } }).catch(() => undefined);
-    }
+    setSessionLoading(false);
     navigate("/login", { replace: true });
     toast.success(message);
   }, [auth.refreshToken, auth.token, navigate]);
+
+  useEffect(() => {
+    if (!auth.token) return undefined;
+
+    let active = true;
+
+    apiRequest("/auth/me/", { token: auth.token })
+      .then((profile) => {
+        if (!active) return;
+        const user = {
+          ...profile,
+          name: `${profile.first_name || ""} ${profile.last_name || ""}`.trim() || profile.email,
+        };
+        setAuth((current) => current.token === auth.token
+          ? { ...current, user, role: user.role }
+          : current);
+      })
+      .catch(async (error) => {
+        if (!active || error.status !== 401) return;
+        if (!auth.refreshToken || !(await refreshSession())) {
+          if (active) logout("Session expired. Please log in again.");
+        }
+      })
+      .finally(() => {
+        if (active) setSessionLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [auth.refreshToken, auth.token, logout, refreshSession]);
 
   useEffect(() => {
     if (!auth.token || !auth.user || !auth.expiresAt) return undefined;

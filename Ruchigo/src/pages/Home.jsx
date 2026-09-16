@@ -16,6 +16,13 @@ import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
+import {
+  applyImageFallback,
+  getFoodFallback,
+  getRestaurantFallback,
+  resolveFoodImage,
+  resolveRestaurantImage,
+} from "../lib/images.js";
 
 const categoryCards = [
   { name: "Biryani", tag: "Spicy & aromatic", icon: Flame },
@@ -28,12 +35,21 @@ const categoryCards = [
 
 export default function Home() {
   const navigate = useNavigate();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout, role } = useAuth();
   const [query, setQuery] = useState("");
   const [trendingRestaurants, setTrendingRestaurants] = useState([]);
   const [featuredDishes, setFeaturedDishes] = useState([]);
   const [activeOffers, setActiveOffers] = useState([]);
   const [catalogCounts, setCatalogCounts] = useState({ restaurants: 0, dishes: 0, offers: 0 });
+
+  const accountPath = role === "admin"
+    ? "/admin-dashboard"
+    : role === "restaurant"
+      ? "/restaurant-dashboard"
+      : role === "delivery"
+        ? "/delivery-dashboard"
+        : "/profile";
+  const accountLabel = role === "customer" ? "My Profile" : "Open Dashboard";
 
   useEffect(() => {
     let active = true;
@@ -46,12 +62,12 @@ export default function Home() {
       if (restaurantResult.status === "fulfilled") {
         const data = restaurantResult.value;
         setCatalogCounts((current) => ({ ...current, restaurants: data.count ?? data.length ?? 0 }));
-        setTrendingRestaurants((data.results || data).slice(0, 3).map((restaurant) => ({ id: restaurant.id, name: restaurant.name, cuisine: restaurant.description || restaurant.city, rating: restaurant.average_rating || "New", city: restaurant.city, image: restaurant.image || "/favicon.svg" })));
+        setTrendingRestaurants((data.results || data).slice(0, 3).map((restaurant) => ({ id: restaurant.id, name: restaurant.name, cuisine: restaurant.description || restaurant.city, rating: restaurant.average_rating || "New", city: restaurant.city, image: resolveRestaurantImage(restaurant.image, restaurant.id) })));
       }
       if (menuResult.status === "fulfilled") {
         const data = menuResult.value;
         setCatalogCounts((current) => ({ ...current, dishes: data.count ?? data.length ?? 0 }));
-        setFeaturedDishes((data.results || data).slice(0, 4).map((item) => ({ id: item.id, name: item.name, restaurant: item.restaurant_detail?.name || "Restaurant", price: Number(item.price), deliveryTime: `${item.preparation_minutes} min`, image: item.image || "/favicon.svg" })));
+        setFeaturedDishes((data.results || data).slice(0, 4).map((item) => ({ id: item.id, name: item.name, restaurant: item.restaurant_detail?.name || "Restaurant", price: Number(item.price), deliveryTime: `${item.preparation_minutes} min`, image: resolveFoodImage(item.image, item.id) })));
       }
       if (offerResult.status === "fulfilled") {
         const data = offerResult.value;
@@ -128,7 +144,7 @@ export default function Home() {
                     </>
                   ) : (
                     <>
-                      <Link to="/profile" className="rounded-2xl border border-white/40 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">My Profile</Link>
+                      <Link to={accountPath} className="rounded-2xl border border-white/40 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">{accountLabel}</Link>
                       <button onClick={() => logout()} className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-orange-600 transition hover:bg-orange-50">Logout</button>
                     </>
                   )}
@@ -215,7 +231,7 @@ export default function Home() {
                   className="group overflow-hidden rounded-[28px] border border-orange-100 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl"
                 >
                   <div className="relative h-60 overflow-hidden">
-                    <img src={restaurant.image} alt={restaurant.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
+                    <img src={restaurant.image} onError={(event) => applyImageFallback(event, getRestaurantFallback(restaurant.id))} alt={restaurant.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
                   </div>
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-3">
@@ -250,7 +266,7 @@ export default function Home() {
               {featuredDishes.map((item) => (
                 <div key={item.id} className="overflow-hidden rounded-[26px] border border-orange-100 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg">
                   <div className="relative h-48 overflow-hidden">
-                    <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+                    <img src={item.image} onError={(event) => applyImageFallback(event, getFoodFallback(item.id))} alt={item.name} className="h-full w-full object-cover" />
                     <span className="absolute left-4 top-4 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white">Popular</span>
                   </div>
                   <div className="p-4">

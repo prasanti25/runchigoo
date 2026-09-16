@@ -29,7 +29,14 @@ export default function ProtectedRoute({
   }
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
-    return <Navigate to="/access-denied" replace />;
+    const roleHome = role === "admin"
+      ? "/admin-dashboard"
+      : role === "restaurant"
+        ? "/restaurant-dashboard"
+        : role === "delivery"
+          ? "/delivery-dashboard"
+          : "/";
+    return <Navigate to={roleHome} replace />;
   }
 
   return children;

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import Logo from "./common/Logo";
+import Navbar from "./Navbar.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const menuItems = [
@@ -43,7 +44,9 @@ const menuItems = [
 export default function RestaurantSidebar() {
   const { user, logout } = useAuth();
   return (
-    <aside className="fixed left-0 top-0 flex h-screen w-72 flex-col border-r border-orange-100 bg-white p-6">
+    <>
+    <div className="lg:hidden"><Navbar /></div>
+    <aside className="fixed left-0 top-0 hidden h-screen w-72 flex-col border-r border-orange-100 bg-white p-6 lg:flex">
       <div className="flex items-center gap-3">
         <Logo type="icon" size="sm" />
 
@@ -105,5 +108,6 @@ export default function RestaurantSidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

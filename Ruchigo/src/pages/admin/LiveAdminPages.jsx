@@ -14,7 +14,7 @@ function AdminFrame({ title, subtitle, children }) {
   return (
     <div className="min-h-screen bg-[#fffaf7]">
       <AdminSidebar />
-      <main className="ml-72 min-h-screen p-8">
+      <main className="min-h-screen p-4 sm:p-8 lg:ml-72">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-500">Administration</p>
         <h1 className="mt-2 text-3xl font-bold text-gray-900">{title}</h1>
         <p className="mt-2 text-sm text-gray-500">{subtitle}</p>

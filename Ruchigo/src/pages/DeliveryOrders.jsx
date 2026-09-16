@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
 import DeliverySidebar from "../components/DeliverySidebar.jsx";
@@ -10,7 +10,6 @@ import {
   Clock,
   IndianRupee,
   Check,
-  X,
   Bike,
   PackageCheck,
   Eye,
@@ -58,7 +57,7 @@ function normalizeOrder(order) {
     customerAddress: order.delivery_address_detail?.line1 || "",
     distance: order.delivery?.distance || "—",
     time: order.delivery?.pickup_at ? "Assigned" : "—",
-    earning: `₹${order.delivery?.order?.delivery_fee || order.delivery_fee || 0}`,
+    earning: `₹${order.delivery_fee || 0}`,
     status,
     items: `${order.items?.length || 0} Items`,
     raw: order,
@@ -66,13 +65,16 @@ function normalizeOrder(order) {
 }
 
 export default function DeliveryOrders() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [counts, setCounts] = useState({ available: 0, active: 0, completed: 0 });
   const [activeTab, setActiveTab] = useState("Available");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const initials = `${user?.first_name?.[0] || ""}${user?.last_name?.[0] || ""}`.toUpperCase()
+    || user?.email?.[0]?.toUpperCase()
+    || "D";
 
   const fetchOrders = useCallback(async (tab) => {
     if (!token) return;
@@ -191,18 +193,18 @@ export default function DeliveryOrders() {
               <span className="h-3 w-3 rounded-full bg-green-500" />
 
               <span className="font-semibold text-green-600">
-                Online
+                {user?.is_available ? "Online" : "Offline"}
               </span>
             </div>
 
-            <button className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
+            <Link to="/notifications" aria-label="Open notifications" className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
               <Bell size={20} />
 
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500" />
-            </button>
+            </Link>
 
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-orange-500 font-bold text-white">
-              RK
+              {initials}
             </div>
           </div>
         </header>
@@ -244,7 +246,7 @@ export default function DeliveryOrders() {
               </div>
 
               <p className="mt-5 text-sm text-gray-500">
-                Completed Today
+                Completed Deliveries
               </p>
 
               <h2 className="mt-2 text-3xl font-bold text-gray-900">
@@ -431,9 +433,6 @@ export default function DeliveryOrders() {
                         Accept Delivery
                       </button>
 
-                      <button className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-500 transition hover:bg-red-500 hover:text-white">
-                        <X size={19} />
-                      </button>
                     </>
                   )}
 
@@ -457,13 +456,13 @@ export default function DeliveryOrders() {
                   )}
 
                   {order.status === "Completed" && (
-                    <button className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-50 px-5 py-3 font-semibold text-green-600">
+                    <div className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-50 px-5 py-3 font-semibold text-green-600">
                       <PackageCheck size={18} />
                       Delivery Completed
-                    </button>
+                    </div>
                   )}
 
-                  <button className="flex h-12 w-12 items-center justify-center rounded-xl border border-orange-100 bg-white text-orange-500 transition hover:bg-orange-50">
+                  <button onClick={() => handleContinueNavigation(order.orderId)} aria-label={`View ${order.id}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-orange-100 bg-white text-orange-500 transition hover:bg-orange-50">
                     <Eye size={19} />
                   </button>
                 </div>

@@ -187,6 +187,8 @@ export default function Navbar() {
           )}
 
           <button
+            type="button"
+            aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
             className="rounded-xl border border-orange-100 p-2 text-orange-500 xl:hidden"
             onClick={() => setMobileOpen(!mobileOpen)}
           >

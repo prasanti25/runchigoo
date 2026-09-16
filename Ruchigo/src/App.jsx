@@ -88,15 +88,15 @@ export default function App() {
         <Route path="/search" element={<SearchPage />} />
         <Route path="/restaurant/:id" element={<Restaurant />} />
         <Route path="/food-details/:id" element={<FoodDetails />} />
-        <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
-        <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-        <Route path="/payment" element={<ProtectedRoute><Payment /></ProtectedRoute>} />
-        <Route path="/tracking/:id?" element={<ProtectedRoute><Tracking /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-        <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
-        <Route path="/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
+        <Route path="/cart" element={<ProtectedRoute allowedRoles={["customer"]}><Cart /></ProtectedRoute>} />
+        <Route path="/checkout" element={<ProtectedRoute allowedRoles={["customer"]}><Checkout /></ProtectedRoute>} />
+        <Route path="/payment" element={<ProtectedRoute allowedRoles={["customer"]}><Payment /></ProtectedRoute>} />
+        <Route path="/tracking/:id?" element={<ProtectedRoute allowedRoles={["customer"]}><Tracking /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute allowedRoles={["customer"]}><Profile /></ProtectedRoute>} />
+        <Route path="/orders" element={<ProtectedRoute allowedRoles={["customer"]}><Orders /></ProtectedRoute>} />
+        <Route path="/wishlist" element={<ProtectedRoute allowedRoles={["customer"]}><Wishlist /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-        <Route path="/addresses" element={<ProtectedRoute><Addresses /></ProtectedRoute>} />
+        <Route path="/addresses" element={<ProtectedRoute allowedRoles={["customer"]}><Addresses /></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
 
         <Route path="/restaurant-dashboard" element={<ProtectedRoute allowedRoles={["restaurant"]}><RestaurantDashboard /></ProtectedRoute>} />
