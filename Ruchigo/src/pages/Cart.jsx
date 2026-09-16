@@ -127,10 +127,10 @@ export default function Cart() {
 
           </div>
 
-          <div className="grid gap-8 lg:grid-cols-[1.8fr_1fr]">
+          <div className="grid min-w-0 gap-8 lg:grid-cols-[1.8fr_1fr]">
                         {/* Cart Items */}
 
-            <section>
+            <section className="min-w-0">
 
               <div className="rounded-[32px] bg-white p-5 shadow-lg sm:p-8">
 
@@ -310,7 +310,7 @@ export default function Cart() {
             </section>
                         {/* Order Summary */}
 
-            <aside>
+            <aside className="min-w-0">
 
               <div className="sticky top-28 rounded-[32px] bg-white p-5 shadow-lg sm:p-8">
 
@@ -326,7 +326,7 @@ export default function Cart() {
                     Coupon Code
                   </label>
 
-                  <div className="flex overflow-hidden rounded-2xl border border-orange-200">
+                  <div className="flex min-w-0 overflow-hidden rounded-2xl border border-orange-200">
 
                     <div className="flex items-center px-4">
 
@@ -341,12 +341,12 @@ export default function Cart() {
                         if (couponCode && e.target.value.trim().toUpperCase() !== couponCode) clearCoupon();
                       }}
                       placeholder="Enter coupon code"
-                      className="flex-1 px-4 py-4 outline-none"
+                      className="min-w-0 flex-1 px-2 py-4 outline-none sm:px-4"
                     />
 
                     <button
                       onClick={handleApplyCoupon}
-                      className="bg-orange-500 px-6 font-semibold text-white hover:bg-orange-600"
+                      className="bg-orange-500 px-4 font-semibold text-white hover:bg-orange-600 sm:px-6"
                     >
                       Apply
                     </button>
