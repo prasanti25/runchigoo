@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
 import os
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -11,6 +12,11 @@ if not SECRET_KEY and not DEBUG:
     raise RuntimeError("DJANGO_SECRET_KEY must be configured when DJANGO_DEBUG is false.")
 SECRET_KEY = SECRET_KEY or "unsafe-development-key-change-me"
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",") if h.strip()]
+for vercel_host in (os.getenv("VERCEL_URL"), os.getenv("VERCEL_PROJECT_PRODUCTION_URL")):
+    if vercel_host:
+        hostname = urlparse(f"//{vercel_host}").hostname
+        if hostname and hostname not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(hostname)
 
 INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
@@ -34,7 +40,19 @@ TEMPLATES = [{"BACKEND": "django.template.backends.django.DjangoTemplates", "DIR
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-if os.getenv("DJANGO_DB_ENGINE", "sqlite") == "mysql":
+DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
+if DATABASE_URL:
+    import dj_database_url
+
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=int(os.getenv("DB_CONN_MAX_AGE", "60")),
+            conn_health_checks=True,
+            ssl_require=not DEBUG,
+        )
+    }
+elif os.getenv("DJANGO_DB_ENGINE", "sqlite") == "mysql":
     DATABASES = {"default": {"ENGINE": "django.db.backends.mysql", "NAME": os.getenv("MYSQL_DATABASE", "ruchigo"), "USER": os.getenv("MYSQL_USER", "ruchigo"), "PASSWORD": os.getenv("MYSQL_PASSWORD", ""), "HOST": os.getenv("MYSQL_HOST", "127.0.0.1"), "PORT": os.getenv("MYSQL_PORT", "3306"), "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")), "OPTIONS": {"charset": "utf8mb4"}}}
 else:
     DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}

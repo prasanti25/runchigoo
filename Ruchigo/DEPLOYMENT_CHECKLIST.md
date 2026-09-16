@@ -10,11 +10,15 @@
 Set these in production only, not in version control.
 
 - `DJANGO_SECRET_KEY` — long random secret
+- `DATABASE_URL` — persistent PostgreSQL connection string (required for Vercel)
+- `RUCHIGO_ADMIN_EMAIL` — initial admin email
+- `RUCHIGO_ADMIN_PASSWORD` — initial admin password (never commit this value)
 - `DJANGO_DEBUG=false`
 - `DJANGO_ALLOWED_HOSTS=<your-domain>,...`
 - `FRONTEND_URL=<frontend-url>`
 - `CSRF_TRUSTED_ORIGINS=<frontend-url>`
 - `VITE_API_BASE_URL=<backend-api-url>/api/v1`
+- When frontend and Django are deployed together on Vercel, use `/api/v1`.
 - `DJANGO_SECURE_SSL_REDIRECT=true` when using HTTPS
 - `DJANGO_SECURE_HSTS_SECONDS=31536000`
 - `EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend` or production email driver

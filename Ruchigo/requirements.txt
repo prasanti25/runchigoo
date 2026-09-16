@@ -1,0 +1,3 @@
+-r backend/requirements.txt
+dj-database-url>=2.2,<3.0
+psycopg[binary]>=3.2,<4.0

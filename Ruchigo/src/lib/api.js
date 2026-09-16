@@ -6,6 +6,12 @@ function errorMessage(data) {
   if (typeof data === "string" && data.trim()) return data;
   if (!data || typeof data !== "object") return "Request failed.";
   if (typeof data.detail === "string") return data.detail;
+  if (typeof data.error?.message === "string") {
+    if (data.error.code === "404" || data.error.message.toLowerCase().includes("page could not be found")) {
+      return "RuchiGo service is temporarily unavailable. Please try again shortly.";
+    }
+    return data.error.message;
+  }
 
   const messages = Object.entries(data).flatMap(([field, value]) => {
     const values = Array.isArray(value) ? value : [value];
