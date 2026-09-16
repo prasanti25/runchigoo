@@ -124,7 +124,7 @@ export default function DeliveryNavigation() {
     return (
       <div className="min-h-screen bg-[#fffaf7]">
         <DeliverySidebar />
-        <main className="ml-72 min-h-screen p-10">
+        <main className="min-h-screen p-4 sm:p-10 lg:ml-72">
           <p>Loading delivery navigation…</p>
         </main>
       </div>
@@ -135,7 +135,7 @@ export default function DeliveryNavigation() {
     return (
       <div className="min-h-screen bg-[#fffaf7]">
         <DeliverySidebar />
-        <main className="ml-72 min-h-screen p-10">
+        <main className="min-h-screen p-4 sm:p-10 lg:ml-72">
           <p className="text-red-500">{error}</p>
         </main>
       </div>
@@ -146,9 +146,9 @@ export default function DeliveryNavigation() {
     <div className="min-h-screen bg-[#fffaf7]">
       <DeliverySidebar />
 
-      <main className="ml-72 min-h-screen">
+      <main className="min-h-screen lg:ml-72">
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-orange-100 bg-white px-8 py-5">
+        <header className="flex flex-col items-start gap-4 border-b border-orange-100 bg-white px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div>
             <p className="text-sm text-gray-500">
               Active Delivery
@@ -159,7 +159,7 @@ export default function DeliveryNavigation() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:gap-4">
             <div className="rounded-xl bg-orange-50 px-5 py-3">
               <p className="text-xs text-gray-500">
                 Order ID
@@ -186,7 +186,7 @@ export default function DeliveryNavigation() {
           </div>
         </header>
 
-        <section className="p-8">
+        <section className="p-4 sm:p-8">
           <div className="grid gap-7 xl:grid-cols-[1.7fr_1fr]">
             {/* Map Section */}
             <section className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-sm">
@@ -250,7 +250,7 @@ export default function DeliveryNavigation() {
                 </div>
 
                 {/* Current Navigation Card */}
-                <div className="absolute left-6 top-6 flex items-center gap-4 rounded-2xl bg-gray-900 px-6 py-5 text-white shadow-xl">
+                <div className="absolute left-4 right-4 top-4 flex items-center gap-3 rounded-2xl bg-gray-900 px-4 py-4 text-white shadow-xl sm:left-6 sm:right-auto sm:top-6 sm:gap-4 sm:px-6 sm:py-5">
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500">
                     <CornerUpRight size={25} />
                   </div>
@@ -272,33 +272,33 @@ export default function DeliveryNavigation() {
                 </button>
 
                 {/* ETA Card */}
-                <div className="absolute bottom-6 left-6 flex gap-8 rounded-2xl bg-white px-7 py-5 shadow-xl">
+                <div className="absolute bottom-4 left-4 right-4 grid grid-cols-3 gap-2 rounded-2xl bg-white px-3 py-4 shadow-xl sm:bottom-6 sm:left-6 sm:right-auto sm:flex sm:gap-8 sm:px-7 sm:py-5">
                   <div>
                     <p className="text-xs text-gray-400">
                       STATUS
                     </p>
 
-                    <p className="mt-1 text-xl font-bold text-gray-900">
+                    <p className="mt-1 text-base font-bold text-gray-900 sm:text-xl">
                       {getStatusLabel(order?.status)}
                     </p>
                   </div>
 
-                  <div className="border-l border-gray-200 pl-8">
+                  <div className="border-l border-gray-200 pl-2 sm:pl-8">
                     <p className="text-xs text-gray-400">
                       ROUTE
                     </p>
 
-                    <p className="mt-1 text-xl font-bold text-gray-900">
+                    <p className="mt-1 text-base font-bold text-gray-900 sm:text-xl">
                       Google Maps
                     </p>
                   </div>
 
-                  <div className="border-l border-gray-200 pl-8">
+                  <div className="border-l border-gray-200 pl-2 sm:pl-8">
                     <p className="text-xs text-gray-400">
                       PAYMENT
                     </p>
 
-                    <p className="mt-1 text-xl font-bold text-gray-900">
+                    <p className="mt-1 text-base font-bold text-gray-900 sm:text-xl">
                       {order?.payment?.method === "cod" ? "Cash on delivery" : order?.payment?.status || "—"}
                     </p>
                   </div>
@@ -320,7 +320,7 @@ export default function DeliveryNavigation() {
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900">
+                    <h2 className="min-w-0 break-words text-xl font-bold text-gray-900">
                       {order?.customer_detail ? `${order.customer_detail.first_name || ""} ${order.customer_detail.last_name || ""}`.trim() || order.customer_detail.email : "Customer"}
                     </h2>
 

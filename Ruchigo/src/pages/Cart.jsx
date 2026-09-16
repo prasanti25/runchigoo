@@ -116,7 +116,7 @@ export default function Cart() {
               🍽 Your Delicious Order
             </p>
 
-            <h1 className="mt-3 text-5xl font-bold text-gray-900">
+            <h1 className="mt-3 text-4xl font-bold text-gray-900 sm:text-5xl">
               Shopping Cart
             </h1>
 
@@ -132,7 +132,7 @@ export default function Cart() {
 
             <section>
 
-              <div className="rounded-[32px] bg-white p-8 shadow-lg">
+              <div className="rounded-[32px] bg-white p-5 shadow-lg sm:p-8">
 
                 <div className="flex items-center justify-between border-b pb-5">
 
@@ -196,12 +196,12 @@ export default function Cart() {
 
                       <div
                         key={item.id}
-                        className="group flex gap-6 py-8"
+                        className="group flex flex-col gap-5 py-8 sm:flex-row sm:gap-6"
                       >
 
                         {/* Image */}
 
-                        <div className="relative h-36 w-36 shrink-0 overflow-hidden rounded-3xl">
+                        <div className="relative h-48 w-full shrink-0 overflow-hidden rounded-3xl sm:h-36 sm:w-36">
 
                           <img
                             src={resolveFoodImage(item.image, item.menuItemId || item.id)}
@@ -240,11 +240,11 @@ export default function Cart() {
 
                           </div>
 
-                          <div className="mt-6 flex items-center justify-between">
+                          <div className="mt-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
 
                             <div>
 
-                              <p className="text-3xl font-bold text-orange-600">
+                              <p className="text-2xl font-bold text-orange-600 sm:text-3xl">
 
                                 ₹{item.price * item.quantity}
 
@@ -252,7 +252,7 @@ export default function Cart() {
 
                             </div>
 
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-3 sm:gap-4">
 
                               <button
                                 onClick={() => runCartAction(() => decreaseQuantity(item.id))}
@@ -312,7 +312,7 @@ export default function Cart() {
 
             <aside>
 
-              <div className="sticky top-28 rounded-[32px] bg-white p-8 shadow-lg">
+              <div className="sticky top-28 rounded-[32px] bg-white p-5 shadow-lg sm:p-8">
 
                 <h2 className="text-3xl font-bold text-gray-900">
                   Order Summary

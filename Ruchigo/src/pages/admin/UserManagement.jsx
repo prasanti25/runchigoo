@@ -465,11 +465,18 @@ export default function UserManagement() {
 
               </select>
 
-              <button className="flex items-center justify-center gap-2 rounded-2xl border px-6 py-3 hover:bg-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  setFilter("All Roles");
+                }}
+                className="flex items-center justify-center gap-2 rounded-2xl border px-6 py-3 hover:bg-gray-100"
+              >
 
                 <Filter size={18} />
 
-                Filters
+                Reset filters
 
               </button>
 

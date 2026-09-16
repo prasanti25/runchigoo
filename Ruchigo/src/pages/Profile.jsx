@@ -136,7 +136,7 @@ export default function Profile() {
                   {user.name}
                 </h2>
 
-                <p className="mt-2 text-gray-500">
+                <p className="mt-2 break-all text-gray-500">
                   {user.email}
                 </p>
 

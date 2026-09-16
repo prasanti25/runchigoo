@@ -5,7 +5,11 @@ from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env")
+# Local .env files are for development only. Production platforms provide
+# configuration through environment variables and must never inherit a local
+# DJANGO_DEBUG value from the deployment bundle.
+if not os.getenv("VERCEL"):
+    load_dotenv(BASE_DIR / ".env")
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 if not SECRET_KEY and not DEBUG:
@@ -68,10 +72,10 @@ CORS_ALLOWED_ORIGINS = [u.strip() for u in FRONTEND_URL.split(",") if u.strip()]
 CSRF_TRUSTED_ORIGINS = [u.strip() for u in os.getenv("CSRF_TRUSTED_ORIGINS", ",".join(CORS_ALLOWED_ORIGINS)).split(",") if u.strip()]
 # NOTE: Do not enable CORS_ALLOW_ALL_ORIGINS in production. For local dev,
 # set FRONTEND_URL in backend/.env to include Vite ports (e.g. http://localhost:5173,http://localhost:5174)
-SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "False").lower() == "true"
+SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "True" if os.getenv("VERCEL") else "False").lower() == "true"
 SESSION_COOKIE_SECURE = SECURE_SSL_REDIRECT
 CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
-SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "0"))
+SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "31536000" if os.getenv("VERCEL") else "0"))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
 SECURE_HSTS_PRELOAD = SECURE_HSTS_SECONDS > 0
 SECURE_CONTENT_TYPE_NOSNIFF = True

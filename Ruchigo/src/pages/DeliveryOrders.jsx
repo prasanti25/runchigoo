@@ -175,9 +175,9 @@ export default function DeliveryOrders() {
     <div className="min-h-screen bg-[#fffaf7]">
       <DeliverySidebar />
 
-      <main className="ml-72 min-h-screen">
+      <main className="min-h-screen lg:ml-72">
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-orange-100 bg-white px-8 py-5">
+        <header className="flex flex-col items-start gap-4 border-b border-orange-100 bg-white px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div>
             <p className="text-sm text-gray-500">
               Delivery Management
@@ -188,7 +188,7 @@ export default function DeliveryOrders() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:gap-4">
             <div className="flex items-center gap-3 rounded-xl bg-green-50 px-5 py-3">
               <span className="h-3 w-3 rounded-full bg-green-500" />
 
@@ -209,7 +209,7 @@ export default function DeliveryOrders() {
           </div>
         </header>
 
-        <section className="p-8">
+        <section className="p-4 sm:p-8">
           {/* Stats */}
           <div className="grid gap-5 md:grid-cols-3">
             <div className="rounded-3xl border border-blue-100 bg-white p-6 shadow-sm">
@@ -294,7 +294,7 @@ export default function DeliveryOrders() {
                   className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
                 >
                 {/* Order Header */}
-                <div className="flex items-start justify-between gap-5">
+                <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:gap-5">
                   <div>
                     <div className="flex flex-wrap items-center gap-3">
                       <h2 className="text-xl font-bold text-gray-900">
@@ -315,7 +315,7 @@ export default function DeliveryOrders() {
                     </p>
                   </div>
 
-                  <div className="text-right">
+                  <div className="sm:text-right">
                     <p className="text-xs text-gray-500">
                       Delivery Earnings
                     </p>
@@ -374,7 +374,7 @@ export default function DeliveryOrders() {
                 </div>
 
                 {/* Delivery Info */}
-                <div className="mt-5 grid grid-cols-3 gap-3">
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
                   <div className="rounded-xl bg-orange-50 p-4 text-center">
                     <Navigation
                       size={18}
@@ -422,7 +422,7 @@ export default function DeliveryOrders() {
                 </div>
 
                 {/* Actions */}
-                <div className="mt-6 flex gap-3 border-t border-gray-100 pt-5">
+                <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-5 sm:flex-row">
                   {order.status === "Available" && (
                     <>
                       <button
@@ -462,7 +462,7 @@ export default function DeliveryOrders() {
                     </div>
                   )}
 
-                  <button onClick={() => handleContinueNavigation(order.orderId)} aria-label={`View ${order.id}`} className="flex h-12 w-12 items-center justify-center rounded-xl border border-orange-100 bg-white text-orange-500 transition hover:bg-orange-50">
+                  <button onClick={() => handleContinueNavigation(order.orderId)} aria-label={`View ${order.id}`} className="flex h-12 w-full items-center justify-center rounded-xl border border-orange-100 bg-white text-orange-500 transition hover:bg-orange-50 sm:w-12">
                     <Eye size={19} />
                   </button>
                 </div>
