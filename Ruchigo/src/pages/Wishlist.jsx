@@ -25,7 +25,7 @@ export default function Wishlist() {
   const { addToCart } = useCart();
 
   useEffect(() => {
-    apiRequest("/wishlist/", { token }).then((data) => setFavouriteFoods((data.results || data).map((entry) => ({ id: entry.id, menuItemId: entry.menu_item, name: entry.menu_item_detail?.name || "Menu item", restaurant: entry.menu_item_detail?.restaurant_detail?.name || "Restaurant", price: Number(entry.menu_item_detail?.price || 0), rating: entry.menu_item_detail?.restaurant_detail?.average_rating || "New", image: resolveFoodImage(entry.menu_item_detail?.image, entry.menu_item) })))).catch((error) => { setFavouriteFoods([]); toast.error(error.message); });
+    apiRequest("/wishlist/", { token }).then((data) => setFavouriteFoods((data.results || data).map((entry) => ({ id: entry.id, menuItemId: entry.menu_item, name: entry.menu_item_detail?.name || "Menu item", restaurantId: entry.menu_item_detail?.restaurant, restaurant: entry.menu_item_detail?.restaurant_detail?.name || "Restaurant", price: Number(entry.menu_item_detail?.price || 0), rating: entry.menu_item_detail?.restaurant_detail?.average_rating || "New", image: resolveFoodImage(entry.menu_item_detail?.image, entry.menu_item) })))).catch((error) => { setFavouriteFoods([]); toast.error(error.message); });
   }, [token]);
 
   const removeFood = async (id) => {
@@ -266,7 +266,7 @@ export default function Wishlist() {
 
                     <div className="mt-6 flex gap-3">
 
-                      <button onClick={async () => { try { if (await addToCart({ id: food.menuItemId || food.id })) toast.success("Added to cart."); } catch (error) { toast.error(error.message); } }} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 font-semibold text-white transition hover:bg-orange-600">
+                      <button onClick={async () => { try { if (await addToCart(food)) toast.success("Added to cart."); } catch (error) { toast.error(error.message); } }} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 font-semibold text-white transition hover:bg-orange-600">
 
                         <ShoppingCart size={18} />
 
