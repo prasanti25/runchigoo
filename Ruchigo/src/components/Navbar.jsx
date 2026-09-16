@@ -23,7 +23,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { useState } from "react";
 
 export default function Navbar() {
-  const { isAuthenticated, user, role, logout } = useAuth();
+  const { isAuthenticated, role, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const guestItems = [
@@ -106,7 +106,7 @@ export default function Navbar() {
           <Logo type="full" className="h-10 w-auto sm:h-11" showText />
         </NavLink>
 
-        <div className="hidden items-center gap-2 lg:flex">
+        <div className="hidden min-w-0 flex-1 items-center justify-center gap-1 xl:flex">
           {items.map((item) => {
             const Icon = item.icon;
 
@@ -115,7 +115,7 @@ export default function Navbar() {
                 key={item.name}
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                  `flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
                     isActive
                       ? "bg-orange-500 text-white shadow-md shadow-orange-100"
                       : "text-gray-600 hover:bg-orange-50 hover:text-orange-500"
@@ -131,27 +131,28 @@ export default function Navbar() {
 
         <div className="flex items-center gap-3">
           {isAuthenticated ? (
-            <div className="hidden items-center gap-3 lg:flex">
-              <div className="rounded-2xl border border-orange-100 bg-orange-50 px-3 py-2 text-sm text-gray-700">
-                <p className="text-[11px] text-gray-500">Signed in as</p>
-                <p className="font-semibold text-gray-900">{user?.name || roleLabel}</p>
-              </div>
-
-              <div className="flex items-center gap-2 rounded-2xl border border-orange-100 bg-white px-3 py-2">
-                {profileItems.map((item) => (
+            <div className="hidden shrink-0 items-center gap-2 xl:flex">
+              <span className="whitespace-nowrap rounded-xl bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700">
+                {roleLabel}
+              </span>
+              <div className="flex items-center gap-1 rounded-xl border border-orange-100 bg-white p-1.5">
+                {role === "customer" && (
                   <NavLink
-                    key={item.name}
-                    to={item.path}
-                    className="rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-orange-50 hover:text-orange-500"
+                    to="/profile"
+                    aria-label="Open profile"
+                    title="Profile"
+                    className="rounded-lg p-2 text-gray-600 hover:bg-orange-50 hover:text-orange-500"
                   >
-                    {item.name}
+                    <User size={18} />
                   </NavLink>
-                ))}
+                )}
                 <button
                   onClick={handleLogout}
-                  className="rounded-lg px-2 py-1 text-sm text-red-500 hover:bg-red-50"
+                  aria-label="Log out"
+                  title="Logout"
+                  className="rounded-lg p-2 text-red-500 hover:bg-red-50"
                 >
-                  Logout
+                  <LogOut size={18} />
                 </button>
               </div>
             </div>
@@ -173,7 +174,7 @@ export default function Navbar() {
           )}
 
           <button
-            className="rounded-xl border border-orange-100 p-2 text-orange-500 lg:hidden"
+            className="rounded-xl border border-orange-100 p-2 text-orange-500 xl:hidden"
             onClick={() => setMobileOpen(!mobileOpen)}
           >
             {mobileOpen ? <X size={20} /> : <Menu size={20} />}
@@ -182,7 +183,7 @@ export default function Navbar() {
       </div>
 
       {mobileOpen && (
-        <div className="border-t border-orange-100 bg-white px-4 py-4 lg:hidden">
+        <div className="border-t border-orange-100 bg-white px-4 py-4 xl:hidden">
           <div className="flex flex-col gap-2">
             {items.map((item) => {
               const Icon = item.icon;
@@ -202,6 +203,7 @@ export default function Navbar() {
 
             {isAuthenticated ? (
               <>
+                <p className="px-3 pt-2 text-xs font-semibold uppercase tracking-wider text-orange-500">{roleLabel}</p>
                 {profileItems.map((item) => (
                   <NavLink
                     key={item.name}
