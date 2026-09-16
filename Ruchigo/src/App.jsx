@@ -1,67 +1,68 @@
-import { Routes, Route } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import { Link, Routes, Route } from "react-router-dom";
 
-import Home from "./pages/Home.jsx";
-import SearchPage from "./pages/Search.jsx";
-import Restaurant from "./pages/Restaurant.jsx";
-import FoodDetails from "./pages/FoodDetails.jsx";
-import Cart from "./pages/Cart.jsx";
-import Checkout from "./pages/Checkout.jsx";
-import Payment from "./pages/Payment.jsx";
-import Tracking from "./pages/Tracking.jsx";
-import Profile from "./pages/Profile.jsx";
-import Orders from "./pages/Orders.jsx";
-import Wishlist from "./pages/Wishlist.jsx";
-import Settings from "./pages/Settings.jsx";
-import Addresses from "./pages/Addresses.jsx";
-import Notifications from "./pages/Notifications.jsx";
-import About from "./pages/About.jsx";
-import Contact from "./pages/Contact.jsx";
-import FAQ from "./pages/FAQ.jsx";
-import Privacy from "./pages/Privacy.jsx";
-import Terms from "./pages/Terms.jsx";
-import Offers from "./pages/Offers.jsx";
-import Support from "./pages/Support.jsx";
-
-import RestaurantDashboard from "./pages/RestaurantDashboard.jsx";
-import RestaurantMenu from "./pages/RestaurantMenu.jsx";
-import RestaurantOrders from "./pages/RestaurantOrders.jsx";
-import RestaurantEarnings from "./pages/RestaurantEarnings.jsx";
-import RestaurantAnalytics from "./pages/RestaurantAnalytics.jsx";
-
-import DeliveryDashboard from "./pages/DeliveryDashboard.jsx";
-import DeliveryOrders from "./pages/DeliveryOrders.jsx";
-import DeliveryNavigation from "./pages/DeliveryNavigation.jsx";
-import DeliveryEarnings from "./pages/DeliveryEarnings.jsx";
-import DeliveryProfile from "./pages/DeliveryProfile.jsx";
-
-import AdminDashboard from "./pages/AdminDashboard.jsx";
-import UserManagement from "./pages/admin/UserManagement.jsx";
-import AdminRestaurants from "./pages/AdminRestaurants.jsx";
-import AdminDeliveryPartners from "./pages/AdminDeliveryPartners.jsx";
-import AdminOrders from "./pages/AdminOrders.jsx";
-import AdminPayments from "./pages/AdminPayments.jsx";
-import AdminReports from "./pages/AdminReports.jsx";
-
-import Login from "./pages/Auth/Login.jsx";
-import Register from "./pages/Auth/Register.jsx";
-import PendingApproval from "./pages/Auth/PendingApproval.jsx";
-import ForgotPassword from "./pages/Auth/ForgotPassword.jsx";
-import VerifyOTP from "./pages/Auth/VerifyOTP.jsx";
-import ResetPassword from "./pages/Auth/ResetPassword.jsx";
-import EmailVerification from "./pages/Auth/EmailVerification.jsx";
-import TwoFactorAuth from "./pages/Auth/TwoFactorAuth.jsx";
-import AccountLocked from "./pages/Auth/AccountLocked.jsx";
-import Unauthorized from "./pages/Auth/Unauthorized.jsx";
-import AccessDenied from "./pages/Auth/AccessDenied.jsx";
-import SessionExpired from "./pages/Auth/SessionExpired.jsx";
+const Home = lazy(() => import("./pages/Home.jsx"));
+const SearchPage = lazy(() => import("./pages/Search.jsx"));
+const Restaurant = lazy(() => import("./pages/RestaurantLive.jsx"));
+const FoodDetails = lazy(() => import("./pages/FoodDetails.jsx"));
+const Cart = lazy(() => import("./pages/Cart.jsx"));
+const Checkout = lazy(() => import("./pages/Checkout.jsx"));
+const Payment = lazy(() => import("./pages/Payment.jsx"));
+const Tracking = lazy(() => import("./pages/Tracking.jsx"));
+const Profile = lazy(() => import("./pages/Profile.jsx"));
+const Orders = lazy(() => import("./pages/Orders.jsx"));
+const Wishlist = lazy(() => import("./pages/Wishlist.jsx"));
+const Settings = lazy(() => import("./pages/Settings.jsx"));
+const Addresses = lazy(() => import("./pages/Addresses.jsx"));
+const Notifications = lazy(() => import("./pages/Notifications.jsx"));
+const About = lazy(() => import("./pages/About.jsx"));
+const Contact = lazy(() => import("./pages/Contact.jsx"));
+const FAQ = lazy(() => import("./pages/FAQ.jsx"));
+const Privacy = lazy(() => import("./pages/Privacy.jsx"));
+const Terms = lazy(() => import("./pages/Terms.jsx"));
+const Offers = lazy(() => import("./pages/Offers.jsx"));
+const Support = lazy(() => import("./pages/Support.jsx"));
+const RestaurantDashboard = lazy(() => import("./pages/RestaurantDashboard.jsx"));
+const RestaurantMenu = lazy(() => import("./pages/RestaurantMenu.jsx"));
+const RestaurantOrders = lazy(() => import("./pages/RestaurantOrders.jsx"));
+const rolePages = () => import("./pages/LiveRolePages.jsx");
+const RestaurantEarnings = lazy(() => rolePages().then((module) => ({ default: module.RestaurantEarnings })));
+const RestaurantAnalytics = lazy(() => rolePages().then((module) => ({ default: module.RestaurantAnalytics })));
+const DeliveryDashboard = lazy(() => rolePages().then((module) => ({ default: module.DeliveryDashboard })));
+const DeliveryOrders = lazy(() => import("./pages/DeliveryOrders.jsx"));
+const DeliveryNavigation = lazy(() => import("./pages/DeliveryNavigation.jsx"));
+const DeliveryEarnings = lazy(() => rolePages().then((module) => ({ default: module.DeliveryEarnings })));
+const DeliveryProfile = lazy(() => rolePages().then((module) => ({ default: module.DeliveryProfile })));
+const adminPages = () => import("./pages/admin/LiveAdminPages.jsx");
+const AdminDashboard = lazy(() => adminPages().then((module) => ({ default: module.AdminDashboard })));
+const UserManagement = lazy(() => import("./pages/admin/UserManagement.jsx"));
+const AdminRestaurants = lazy(() => adminPages().then((module) => ({ default: module.AdminRestaurants })));
+const AdminDeliveryPartners = lazy(() => adminPages().then((module) => ({ default: module.AdminDeliveryPartners })));
+const AdminOrders = lazy(() => adminPages().then((module) => ({ default: module.AdminOrders })));
+const AdminPayments = lazy(() => adminPages().then((module) => ({ default: module.AdminPayments })));
+const AdminReports = lazy(() => adminPages().then((module) => ({ default: module.AdminReports })));
+const Login = lazy(() => import("./pages/Auth/Login.jsx"));
+const Register = lazy(() => import("./pages/Auth/Register.jsx"));
+const PendingApproval = lazy(() => import("./pages/Auth/PendingApproval.jsx"));
+const ForgotPassword = lazy(() => import("./pages/Auth/ForgotPassword.jsx"));
+const VerifyOTP = lazy(() => import("./pages/Auth/VerifyOTP.jsx"));
+const ResetPassword = lazy(() => import("./pages/Auth/ResetPassword.jsx"));
+const EmailVerification = lazy(() => import("./pages/Auth/EmailVerification.jsx"));
+const TwoFactorAuth = lazy(() => import("./pages/Auth/TwoFactorAuth.jsx"));
+const AccountLocked = lazy(() => import("./pages/Auth/AccountLocked.jsx"));
+const Unauthorized = lazy(() => import("./pages/Auth/Unauthorized.jsx"));
+const AccessDenied = lazy(() => import("./pages/Auth/AccessDenied.jsx"));
+const SessionExpired = lazy(() => import("./pages/Auth/SessionExpired.jsx"));
 
 import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
 import GuestRoute from "./components/auth/GuestRoute.jsx";
 import Footer from "./components/Footer.jsx";
+import LoadingScreen from "./components/common/LoadingScreen.jsx";
 
 export default function App() {
   return (
     <>
+      <Suspense fallback={<LoadingScreen message="Loading page…" />}>
       <Routes>
         <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
         <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
@@ -118,8 +119,9 @@ export default function App() {
         <Route path="/admin-payments" element={<ProtectedRoute allowedRoles={["admin"]}><AdminPayments /></ProtectedRoute>} />
         <Route path="/admin-reports" element={<ProtectedRoute allowedRoles={["admin"]}><AdminReports /></ProtectedRoute>} />
 
-        <Route path="*" element={<div className="flex min-h-screen items-center justify-center bg-[#fffaf7] px-4 text-center"><div className="rounded-[28px] border border-orange-100 bg-white p-8 shadow-sm"><h1 className="text-3xl font-black text-gray-900">404 - Page Not Found</h1><p className="mt-2 text-sm text-gray-600">The page you are looking for does not exist.</p><a href="/" className="mt-5 inline-flex rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white">Back to Home</a></div></div>} />
+        <Route path="*" element={<div className="flex min-h-screen items-center justify-center bg-[#fffaf7] px-4 text-center"><div className="rounded-[28px] border border-orange-100 bg-white p-8 shadow-sm"><h1 className="text-3xl font-black text-gray-900">404 - Page Not Found</h1><p className="mt-2 text-sm text-gray-600">The page you are looking for does not exist.</p><Link to="/" className="mt-5 inline-flex rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white">Back to Home</Link></div></div>} />
       </Routes>
+      </Suspense>
       <Footer />
     </>
   );

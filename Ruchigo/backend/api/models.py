@@ -11,7 +11,7 @@ class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise ValueError("Email is required")
-        email = self.normalize_email(email)
+        email = self.normalize_email(email).lower()
         user = self.model(email=email, username=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -21,6 +21,11 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("role", User.Role.ADMIN)
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
+        extra_fields.setdefault("is_active", True)
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superuser must have is_staff=True.")
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superuser must have is_superuser=True.")
         return self.create_user(email, password, **extra_fields)
 
 
@@ -148,6 +153,7 @@ class Order(TimestampedModel):
     notes = models.TextField(blank=True)
     class Meta:
         indexes = [models.Index(fields=["customer", "status"]), models.Index(fields=["restaurant", "status"])]
+        ordering = ["-created_at"]
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
@@ -182,7 +188,8 @@ class Review(TimestampedModel):
 class OTP(TimestampedModel):
     class Purpose(models.TextChoices): VERIFY_EMAIL="verify_email", "Verify email"; RESET_PASSWORD="reset_password", "Reset password"
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="otps")
-    code = models.CharField(max_length=6); purpose = models.CharField(max_length=20, choices=Purpose.choices)
+    # Store Django's salted password hash, never the six-digit plaintext code.
+    code = models.CharField(max_length=128); purpose = models.CharField(max_length=20, choices=Purpose.choices)
     expires_at = models.DateTimeField(); used_at = models.DateTimeField(null=True, blank=True)
     def is_valid(self): return not self.used_at and self.expires_at > timezone.now()
 

@@ -9,7 +9,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -24,9 +24,11 @@ export default function Checkout() {
     platformFee,
     discount,
     total,
+    couponCode,
+    clearCoupon,
+    loadCart,
   } = useCart();
   const navigate = useNavigate();
-  const location = useLocation();
   const { isAuthenticated, token } = useAuth();
 
   const [addresses, setAddresses] = useState([]);
@@ -55,7 +57,9 @@ export default function Checkout() {
     }
     setPlacingOrder(true);
     try {
-      await apiRequest("/cart/checkout/", { token, method: "POST", body: { address_id: selectedAddress, payment_method: "cod", notes: instructions } });
+      await apiRequest("/cart/checkout/", { token, method: "POST", body: { address_id: selectedAddress, coupon_code: couponCode, payment_method: "cod", notes: instructions } });
+      clearCoupon();
+      await loadCart();
       toast.success("Order placed successfully.");
       navigate("/orders", { replace: true });
     } catch (error) {
@@ -64,12 +68,6 @@ export default function Checkout() {
       setPlacingOrder(false);
     }
   };
-
-  if (!isAuthenticated) {
-    toast.error("Please login to continue.");
-    navigate("/login", { state: { from: { pathname: location.pathname } }, replace: true });
-    return null;
-  }
 
   return (
     <>
@@ -315,8 +313,8 @@ export default function Checkout() {
                         className="flex items-center gap-4"
                       >
 
-                        <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-orange-100 text-3xl">
-                          {item.image}
+                        <div className="h-16 w-16 overflow-hidden rounded-xl bg-orange-100">
+                          <img src={item.image || "/favicon.svg"} alt={item.name} className="h-full w-full object-cover" />
                         </div>
 
                         <div className="flex-1">

@@ -15,6 +15,7 @@ function mapCart(cart) {
     price: Number(item.menu_item_detail?.price || 0),
     image: item.menu_item_detail?.image || "",
     restaurantId: item.menu_item_detail?.restaurant,
+    restaurant: item.menu_item_detail?.restaurant_detail?.name || "Restaurant",
     isVeg: item.menu_item_detail?.is_vegetarian,
   }));
 }
@@ -23,16 +24,19 @@ export function CartProvider({ children }) {
   const { isAuthenticated, token } = useAuth();
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [coupon, setCoupon] = useState(null);
 
   const loadCart = useCallback(async () => {
     if (!isAuthenticated || !token) {
       setCartItems([]);
+      setCoupon(null);
       return;
     }
     setLoading(true);
     try {
       const cart = await apiRequest("/cart/", { token });
       setCartItems(mapCart(cart));
+      setCoupon(null);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -50,12 +54,14 @@ export function CartProvider({ children }) {
     const menuItemId = food.menuItemId || food.id;
     const cart = await apiRequest("/cart/items/", { token, method: "POST", body: { menu_item: menuItemId, quantity } });
     setCartItems(mapCart(cart));
+    setCoupon(null);
   }, [isAuthenticated, token]);
 
   const updateQuantity = useCallback(async (id, quantity) => {
-    if (quantity <= 0) return apiRequest(`/cart/items/${id}/`, { token, method: "DELETE" }).then((cart) => setCartItems(mapCart(cart)));
+    if (quantity <= 0) return apiRequest(`/cart/items/${id}/`, { token, method: "DELETE" }).then((cart) => { setCartItems(mapCart(cart)); setCoupon(null); });
     const cart = await apiRequest(`/cart/items/${id}/`, { token, method: "PATCH", body: { quantity } });
     setCartItems(mapCart(cart));
+    setCoupon(null);
   }, [token]);
 
   const removeFromCart = useCallback((id) => updateQuantity(id, 0), [updateQuantity]);
@@ -67,15 +73,27 @@ export function CartProvider({ children }) {
     const item = cartItems.find((cartItem) => cartItem.id === id);
     return item ? updateQuantity(id, item.quantity - 1) : Promise.resolve();
   }, [cartItems, updateQuantity]);
-  const clearCart = useCallback(async () => Promise.all(cartItems.map((item) => removeFromCart(item.id))), [cartItems, removeFromCart]);
+  const clearCart = useCallback(async () => {
+    await Promise.all(cartItems.map((item) => removeFromCart(item.id)));
+    setCartItems([]);
+    setCoupon(null);
+  }, [cartItems, removeFromCart]);
+
+  const applyCoupon = useCallback(async (code) => {
+    const data = await apiRequest("/cart/validate-coupon/", { token, method: "POST", body: { code } });
+    setCoupon({ code: data.code, discount: Number(data.discount || 0) });
+    return data;
+  }, [token]);
+
+  const clearCoupon = useCallback(() => setCoupon(null), []);
 
   const itemTotal = useMemo(() => cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0), [cartItems]);
   const deliveryFee = itemTotal > 0 && itemTotal < 500 ? 40 : 0;
   const platformFee = 0;
-  const discount = 0;
-  const total = itemTotal + deliveryFee;
+  const discount = coupon?.discount || 0;
+  const total = Math.max(0, itemTotal + deliveryFee - discount);
 
-  const value = useMemo(() => ({ cartItems, loading, loadCart, addToCart, removeFromCart, increaseQuantity, decreaseQuantity, clearCart, itemTotal, deliveryFee, platformFee, discount, total }), [cartItems, loading, loadCart, addToCart, removeFromCart, increaseQuantity, decreaseQuantity, clearCart, itemTotal, deliveryFee, total]);
+  const value = useMemo(() => ({ cartItems, loading, loadCart, addToCart, removeFromCart, increaseQuantity, decreaseQuantity, clearCart, applyCoupon, clearCoupon, couponCode: coupon?.code || "", itemTotal, deliveryFee, platformFee, discount, total }), [cartItems, loading, loadCart, addToCart, removeFromCart, increaseQuantity, decreaseQuantity, clearCart, applyCoupon, clearCoupon, coupon, itemTotal, deliveryFee, discount, total]);
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 

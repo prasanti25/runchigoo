@@ -12,9 +12,13 @@ def spa_index_view(request, path=""):
     normalized_path = (path or "").strip("/")
     if normalized_path and "." in Path(normalized_path).name:
         for candidate_root in [Path(settings.BASE_DIR).parent / "dist", Path(settings.BASE_DIR) / "dist"]:
-            candidate = candidate_root / normalized_path
+            resolved_root = candidate_root.resolve()
+            candidate = (resolved_root / normalized_path).resolve()
+            if not candidate.is_relative_to(resolved_root):
+                continue
             if candidate.exists() and candidate.is_file():
                 return FileResponse(candidate.open("rb"))
+        return HttpResponse(status=404)
 
     candidates = [
         Path(settings.BASE_DIR).parent / "dist" / "index.html",

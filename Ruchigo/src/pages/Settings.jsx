@@ -1,379 +1,105 @@
-import Navbar from "../components/Navbar.jsx";
-
-import {
-  Settings as SettingsIcon,
-  Bell,
-  User,
-  Lock,
-  Moon,
-  Globe,
-  MapPin,
-} from "lucide-react";
-
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Lock, LogOut, Save, User } from "lucide-react";
+import toast from "react-hot-toast";
+import Navbar from "../components/Navbar.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
+
+const inputClass = "mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 outline-none transition focus:border-orange-500";
 
 export default function Settings() {
+  const { user, updateProfile, changePassword, logout } = useAuth();
+  const [profile, setProfile] = useState({
+    first_name: user?.first_name || "",
+    last_name: user?.last_name || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
+  });
+  const [passwords, setPasswords] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
 
-  const [pushNotifications, setPushNotifications] =
-    useState(true);
+  const saveProfile = async (event) => {
+    event.preventDefault();
+    setSavingProfile(true);
+    try {
+      await updateProfile(profile);
+      toast.success("Profile updated.");
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
-  const [orderUpdates, setOrderUpdates] =
-    useState(true);
-
-  const [offers, setOffers] =
-    useState(false);
-
-  const [darkMode, setDarkMode] =
-    useState(false);
-
-  const [locationEnabled, setLocationEnabled] =
-    useState(true);
+  const savePassword = async (event) => {
+    event.preventDefault();
+    if (passwords.newPassword.length < 8) {
+      toast.error("The new password must contain at least 8 characters.");
+      return;
+    }
+    if (passwords.newPassword !== passwords.confirmPassword) {
+      toast.error("New passwords do not match.");
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await changePassword(passwords);
+    } catch (error) {
+      toast.error(error.message);
+      setSavingPassword(false);
+    }
+  };
 
   return (
-
     <>
-
       <Navbar />
-
       <main className="min-h-screen bg-[#fffaf7]">
-
         <section className="mx-auto max-w-5xl px-6 py-10">
-
-          {/* Header */}
-
           <div className="mb-10">
-
-            <p className="font-semibold text-orange-500">
-              Account
-            </p>
-
-            <h1 className="mt-2 text-4xl font-bold text-gray-900">
-              Settings
-            </h1>
-
-            <p className="mt-3 text-gray-500">
-              Manage your account preferences and privacy settings.
-            </p>
-
+            <p className="font-semibold text-orange-500">Account</p>
+            <h1 className="mt-2 text-4xl font-bold text-gray-900">Settings</h1>
+            <p className="mt-3 text-gray-500">Keep your profile and sign-in details up to date.</p>
           </div>
 
-          {/* Account */}
-
-          <div className="mb-8 rounded-3xl bg-white p-6 shadow-sm">
-
+          <form onSubmit={saveProfile} className="rounded-3xl bg-white p-6 shadow-sm">
             <div className="mb-6 flex items-center gap-3">
-
               <User className="text-orange-500" />
-
-              <h2 className="text-2xl font-bold">
-                Account
-              </h2>
-
+              <h2 className="text-2xl font-bold">Profile</h2>
             </div>
+            <div className="grid gap-5 md:grid-cols-2">
+              <label className="text-sm font-medium text-gray-700">First name<input className={inputClass} value={profile.first_name} onChange={(event) => setProfile((current) => ({ ...current, first_name: event.target.value }))} /></label>
+              <label className="text-sm font-medium text-gray-700">Last name<input className={inputClass} value={profile.last_name} onChange={(event) => setProfile((current) => ({ ...current, last_name: event.target.value }))} /></label>
+              <label className="text-sm font-medium text-gray-700">Email<input className={inputClass} type="email" required value={profile.email} onChange={(event) => setProfile((current) => ({ ...current, email: event.target.value }))} /></label>
+              <label className="text-sm font-medium text-gray-700">Phone<input className={inputClass} type="tel" value={profile.phone} onChange={(event) => setProfile((current) => ({ ...current, phone: event.target.value }))} /></label>
+            </div>
+            <button disabled={savingProfile} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-3 font-semibold text-white disabled:opacity-60"><Save size={18} />{savingProfile ? "Saving…" : "Save profile"}</button>
+          </form>
 
-            <button className="mb-3 flex w-full items-center justify-between rounded-xl border border-orange-100 p-4 transition hover:bg-orange-50">
-
-              <span>Edit Profile</span>
-
-              ➜
-
-            </button>
-
-            <button className="flex w-full items-center justify-between rounded-xl border border-orange-100 p-4 transition hover:bg-orange-50">
-
-              <span>Change Password</span>
-
-              ➜
-
-            </button>
-
-          </div>
-
-          {/* Notifications */}
-
-          <div className="rounded-3xl bg-white p-6 shadow-sm">
-
+          <form onSubmit={savePassword} className="mt-8 rounded-3xl bg-white p-6 shadow-sm">
             <div className="mb-6 flex items-center gap-3">
-
-              <Bell className="text-orange-500" />
-
-              <h2 className="text-2xl font-bold">
-                Notifications
-              </h2>
-
-            </div>
-                        {/* Push Notifications */}
-
-            <div className="mb-4 flex items-center justify-between rounded-xl border border-orange-100 p-4">
-
-              <div>
-
-                <h3 className="font-semibold text-gray-900">
-                  Push Notifications
-                </h3>
-
-                <p className="text-sm text-gray-500">
-                  Receive notifications about your account.
-                </p>
-
-              </div>
-
-              <button
-                onClick={() => setPushNotifications(!pushNotifications)}
-                className={`h-7 w-14 rounded-full transition ${
-                  pushNotifications ? "bg-orange-500" : "bg-gray-300"
-                }`}
-              >
-                <div
-                  className={`h-6 w-6 rounded-full bg-white transition ${
-                    pushNotifications
-                      ? "translate-x-7"
-                      : "translate-x-1"
-                  }`}
-                />
-              </button>
-
-            </div>
-
-            {/* Order Updates */}
-
-            <div className="mb-4 flex items-center justify-between rounded-xl border border-orange-100 p-4">
-
-              <div>
-
-                <h3 className="font-semibold text-gray-900">
-                  Order Updates
-                </h3>
-
-                <p className="text-sm text-gray-500">
-                  Get notified about order status and delivery updates.
-                </p>
-
-              </div>
-
-              <button
-                onClick={() => setOrderUpdates(!orderUpdates)}
-                className={`h-7 w-14 rounded-full transition ${
-                  orderUpdates ? "bg-orange-500" : "bg-gray-300"
-                }`}
-              >
-                <div
-                  className={`h-6 w-6 rounded-full bg-white transition ${
-                    orderUpdates
-                      ? "translate-x-7"
-                      : "translate-x-1"
-                  }`}
-                />
-              </button>
-
-            </div>
-
-            {/* Promotional Offers */}
-
-            <div className="flex items-center justify-between rounded-xl border border-orange-100 p-4">
-
-              <div>
-
-                <h3 className="font-semibold text-gray-900">
-                  Promotional Offers
-                </h3>
-
-                <p className="text-sm text-gray-500">
-                  Receive coupons and exclusive offers.
-                </p>
-
-              </div>
-
-              <button
-                onClick={() => setOffers(!offers)}
-                className={`h-7 w-14 rounded-full transition ${
-                  offers ? "bg-orange-500" : "bg-gray-300"
-                }`}
-              >
-                <div
-                  className={`h-6 w-6 rounded-full bg-white transition ${
-                    offers
-                      ? "translate-x-7"
-                      : "translate-x-1"
-                  }`}
-                />
-              </button>
-
-            </div>
-
-          </div>
-
-          {/* Preferences */}
-
-          <div className="mt-8 rounded-3xl bg-white p-6 shadow-sm">
-
-            <div className="mb-6 flex items-center gap-3">
-
-              <SettingsIcon className="text-orange-500" />
-
-              <h2 className="text-2xl font-bold">
-                Preferences
-              </h2>
-
-            </div>
-
-            {/* Dark Mode */}
-
-            <div className="mb-4 flex items-center justify-between rounded-xl border border-orange-100 p-4">
-
-              <div className="flex items-center gap-3">
-
-                <Moon className="text-orange-500" />
-
-                <span className="font-medium">
-                  Dark Mode
-                </span>
-
-              </div>
-
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className={`h-7 w-14 rounded-full transition ${
-                  darkMode ? "bg-orange-500" : "bg-gray-300"
-                }`}
-              >
-                <div
-                  className={`h-6 w-6 rounded-full bg-white transition ${
-                    darkMode
-                      ? "translate-x-7"
-                      : "translate-x-1"
-                  }`}
-                />
-              </button>
-
-            </div>
-
-            {/* Language */}
-
-            <div className="mb-4 flex items-center justify-between rounded-xl border border-orange-100 p-4">
-
-              <div className="flex items-center gap-3">
-
-                <Globe className="text-orange-500" />
-
-                <span className="font-medium">
-                  Language
-                </span>
-
-              </div>
-
-              <select className="rounded-lg border border-orange-200 px-4 py-2 outline-none">
-
-                <option>English</option>
-
-                <option>తెలుగు</option>
-
-                <option>Hindi</option>
-
-              </select>
-
-            </div>
-
-            {/* Location */}
-
-            <div className="flex items-center justify-between rounded-xl border border-orange-100 p-4">
-
-              <div className="flex items-center gap-3">
-
-                <MapPin className="text-orange-500" />
-
-                <span className="font-medium">
-                  Location Access
-                </span>
-
-              </div>
-
-              <button
-                onClick={() => setLocationEnabled(!locationEnabled)}
-                className={`h-7 w-14 rounded-full transition ${
-                  locationEnabled ? "bg-orange-500" : "bg-gray-300"
-                }`}
-              >
-                <div
-                  className={`h-6 w-6 rounded-full bg-white transition ${
-                    locationEnabled
-                      ? "translate-x-7"
-                      : "translate-x-1"
-                  }`}
-                />
-              </button>
-
-            </div>
-
-          </div>
-
-          {/* Privacy */}
-
-          <div className="mt-8 rounded-3xl bg-white p-6 shadow-sm">
-
-            <div className="mb-6 flex items-center gap-3">
-
               <Lock className="text-orange-500" />
-
-              <h2 className="text-2xl font-bold">
-                Privacy & Security
-              </h2>
-
+              <h2 className="text-2xl font-bold">Change password</h2>
             </div>
-
-            <button className="mb-3 flex w-full items-center justify-between rounded-xl border border-orange-100 p-4 transition hover:bg-orange-50">
-
-              <span>Two-Factor Authentication</span>
-
-              ➜
-
-            </button>
-
-            <button className="mb-3 flex w-full items-center justify-between rounded-xl border border-orange-100 p-4 transition hover:bg-orange-50">
-
-              <span>Privacy Policy</span>
-
-              ➜
-
-            </button>
-
-            <button className="flex w-full items-center justify-between rounded-xl border border-orange-100 p-4 transition hover:bg-orange-50">
-
-              <span>Terms & Conditions</span>
-
-              ➜
-
-            </button>
-
-          </div>
-                    {/* Account Actions */}
+            <div className="grid gap-5 md:grid-cols-3">
+              <label className="text-sm font-medium text-gray-700">Current password<input className={inputClass} type="password" required autoComplete="current-password" value={passwords.currentPassword} onChange={(event) => setPasswords((current) => ({ ...current, currentPassword: event.target.value }))} /></label>
+              <label className="text-sm font-medium text-gray-700">New password<input className={inputClass} type="password" required minLength="8" autoComplete="new-password" value={passwords.newPassword} onChange={(event) => setPasswords((current) => ({ ...current, newPassword: event.target.value }))} /></label>
+              <label className="text-sm font-medium text-gray-700">Confirm password<input className={inputClass} type="password" required minLength="8" autoComplete="new-password" value={passwords.confirmPassword} onChange={(event) => setPasswords((current) => ({ ...current, confirmPassword: event.target.value }))} /></label>
+            </div>
+            <button disabled={savingPassword} className="mt-6 rounded-xl bg-gray-900 px-5 py-3 font-semibold text-white disabled:opacity-60">{savingPassword ? "Updating…" : "Update password"}</button>
+          </form>
 
           <div className="mt-8 rounded-3xl bg-white p-6 shadow-sm">
-
-            <h2 className="mb-6 text-2xl font-bold text-gray-900">
-              Account Actions
-            </h2>
-
-            <div className="space-y-4">
-
-              <button className="w-full rounded-xl bg-orange-500 px-6 py-4 font-semibold text-white transition hover:bg-orange-600">
-                Logout
-              </button>
-
-              <button className="w-full rounded-xl border border-red-300 px-6 py-4 font-semibold text-red-600 transition hover:bg-red-500 hover:text-white">
-                Delete Account
-              </button>
-
+            <h2 className="text-2xl font-bold">Privacy & legal</h2>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link to="/privacy" className="rounded-xl border border-orange-200 px-5 py-3 font-semibold text-orange-600">Privacy Policy</Link>
+              <Link to="/terms" className="rounded-xl border border-orange-200 px-5 py-3 font-semibold text-orange-600">Terms & Conditions</Link>
             </div>
-
           </div>
 
+          <button onClick={() => logout()} className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-6 py-4 font-semibold text-red-600 transition hover:bg-red-500 hover:text-white"><LogOut size={19} />Logout</button>
         </section>
-
       </main>
-
     </>
-
   );
-
 }

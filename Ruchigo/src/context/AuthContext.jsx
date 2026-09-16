@@ -15,6 +15,7 @@ const SESSION_FALLBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const defaultAuthState = {
   token: null,
+  refreshToken: null,
   user: null,
   role: "guest",
   expiresAt: null,
@@ -24,9 +25,10 @@ function getTokenExpiry(token) {
   if (!token) return null;
 
   try {
-    const payload = JSON.parse(
-      atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
-    );
+    const encodedPayload = token.split(".")[1]?.replace(/-/g, "+").replace(/_/g, "/");
+    if (!encodedPayload) return null;
+    const paddedPayload = encodedPayload.padEnd(encodedPayload.length + ((4 - (encodedPayload.length % 4)) % 4), "=");
+    const payload = JSON.parse(atob(paddedPayload));
 
     return payload?.exp ? payload.exp * 1000 : null;
   } catch {
@@ -55,7 +57,7 @@ function readStoredAuth() {
     }
 
     const expiresAt = parsed.expiresAt || getTokenExpiry(parsed.token) || Date.now() + SESSION_FALLBACK_MS;
-    if (Date.now() > expiresAt) {
+    if (Date.now() > expiresAt && !parsed.refreshToken) {
       window.localStorage.removeItem(STORAGE_KEY);
       return defaultAuthState;
     }
@@ -96,9 +98,13 @@ export function AuthProvider({ children }) {
   const { addNotification } = useNotifications();
   const [auth, setAuth] = useState(() => readStoredAuth());
   const [loading, setLoading] = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(
+    () => Boolean(auth.refreshToken && auth.expiresAt && auth.expiresAt - Date.now() <= 60 * 1000)
+  );
 
   const refreshSession = useCallback(async () => {
     if (!auth.refreshToken) return false;
+    setSessionLoading(true);
     try {
       const tokens = await refreshAccessToken(auth.refreshToken);
       setAuth((current) => ({
@@ -112,6 +118,8 @@ export function AuthProvider({ children }) {
       setAuth(defaultAuthState);
       clearAuthStorage();
       return false;
+    } finally {
+      setSessionLoading(false);
     }
   }, [auth.refreshToken]);
 
@@ -163,7 +171,7 @@ export function AuthProvider({ children }) {
     setLoading(true);
 
     const normalizedEmail = (email || "").trim().toLowerCase();
-    const normalizedPassword = (password || "").trim();
+    const normalizedPassword = password || "";
     const safeRole = role || "customer";
 
     if (!normalizedEmail || !normalizedPassword || normalizedPassword.length < 6) {
@@ -231,8 +239,8 @@ export function AuthProvider({ children }) {
             navigate(target, { replace: true });
           }, 0);
           return true;
-        } catch {
-          toast.error(error.message);
+        } catch (retryError) {
+          toast.error(retryError.message);
           return false;
         } finally { setLoading(false); }
       }
@@ -254,9 +262,9 @@ export function AuthProvider({ children }) {
     const normalizedName = (fullName || "").trim();
     const normalizedEmail = (email || "").trim().toLowerCase();
     const normalizedPhone = (phone || "").trim();
-    const normalizedPassword = (password || "").trim();
+    const normalizedPassword = password || "";
 
-    if (!normalizedName || !normalizedEmail || !normalizedPhone || normalizedPassword.length < 6) {
+    if (!normalizedName || !normalizedEmail || !normalizedPhone || normalizedPassword.length < 8) {
       setLoading(false);
       toast.error("Please complete all registration details.");
       return false;
@@ -299,17 +307,35 @@ export function AuthProvider({ children }) {
     }
   }, [navigate]);
 
+  const updateProfile = useCallback(async (profile) => {
+    const updated = await apiRequest("/auth/me/", { token: auth.token, method: "PATCH", body: profile });
+    const user = { ...updated, name: `${updated.first_name || ""} ${updated.last_name || ""}`.trim() || updated.email };
+    setAuth((current) => ({ ...current, user, role: user.role }));
+    return user;
+  }, [auth.token]);
+
+  const changePassword = useCallback(async ({ currentPassword, newPassword }) => {
+    await apiRequest("/auth/change_password/", {
+      token: auth.token,
+      method: "POST",
+      body: { current_password: currentPassword, new_password: newPassword },
+    });
+    logout("Password changed. Please sign in again.");
+  }, [auth.token, logout]);
+
   const value = useMemo(
     () => ({
       ...auth,
       isAuthenticated: Boolean(auth.token && auth.user),
-      loading,
+      loading: loading || sessionLoading,
       login,
       register,
+      updateProfile,
+      changePassword,
       logout,
       refreshSession,
     }),
-    [auth, loading, login, logout, refreshSession, register]
+    [auth, loading, login, logout, refreshSession, register, updateProfile, changePassword, sessionLoading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

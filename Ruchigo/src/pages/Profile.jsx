@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 
 import { Link } from "react-router-dom";
-import { useCart } from "../context/CartContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
 import { useEffect, useState } from "react";
@@ -55,48 +54,36 @@ const menuItems = [
 
 export default function Profile() {
 
-  const { cartItems, total } = useCart();
-  const { user: authUser, token } = useAuth();
+  const { user: authUser, token, logout } = useAuth();
   const [orderCount, setOrderCount] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [recentOrders, setRecentOrders] = useState([]);
 
-  // Temporary User Data
-  // Later this will come from your backend
+  const user = { name: authUser?.name || `${authUser?.first_name || ""} ${authUser?.last_name || ""}`.trim() || "Customer", email: authUser?.email || "", phone: authUser?.phone || "Not added", totalOrders: orderCount, reviews: reviewCount };
 
-  const user = { name: authUser?.name || `${authUser?.first_name || ""} ${authUser?.last_name || ""}`.trim() || "Customer", email: authUser?.email || "", phone: authUser?.phone || "Not added", totalOrders: orderCount, reviews: 0 };
-
-  useEffect(() => { apiRequest("/orders/", { token }).then((data) => setOrderCount((data.results || data).length)).catch(() => setOrderCount(0)); }, [token]);
-
-  // Temporary Orders
-  // Later replace with API response
-
-  const recentOrders = [
-
-    {
-      id: "#RG202600128",
-      restaurant: "Paradise Biryani",
-      items: cartItems,
-      total: total,
-      status: "On the way",
-      icon: "🍛",
-    },
-
-    {
-      id: "#RG202600097",
-      restaurant: "Pizza Hub",
-      items: [
-        {
-          name: "Farmhouse Pizza",
-        },
-        {
-          name: "Garlic Bread",
-        },
-      ],
-      total: 529,
-      status: "Delivered",
-      icon: "🍕",
-    },
-
-  ];
+  useEffect(() => {
+    if (!token) return;
+    Promise.all([apiRequest("/orders/", { token }), apiRequest("/reviews/", { token })])
+      .then(([orderData, reviewData]) => {
+        const orders = orderData.results || orderData;
+        setOrderCount(orderData.count ?? orders.length);
+        setReviewCount(reviewData.count ?? (reviewData.results || reviewData).length);
+        setRecentOrders(orders.slice(0, 3).map((order) => ({
+          id: `#RG${String(order.number).slice(0, 8).toUpperCase()}`,
+          trackingId: order.id,
+          restaurant: order.restaurant_detail?.name || "Restaurant",
+          items: order.items || [],
+          total: Number(order.total),
+          status: order.status === "delivered" ? "Delivered" : order.status === "cancelled" ? "Cancelled" : order.status === "out_for_delivery" ? "On the way" : "Preparing",
+          icon: "🍽️",
+        })));
+      })
+      .catch(() => {
+        setOrderCount(0);
+        setReviewCount(0);
+        setRecentOrders([]);
+      });
+  }, [token]);
 
   return (
 
@@ -157,9 +144,9 @@ export default function Profile() {
                   {user.phone}
                 </p>
 
-                <button className="mt-6 w-full rounded-xl border border-orange-200 px-5 py-3 font-semibold text-orange-500 transition hover:bg-orange-500 hover:text-white">
+                <Link to="/settings" className="mt-6 block w-full rounded-xl border border-orange-200 px-5 py-3 font-semibold text-orange-500 transition hover:bg-orange-500 hover:text-white">
                   Edit Profile
-                </button>
+                </Link>
 
               </div>
 
@@ -292,7 +279,7 @@ export default function Profile() {
 
                 <div className="mt-6 space-y-5">
 
-                  {recentOrders.map((order) => (
+                  {recentOrders.length === 0 ? <p className="rounded-2xl bg-orange-50 p-5 text-center text-gray-500">No recent orders yet.</p> : recentOrders.map((order) => (
 
                     <div
                       key={order.id}
@@ -364,7 +351,7 @@ export default function Profile() {
                         {order.status === "On the way" ? (
 
                           <Link
-                            to="/tracking"
+                            to={`/tracking/${order.trackingId}`}
                             className="mt-3 inline-block rounded-lg bg-orange-50 px-4 py-2 font-semibold text-orange-500 transition hover:bg-orange-500 hover:text-white"
                           >
                             Track Order
@@ -372,9 +359,7 @@ export default function Profile() {
 
                         ) : (
 
-                          <button className="mt-3 rounded-lg bg-orange-50 px-4 py-2 font-semibold text-orange-500 transition hover:bg-orange-500 hover:text-white">
-                            Reorder
-                          </button>
+                          <Link to={`/tracking/${order.trackingId}`} className="mt-3 inline-block rounded-lg bg-orange-50 px-4 py-2 font-semibold text-orange-500 transition hover:bg-orange-500 hover:text-white">View order</Link>
 
                         )}
 
@@ -390,7 +375,7 @@ export default function Profile() {
 
               {/* Logout */}
 
-              <button className="flex w-full items-center justify-center gap-3 rounded-2xl border border-red-100 bg-white px-6 py-4 font-semibold text-red-500 transition hover:bg-red-500 hover:text-white">
+              <button onClick={() => logout()} className="flex w-full items-center justify-center gap-3 rounded-2xl border border-red-100 bg-white px-6 py-4 font-semibold text-red-500 transition hover:bg-red-500 hover:text-white">
 
                 <LogOut size={20} />
 

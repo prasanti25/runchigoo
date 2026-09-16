@@ -82,7 +82,7 @@ const Login = () => {
       />
 
       <form onSubmit={handleLogin} className="space-y-5">
-        <RoleSelector selectedRole={formData.role} onSelectRole={handleRole} />
+        <RoleSelector selectedRole={formData.role} onSelectRole={handleRole} allowAdmin />
 
         <AuthInput
           label="Email Address"

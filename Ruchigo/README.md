@@ -23,7 +23,7 @@ python manage.py runserver
 
 Runs at http://127.0.0.1:8000, api docs at /api/docs/
 
-Uses SQLite by default for local dev. For MySQL, run database/RuchiGo_DB.sql first and update backend/.env with the credentials.
+Uses SQLite by default for local development. For MySQL, install `backend/requirements-mysql.txt`, run `database/RuchiGo_DB.sql`, and update `backend/.env` with the credentials.
 
 ## Deployment checklist
 See `DEPLOYMENT_CHECKLIST.md` for production readiness and final deployment steps.
@@ -37,5 +37,7 @@ npm run dev
 ```
 
 Runs at http://localhost:5173. VITE_API_BASE_URL in .env points to the backend.
+
+After activating the Python virtual environment, `npm run dev:all` starts both services on macOS, Linux, and Windows.
 
 More details in PROJECT_AUDIT.md

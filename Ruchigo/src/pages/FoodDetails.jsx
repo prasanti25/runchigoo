@@ -30,19 +30,30 @@ export default function FoodDetails() {
 
   const { addToCart } = useCart();
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, token } = useAuth();
 
   const [quantity, setQuantity] = useState(1);
 
   const [liked, setLiked] = useState(false);
+  const [wishlistId, setWishlistId] = useState(null);
 
   const [food, setFood] = useState(foodData.find((item) => item.id === Number(id)) || foodData[0]);
   const [allFoods, setAllFoods] = useState(foodData);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    apiRequest(`/menu-items/${id}/`).then((item) => setFood({ id: item.id, restaurantId: item.restaurant, restaurant: item.restaurant_detail?.name || "Restaurant", category: item.category_name || "Menu", name: item.name, description: item.description, price: Number(item.price), rating: item.restaurant_detail?.average_rating || "New", isVeg: item.is_vegetarian, deliveryTime: `${item.preparation_minutes} min`, image: item.image || "/favicon.svg", imageAlt: item.name }));
-    apiRequest("/menu-items/").then((data) => setAllFoods((data.results || data).map((item) => ({ id: item.id, restaurantId: item.restaurant, name: item.name, description: item.description, price: Number(item.price), image: item.image || "/favicon.svg", category: item.category_name || "Menu", isVeg: item.is_vegetarian, rating: item.restaurant_detail?.average_rating || "New" }))));
-  }, [id]);
+    Promise.all([apiRequest(`/menu-items/${id}/`), apiRequest("/menu-items/"), token ? apiRequest("/wishlist/", { token }) : Promise.resolve(null)])
+      .then(([item, data, wishlistData]) => {
+        setFood({ id: item.id, restaurantId: item.restaurant, restaurant: item.restaurant_detail?.name || "Restaurant", category: item.category_name || "Menu", name: item.name, description: item.description, price: Number(item.price), rating: item.restaurant_detail?.average_rating || "New", isVeg: item.is_vegetarian, deliveryTime: `${item.preparation_minutes} min`, image: item.image || "/favicon.svg", imageAlt: item.name });
+        setAllFoods((data.results || data).map((entry) => ({ id: entry.id, restaurantId: entry.restaurant, restaurant: entry.restaurant_detail?.name || "Restaurant", name: entry.name, description: entry.description, price: Number(entry.price), image: entry.image || "/favicon.svg", imageAlt: entry.name, category: entry.category_name || "Menu", isVeg: entry.is_vegetarian, rating: entry.restaurant_detail?.average_rating || "New" })));
+        const wishlistEntry = wishlistData ? (wishlistData.results || wishlistData).find((entry) => entry.menu_item === item.id) : null;
+        setWishlistId(wishlistEntry?.id || null);
+        setLiked(Boolean(wishlistEntry));
+      })
+      .catch((requestError) => setError(requestError.message))
+      .finally(() => setLoading(false));
+  }, [id, token]);
 
   const recommendedFoods = allFoods.filter(
     (item) =>
@@ -77,9 +88,47 @@ export default function FoodDetails() {
     navigate("/cart");
   };
 
-  const totalPrice = food.price * quantity;
+  const handleBuyNow = async () => {
+    if (!isAuthenticated) {
+      toast.error("Please login to continue.");
+      navigate("/login", { state: { from: { pathname: `/food-details/${id}` } } });
+      return;
+    }
+    try {
+      await addToCart(food, quantity);
+      navigate("/checkout");
+    } catch (requestError) {
+      toast.error(requestError.message);
+    }
+  };
 
-  const originalPrice = Math.round(food.price * 1.3) * quantity;
+  const toggleWishlist = async () => {
+    if (!isAuthenticated) {
+      toast.error("Please login to save favourites.");
+      navigate("/login", { state: { from: { pathname: `/food-details/${id}` } } });
+      return;
+    }
+    try {
+      if (wishlistId) {
+        await apiRequest(`/wishlist/${wishlistId}/`, { token, method: "DELETE" });
+        setWishlistId(null);
+        setLiked(false);
+        toast.success("Removed from wishlist.");
+      } else {
+        const entry = await apiRequest("/wishlist/", { token, method: "POST", body: { menu_item: food.id } });
+        setWishlistId(entry.id);
+        setLiked(true);
+        toast.success("Added to wishlist.");
+      }
+    } catch (requestError) {
+      toast.error(requestError.message);
+    }
+  };
+
+  if (loading) return <><Navbar /><main className="min-h-screen bg-[#fff8f5] p-10 text-center">Loading menu item…</main></>;
+  if (error) return <><Navbar /><main className="min-h-screen bg-[#fff8f5] p-10 text-center text-red-600">{error}</main></>;
+
+  const totalPrice = food.price * quantity;
 
   return (
     <>
@@ -95,12 +144,9 @@ export default function FoodDetails() {
 
             <div className="relative overflow-hidden rounded-[36px] bg-white p-4 shadow-xl">
 
-              <span className="absolute left-8 top-8 z-20 rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white">
-                🔥 30% OFF
-              </span>
-
               <button
-                onClick={() => setLiked(!liked)}
+                onClick={toggleWishlist}
+                aria-label={liked ? "Remove from wishlist" : "Add to wishlist"}
                 className="absolute right-8 top-8 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-lg transition hover:scale-110"
               >
                 <Heart
@@ -155,39 +201,12 @@ export default function FoodDetails() {
                 {food.description}
               </p>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-
-                <span className="rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-600">
-                  🔥 Best Seller
-                </span>
-
-                <span className="rounded-full bg-green-100 px-4 py-2 text-sm font-semibold text-green-700">
-                  🚚 Free Delivery
-                </span>
-
-                <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-semibold text-blue-700">
-                  ⭐ Top Rated
-                </span>
-
-                <span className="rounded-full bg-purple-100 px-4 py-2 text-sm font-semibold text-purple-700">
-                  🍽 Freshly Cooked
-                </span>
-
-              </div>
-                            {/* Price */}
+              {/* Price */}
 
               <div className="mt-8 flex items-center gap-4">
 
                 <span className="text-5xl font-bold text-orange-600">
                   ₹{totalPrice}
-                </span>
-
-                <span className="text-3xl text-gray-400 line-through">
-                  ₹{originalPrice}
-                </span>
-
-                <span className="rounded-full bg-red-500 px-3 py-2 text-sm font-bold text-white">
-                  30% OFF
                 </span>
 
               </div>
@@ -225,9 +244,9 @@ export default function FoodDetails() {
                   </span>
 
                   <button
-                    onClick={() =>
-                      setQuantity(quantity + 1)
-                    }
+                    onClick={() => setQuantity((current) => Math.min(current + 1, 99))}
+                    disabled={quantity >= 99}
+                    aria-label="Increase quantity"
                     className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500 text-white transition hover:bg-orange-600"
                   >
                     <Plus size={20} />
@@ -309,7 +328,7 @@ export default function FoodDetails() {
                 </button>
 
                 <button
-                  onClick={() => navigate("/checkout")}
+                  onClick={handleBuyNow}
                   className="rounded-2xl bg-green-600 px-8 py-4 text-lg font-semibold text-white shadow-lg transition hover:bg-green-700"
                 >
                   Buy Now
@@ -442,10 +461,6 @@ export default function FoodDetails() {
                       className="h-56 w-full object-cover transition duration-500 group-hover:scale-110"
                     />
 
-                    <span className="absolute left-4 top-4 rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white">
-                      20% OFF
-                    </span>
-
                   </div>
 
                   <div className="p-6">
@@ -490,8 +505,7 @@ export default function FoodDetails() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          addToCart(item);
-                          toast.success("Added to Cart");
+                          void addToCart(item).then(() => toast.success("Added to cart.")).catch((requestError) => toast.error(requestError.message));
                         }}
                         className="rounded-xl bg-orange-500 px-5 py-2 font-semibold text-white transition hover:bg-orange-600"
                       >

@@ -3,37 +3,18 @@ import { createContext, useContext, useMemo, useState } from "react";
 
 const NotificationContext = createContext(null);
 
-const initialNotifications = [
-  {
-    id: 1,
-    title: "Your order is on the way",
-    message: "Driver has started the route to your address.",
-    read: false,
-  },
-  {
-    id: 2,
-    title: "Flash deal unlocked",
-    message: "Use code RUCHIGO50 for extra savings today.",
-    read: true,
-  },
-];
-
 export function NotificationProvider({ children }) {
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const [notifications, setNotifications] = useState([]);
 
   const markAllAsRead = () => {
     setNotifications((current) => current.map((item) => ({ ...item, read: true })));
   };
 
   const addNotification = (notification) => {
-    setNotifications((current) => [
-      {
-        id: Date.now(),
-        ...notification,
-        read: false,
-      },
-      ...current,
-    ]);
+    setNotifications((current) => {
+      if (notification.id && current.some((item) => item.id === notification.id)) return current;
+      return [{ id: notification.id || crypto.randomUUID(), ...notification, read: notification.read ?? false }, ...current];
+    });
   };
 
   const value = useMemo(

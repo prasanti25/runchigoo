@@ -26,28 +26,46 @@ const categoryCards = [
   { name: "Drinks", tag: "Refresh & relax", icon: Wallet },
 ];
 
-const offerCards = [
-  "Flat 50% off on your first order",
-  "Free delivery on orders above ₹199",
-  "Combo saver: Biryani + Dessert",
-];
-
 export default function Home() {
   const navigate = useNavigate();
   const { isAuthenticated, logout } = useAuth();
   const [query, setQuery] = useState("");
   const [trendingRestaurants, setTrendingRestaurants] = useState([]);
   const [featuredDishes, setFeaturedDishes] = useState([]);
+  const [activeOffers, setActiveOffers] = useState([]);
+  const [catalogCounts, setCatalogCounts] = useState({ restaurants: 0, dishes: 0, offers: 0 });
 
   useEffect(() => {
-    apiRequest("/restaurants/").then((data) => setTrendingRestaurants((data.results || data).slice(0, 3).map((restaurant) => ({ id: restaurant.id, name: restaurant.name, cuisine: restaurant.description || restaurant.city, rating: restaurant.average_rating || "New", time: "30-40 min", image: restaurant.image || "/favicon.svg", offer: "FREE DELIVERY" }))));
-    apiRequest("/menu-items/").then((data) => setFeaturedDishes((data.results || data).slice(0, 4).map((item) => ({ id: item.id, name: item.name, restaurant: item.restaurant_detail?.name || "Restaurant", price: Number(item.price), deliveryTime: `${item.preparation_minutes} min`, image: item.image || "/favicon.svg" }))));
+    let active = true;
+    Promise.allSettled([
+      apiRequest("/restaurants/"),
+      apiRequest("/menu-items/"),
+      apiRequest("/offers/"),
+    ]).then(([restaurantResult, menuResult, offerResult]) => {
+      if (!active) return;
+      if (restaurantResult.status === "fulfilled") {
+        const data = restaurantResult.value;
+        setCatalogCounts((current) => ({ ...current, restaurants: data.count ?? data.length ?? 0 }));
+        setTrendingRestaurants((data.results || data).slice(0, 3).map((restaurant) => ({ id: restaurant.id, name: restaurant.name, cuisine: restaurant.description || restaurant.city, rating: restaurant.average_rating || "New", city: restaurant.city, image: restaurant.image || "/favicon.svg" })));
+      }
+      if (menuResult.status === "fulfilled") {
+        const data = menuResult.value;
+        setCatalogCounts((current) => ({ ...current, dishes: data.count ?? data.length ?? 0 }));
+        setFeaturedDishes((data.results || data).slice(0, 4).map((item) => ({ id: item.id, name: item.name, restaurant: item.restaurant_detail?.name || "Restaurant", price: Number(item.price), deliveryTime: `${item.preparation_minutes} min`, image: item.image || "/favicon.svg" })));
+      }
+      if (offerResult.status === "fulfilled") {
+        const data = offerResult.value;
+        setCatalogCounts((current) => ({ ...current, offers: data.count ?? data.length ?? 0 }));
+        setActiveOffers((data.results || data).slice(0, 3));
+      }
+    });
+    return () => { active = false; };
   }, []);
 
   const statCards = [
-    { label: "Happy Customers", value: "25k+" },
-    { label: "Restaurants", value: "120+" },
-    { label: "On-time Orders", value: "98%" },
+    { label: "Open restaurants", value: catalogCounts.restaurants },
+    { label: "Available dishes", value: catalogCounts.dishes },
+    { label: "Active offers", value: catalogCounts.offers },
   ];
 
   const handleSearchSubmit = (event) => {
@@ -141,12 +159,14 @@ export default function Home() {
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-3">
-              {offerCards.map((offer) => (
-                <div key={offer} className="rounded-[24px] border border-orange-100 bg-white p-5 shadow-sm">
+              {activeOffers.map((offer) => (
+                <div key={offer.id} className="rounded-[24px] border border-orange-100 bg-white p-5 shadow-sm">
                   <p className="text-sm font-semibold text-orange-600">Special offer</p>
-                  <p className="mt-2 text-lg font-bold text-gray-900">{offer}</p>
+                  <p className="mt-2 text-lg font-bold text-gray-900">{offer.title}</p>
+                  {offer.description && <p className="mt-2 text-sm text-gray-500">{offer.description}</p>}
                 </div>
               ))}
+              {!activeOffers.length && <p className="text-sm text-gray-500">No active offers right now.</p>}
             </div>
           </section>
 
@@ -196,7 +216,6 @@ export default function Home() {
                 >
                   <div className="relative h-60 overflow-hidden">
                     <img src={restaurant.image} alt={restaurant.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
-                    <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-orange-600">{restaurant.offer}</span>
                   </div>
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-3">
@@ -211,7 +230,7 @@ export default function Home() {
                     </div>
                     <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
                       <Clock3 size={14} />
-                      {restaurant.time}
+                      {restaurant.city}
                     </div>
                   </div>
                 </Link>

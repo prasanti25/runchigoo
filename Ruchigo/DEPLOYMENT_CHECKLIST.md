@@ -2,9 +2,9 @@
 
 ## 1. Confirm local readiness
 - [x] Frontend production build passes: `npm run build`
-- [x] Backend API tests pass: `.venv\Scripts\python.exe backend\manage.py test api`
+- [x] Backend API tests pass: `.venv/bin/python backend/manage.py test api` (Windows: `.venv\Scripts\python.exe backend\manage.py test api`)
 - [ ] Review browser console for frontend runtime errors after local testing
-- [ ] Verify backend migrations are current: `.venv\Scripts\python.exe backend\manage.py migrate`
+- [ ] Verify backend migrations are current: `.venv/bin/python backend/manage.py migrate`
 
 ## 2. Production environment variables
 Set these in production only, not in version control.
@@ -16,11 +16,12 @@ Set these in production only, not in version control.
 - `CSRF_TRUSTED_ORIGINS=<frontend-url>`
 - `VITE_API_BASE_URL=<backend-api-url>/api/v1`
 - `DJANGO_SECURE_SSL_REDIRECT=true` when using HTTPS
-- `SECURE_HSTS_SECONDS=31536000`
+- `DJANGO_SECURE_HSTS_SECONDS=31536000`
 - `EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend` or production email driver
 - `DEFAULT_FROM_EMAIL=<your-from-address>`
 
 If using MySQL:
+- Install the optional driver with `pip install -r backend/requirements-mysql.txt`
 - `DJANGO_DB_ENGINE=mysql`
 - `MYSQL_DATABASE=<db-name>`
 - `MYSQL_USER=<db-user>`
@@ -40,7 +41,7 @@ If using MySQL:
 - [ ] Register and login as customer
 - [ ] Browse restaurants and menu items
 - [ ] Add items to cart and proceed through checkout
-- [ ] Complete payment page flow (or verify mock payment behavior)
+- [ ] Configure and verify a real card/UPI payment provider before enabling those methods (COD is implemented)
 - [ ] Verify order appears in `/orders`
 - [ ] Verify tracking page loads and updates correctly
 
@@ -67,9 +68,9 @@ If using MySQL:
 - [ ] Confirm session expiration and logout behavior
 
 ## 5. Performance and asset optimization
-- [ ] Optimize large source images used by the frontend
-- [ ] Minimize bundle size where possible
-- [ ] Consider lazy-loading heavy UI pages or media assets
+- [x] Remove demo food photos from the production route bundle
+- [x] Split route pages into lazy-loaded chunks
+- [ ] Optimize newly uploaded restaurant and menu images at ingestion/CDN level
 
 ## 6. Deployment steps
 - Build frontend: `npm run build`
@@ -77,6 +78,7 @@ If using MySQL:
 - Deploy backend with `.env` set to production values
 - Run backend migrations in production
 - Configure web server or application service for Django and serve static files
+- Run Django behind a production WSGI server, for example `gunicorn config.wsgi:application --chdir backend`
 
 ## 7. Post-deployment validation
 - [ ] Confirm frontend loads at production URL

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Star, Clock3, ShoppingCart, SlidersHorizontal, X, UtensilsCrossed } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { foodData } from "../data/foodData";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
 import toast from "react-hot-toast";
 
@@ -23,10 +23,12 @@ const popularSearches = ["Chicken Biryani", "Butter Chicken", "Burger", "Momos",
 
 export default function SearchPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { addToCart } = useCart();
-  const [query, setQuery] = useState("");
+  const { isAuthenticated } = useAuth();
+  const [query, setQuery] = useState(() => location.state?.query || "");
   const [selectedFilter, setSelectedFilter] = useState("All");
-  const [foods, setFoods] = useState(foodData);
+  const [foods, setFoods] = useState([]);
   const [recent, setRecent] = useState(() => {
     if (typeof window === "undefined") {
       return recentSearches;
@@ -34,7 +36,8 @@ export default function SearchPage() {
 
     try {
       const stored = window.localStorage.getItem("ruchigo-recent-searches");
-      return stored ? JSON.parse(stored) : recentSearches;
+      const parsed = stored ? JSON.parse(stored) : recentSearches;
+      return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string").slice(0, 5) : recentSearches;
     } catch {
       return recentSearches;
     }
@@ -286,7 +289,7 @@ export default function SearchPage() {
                             toast.success("Added to cart.");
                           } catch (error) {
                             toast.error(error.message);
-                            navigate("/login", { state: { from: { pathname: "/search" } } });
+                            if (!isAuthenticated) navigate("/login", { state: { from: { pathname: "/search" } } });
                           }
                         }}
                         className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:scale-[1.02]"

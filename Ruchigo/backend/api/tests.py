@@ -1,6 +1,7 @@
 from decimal import Decimal
 from django.test import SimpleTestCase
-from django.urls import reverse
+from django.test import RequestFactory
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from .models import *
@@ -10,6 +11,11 @@ class SpaRoutingTests(SimpleTestCase):
         response = self.client.get("/admin-users/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "<div id=\"root\">")
+
+    def test_spa_asset_lookup_blocks_path_traversal(self):
+        from config.urls import spa_index_view
+        response = spa_index_view(RequestFactory().get("/"), "../backend/.env")
+        self.assertEqual(response.status_code, 404)
 
 
 class ApiFlowTests(APITestCase):
@@ -134,9 +140,82 @@ class ApiFlowTests(APITestCase):
         self.assertEqual(r.status_code,status.HTTP_201_CREATED)
         r=self.client.post("/api/v1/cart/checkout/", {"address_id":self.address.id,"payment_method":"cod"}, format="json")
         self.assertEqual(r.status_code,status.HTTP_201_CREATED); self.assertEqual(Order.objects.count(),1); self.assertEqual(Order.objects.first().total,Decimal("438.00"))
+        cart = Cart.objects.get(user=self.customer)
+        self.assertIsNone(cart.restaurant)
+
+        other_owner=User.objects.create_user("second-restaurant@example.com","StrongPass123",role="restaurant")
+        other_restaurant=Restaurant.objects.create(owner=other_owner,name="Second Kitchen",phone="9999999998",address="Second Street",city="Delhi",is_approved=True)
+        other_item=MenuItem.objects.create(restaurant=other_restaurant,category=self.category,name="Dosa",price=Decimal("99.00"))
+        r=self.client.post("/api/v1/cart/items/", {"menu_item":other_item.id,"quantity":1}, format="json")
+        self.assertEqual(r.status_code,status.HTTP_201_CREATED)
+
+    def test_cart_rejects_invalid_quantities(self):
+        self.authenticate(self.customer)
+        for quantity in (0, -1, 100, "not-a-number"):
+            response = self.client.post(
+                "/api/v1/cart/items/",
+                {"menu_item": self.item.id, "quantity": quantity},
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_coupon_usage_limit_is_enforced(self):
+        coupon = Coupon.objects.create(
+            code="LIMITED50",
+            discount_amount=Decimal("50.00"),
+            min_order_amount=Decimal("100.00"),
+            starts_at=timezone.now() - timezone.timedelta(days=1),
+            ends_at=timezone.now() + timezone.timedelta(days=1),
+            usage_limit=1,
+            usage_count=1,
+        )
+        self.authenticate(self.customer)
+        self.client.post("/api/v1/cart/items/", {"menu_item":self.item.id,"quantity":1}, format="json")
+        response = self.client.post("/api/v1/cart/validate-coupon/", {"code": coupon.code}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_public_menu_and_protected_addresses(self):
         self.assertEqual(self.client.get("/api/v1/menu-items/").status_code,status.HTTP_200_OK)
         self.assertEqual(self.client.get("/api/v1/addresses/").status_code,status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.client.get("/api/v1/orders/").status_code,status.HTTP_401_UNAUTHORIZED)
+
+    def test_public_menu_hides_unavailable_and_unapproved_items(self):
+        self.item.is_available = False
+        self.item.save(update_fields=["is_available"])
+        pending_owner = User.objects.create_user("pending-menu@example.com", "StrongPass123", role="restaurant")
+        pending_restaurant = Restaurant.objects.create(owner=pending_owner, name="Hidden Kitchen", phone="9999999998", address="Hidden Street", city="Delhi", is_approved=False)
+        MenuItem.objects.create(restaurant=pending_restaurant, category=self.category, name="Hidden meal", price=Decimal("120.00"))
+
+        response = self.client.get("/api/v1/menu-items/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 0)
+
+        self.authenticate(self.owner)
+        response = self.client.get("/api/v1/menu-items/")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["id"], self.item.id)
+
+    def test_public_offers_only_show_current_approved_offers(self):
+        now=timezone.now()
+        Offer.objects.create(title="Live",starts_at=now-timezone.timedelta(hours=1),ends_at=now+timezone.timedelta(hours=1),is_active=True)
+        Offer.objects.create(title="Expired",starts_at=now-timezone.timedelta(days=2),ends_at=now-timezone.timedelta(days=1),is_active=True)
+        pending_owner=User.objects.create_user("pending-offer@example.com","StrongPass123",role="restaurant")
+        pending_restaurant=Restaurant.objects.create(owner=pending_owner,name="Pending Kitchen",phone="9999999998",address="Hidden Street",city="Delhi",is_approved=False)
+        Offer.objects.create(restaurant=pending_restaurant,title="Hidden",starts_at=now-timezone.timedelta(hours=1),ends_at=now+timezone.timedelta(hours=1),is_active=True)
+        response=self.client.get("/api/v1/offers/")
+        self.assertEqual(response.status_code,status.HTTP_200_OK)
+        self.assertEqual(response.data["count"],1)
+        self.assertEqual(response.data["results"][0]["title"],"Live")
+
+    def test_analytics_requires_admin_and_returns_live_totals(self):
+        self.authenticate(self.customer)
+        self.assertEqual(self.client.get("/api/v1/analytics/").status_code,status.HTTP_403_FORBIDDEN)
+        admin=User.objects.create_superuser("analytics-admin@example.com","StrongPass123")
+        self.authenticate(admin)
+        response=self.client.get("/api/v1/analytics/")
+        self.assertEqual(response.status_code,status.HTTP_200_OK)
+        self.assertEqual(response.data["restaurants"]["total"],1)
+        self.assertIn("recent_orders",response.data)
     def test_restaurant_cannot_edit_other_menu(self):
         other=User.objects.create_user("other@example.com","StrongPass123",role="restaurant")
         self.authenticate(other)
@@ -199,3 +278,107 @@ class ApiFlowTests(APITestCase):
 
         r=self.client.post(f"/api/v1/orders/{order.id}/status/", {"status":"delivered"}, format="json")
         self.assertEqual(r.status_code,status.HTTP_403_FORBIDDEN)
+
+    def test_restaurant_cannot_skip_order_states(self):
+        order=Order.objects.create(customer=self.customer,restaurant=self.restaurant,delivery_address=self.address,subtotal=Decimal("199.00"),delivery_fee=40,discount=0,total=Decimal("239.00"))
+        self.authenticate(self.owner)
+        response=self.client.post(f"/api/v1/orders/{order.id}/status/", {"status":"ready"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_403_FORBIDDEN)
+        order.refresh_from_db()
+        self.assertEqual(order.status,Order.Status.PENDING)
+
+    def test_delivery_completion_records_time_and_cod_payment(self):
+        order=Order.objects.create(customer=self.customer,restaurant=self.restaurant,delivery_address=self.address,subtotal=Decimal("199.00"),delivery_fee=40,discount=0,total=Decimal("239.00"),status=Order.Status.OUT)
+        payment=Payment.objects.create(order=order,method="cod",amount=order.total)
+        courier=User.objects.create_user("delivery-complete@example.com","StrongPass123",role="delivery")
+        assignment=DeliveryAssignment.objects.create(order=order,partner=courier,pickup_at=timezone.now())
+        self.authenticate(courier)
+        response=self.client.post(f"/api/v1/orders/{order.id}/status/", {"status":"delivered"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_200_OK)
+        assignment.refresh_from_db(); payment.refresh_from_db()
+        self.assertIsNotNone(assignment.delivered_at)
+        self.assertEqual(payment.status,Payment.Status.PAID)
+
+    def test_review_must_match_customer_and_delivered_order(self):
+        order=Order.objects.create(customer=self.customer,restaurant=self.restaurant,delivery_address=self.address,subtotal=Decimal("199.00"),delivery_fee=40,discount=0,total=Decimal("239.00"),status=Order.Status.PENDING)
+        self.authenticate(self.customer)
+        response=self.client.post("/api/v1/reviews/", {"order":order.id,"rating":5,"comment":"Great"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_400_BAD_REQUEST)
+        order.status=Order.Status.DELIVERED; order.save(update_fields=["status"])
+        response=self.client.post("/api/v1/reviews/", {"order":order.id,"rating":5,"comment":"Great"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_201_CREATED)
+        self.assertEqual(response.data["restaurant"],self.restaurant.id)
+
+    def test_email_registration_is_case_insensitive(self):
+        response=self.client.post("/api/v1/auth/register/", {"email":"CUSTOMER@example.com","password":"StrongPass123","role":"customer"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_400_BAD_REQUEST)
+
+    def test_authenticated_user_can_change_password(self):
+        self.authenticate(self.customer)
+        response=self.client.post("/api/v1/auth/change_password/", {"current_password":"wrong","new_password":"AnotherStrongPass123"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_400_BAD_REQUEST)
+        response=self.client.post("/api/v1/auth/change_password/", {"current_password":"StrongPass123","new_password":"AnotherStrongPass123"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_200_OK)
+        self.customer.refresh_from_db()
+        self.assertTrue(self.customer.check_password("AnotherStrongPass123"))
+
+        response=self.client.post("/api/v1/auth/change_password/", {"current_password":"AnotherStrongPass123","new_password":"password"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_400_BAD_REQUEST)
+
+    def test_profile_cannot_change_account_state_and_email_change_is_unverified(self):
+        self.customer.email_verified = True
+        self.customer.save(update_fields=["email_verified"])
+        self.authenticate(self.customer)
+        response=self.client.patch("/api/v1/auth/me/", {"email":"changed@example.com","is_active":False,"role":"admin"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_200_OK)
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.email,"changed@example.com")
+        self.assertEqual(self.customer.username,"changed@example.com")
+        self.assertFalse(self.customer.email_verified)
+        self.assertTrue(self.customer.is_active)
+        self.assertEqual(self.customer.role,User.Role.CUSTOMER)
+
+    def test_restaurant_cannot_transfer_ownership(self):
+        other=User.objects.create_user("other-owner@example.com","StrongPass123",role="restaurant")
+        self.authenticate(self.owner)
+        response=self.client.patch(f"/api/v1/restaurants/{self.restaurant.id}/", {"owner_id":other.id}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_400_BAD_REQUEST)
+        self.restaurant.refresh_from_db()
+        self.assertEqual(self.restaurant.owner,self.owner)
+
+    def test_non_superuser_admin_cannot_promote_users_or_block_self(self):
+        admin=User.objects.create_user("staff-admin@example.com","StrongPass123",role="admin",is_staff=True)
+        target=User.objects.create_user("promotion-target@example.com","StrongPass123",role="customer")
+        self.authenticate(admin)
+        response=self.client.patch(f"/api/v1/users/{target.id}/", {"role":"admin"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_400_BAD_REQUEST)
+        target.refresh_from_db()
+        self.assertEqual(target.role,User.Role.CUSTOMER)
+        response=self.client.post(f"/api/v1/users/{admin.id}/block/", format="json")
+        self.assertEqual(response.status_code,status.HTTP_400_BAD_REQUEST)
+        admin.refresh_from_db()
+        self.assertTrue(admin.is_active)
+
+    def test_notifications_are_user_owned_and_content_is_immutable(self):
+        notification=Notification.objects.create(user=self.customer,title="Order update",message="Original",kind="order")
+        self.authenticate(self.customer)
+        response=self.client.post("/api/v1/notifications/", {"title":"Forged","message":"Forged"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_405_METHOD_NOT_ALLOWED)
+        response=self.client.patch(f"/api/v1/notifications/{notification.id}/", {"title":"Forged","message":"Forged","is_read":True}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_200_OK)
+        notification.refresh_from_db()
+        self.assertEqual(notification.title,"Order update")
+        self.assertEqual(notification.message,"Original")
+        self.assertTrue(notification.is_read)
+
+    def test_only_one_default_address_is_kept(self):
+        self.authenticate(self.customer)
+        first=self.client.post("/api/v1/addresses/", {"label":"Office","line1":"2 Main Street","city":"Delhi","state":"Delhi","postal_code":"110002","is_default":True}, format="json")
+        self.assertEqual(first.status_code,status.HTTP_201_CREATED)
+        second=self.client.post("/api/v1/addresses/", {"label":"Parents","line1":"3 Main Street","city":"Delhi","state":"Delhi","postal_code":"110003","is_default":True}, format="json")
+        self.assertEqual(second.status_code,status.HTTP_201_CREATED)
+        self.assertEqual(Address.objects.filter(user=self.customer,is_default=True).count(),1)
+        self.assertTrue(Address.objects.get(pk=second.data["id"]).is_default)
+        response=self.client.patch(f"/api/v1/addresses/{second.data['id']}/", {"is_default":False}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_200_OK)
+        self.assertEqual(Address.objects.filter(user=self.customer,is_default=True).count(),1)

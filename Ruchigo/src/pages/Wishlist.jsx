@@ -14,61 +14,17 @@ import { useCart } from "../context/CartContext.jsx";
 import { apiRequest } from "../lib/api.js";
 import toast from "react-hot-toast";
 
-const favouriteRestaurants = [
-  {
-    id: 1,
-    name: "Paradise Biryani",
-    cuisine: "Biryani • North Indian",
-    rating: 4.8,
-    location: "Guntur",
-    image: "🍛",
-  },
-  {
-    id: 2,
-    name: "Pizza Hub",
-    cuisine: "Pizza • Italian",
-    rating: 4.7,
-    location: "Vijayawada",
-    image: "🍕",
-  },
-];
-
-const initialFavouriteFoods = [
-  {
-    id: 1,
-    name: "Chicken Dum Biryani",
-    restaurant: "Paradise Biryani",
-    price: 299,
-    rating: 4.9,
-    image: "🍛",
-  },
-  {
-    id: 2,
-    name: "Farmhouse Pizza",
-    restaurant: "Pizza Hub",
-    price: 399,
-    rating: 4.8,
-    image: "🍕",
-  },
-  {
-    id: 3,
-    name: "Veg Burger",
-    restaurant: "Burger Point",
-    price: 199,
-    rating: 4.6,
-    image: "🍔",
-  },
-];
+const favouriteRestaurants = [];
 
 export default function Wishlist() {
 
   const [search, setSearch] = useState("");
-  const [favouriteFoods, setFavouriteFoods] = useState(initialFavouriteFoods);
+  const [favouriteFoods, setFavouriteFoods] = useState([]);
   const { token } = useAuth();
   const { addToCart } = useCart();
 
   useEffect(() => {
-    apiRequest("/wishlist/", { token }).then((data) => setFavouriteFoods((data.results || data).map((entry) => ({ id: entry.id, menuItemId: entry.menu_item, name: entry.menu_item_detail?.name || "Menu item", restaurant: entry.menu_item_detail?.restaurant_detail?.name || "Restaurant", price: Number(entry.menu_item_detail?.price || 0), rating: entry.menu_item_detail?.restaurant_detail?.average_rating || "New", image: entry.menu_item_detail?.image || "🍽️" })))).catch((error) => toast.error(error.message));
+    apiRequest("/wishlist/", { token }).then((data) => setFavouriteFoods((data.results || data).map((entry) => ({ id: entry.id, menuItemId: entry.menu_item, name: entry.menu_item_detail?.name || "Menu item", restaurant: entry.menu_item_detail?.restaurant_detail?.name || "Restaurant", price: Number(entry.menu_item_detail?.price || 0), rating: entry.menu_item_detail?.restaurant_detail?.average_rating || "New", image: entry.menu_item_detail?.image || "/favicon.svg" })))).catch((error) => { setFavouriteFoods([]); toast.error(error.message); });
   }, [token]);
 
   const removeFood = async (id) => {
@@ -255,10 +211,8 @@ export default function Wishlist() {
                   className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
                 >
 
-                  <div className="flex h-44 items-center justify-center bg-orange-100 text-7xl">
-
-                    {food.image}
-
+                  <div className="h-44 overflow-hidden bg-orange-100">
+                    <img src={food.image} alt={food.name} className="h-full w-full object-cover" />
                   </div>
 
                   <div className="p-6">

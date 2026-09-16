@@ -10,7 +10,6 @@ import {
   Truck,
   ShieldCheck,
   Gift,
-  Heart,
 } from "lucide-react";
 
 import {
@@ -36,6 +35,9 @@ export default function Cart() {
     platformFee,
     discount,
     total,
+    applyCoupon,
+    clearCoupon,
+    couponCode,
   } = useCart();
 
   const navigate = useNavigate();
@@ -44,41 +46,30 @@ export default function Cart() {
 
   const { isAuthenticated } = useAuth();
 
-  const [coupon, setCoupon] = useState("");
+  const [coupon, setCoupon] = useState(couponCode);
 
-  const [couponApplied, setCouponApplied] =
-    useState(false);
-
-  const couponDiscount =
-    couponApplied &&
-    coupon.toUpperCase() === "RUCHIGO50"
-      ? 50
-      : 0;
-
-  const finalTotal =
-    total - couponDiscount;
-
-  const handleApplyCoupon = () => {
-
-    if (
-      coupon.toUpperCase() ===
-      "RUCHIGO50"
-    ) {
-
-      setCouponApplied(true);
-
-      toast.success(
-        "🎉 Coupon Applied Successfully!"
-      );
-
-    } else {
-
-      toast.error(
-        "Invalid Coupon Code"
-      );
-
+  const handleApplyCoupon = async () => {
+    const normalizedCode = coupon.trim().toUpperCase();
+    if (!normalizedCode) {
+      toast.error("Enter a coupon code.");
+      return;
     }
+    try {
+      await applyCoupon(normalizedCode);
+      setCoupon(normalizedCode);
+      toast.success("Coupon applied successfully.");
+    } catch (error) {
+      clearCoupon();
+      toast.error(error.message);
+    }
+  };
 
+  const runCartAction = async (action) => {
+    try {
+      await action();
+    } catch (error) {
+      toast.error(error.message);
+    }
   };
 
   const handleCheckout = () => {
@@ -217,12 +208,6 @@ export default function Cart() {
                             className="h-full w-full object-cover transition duration-500 group-hover:scale-110"
                           />
 
-                          <span className="absolute left-3 top-3 rounded-lg bg-red-500 px-2 py-1 text-xs font-bold text-white">
-
-                            20% OFF
-
-                          </span>
-
                         </div>
 
                         {/* Details */}
@@ -249,31 +234,6 @@ export default function Cart() {
 
                               </div>
 
-                              <button className="rounded-full bg-red-50 p-3 transition hover:scale-110">
-
-                                <Heart
-                                  size={20}
-                                  className="text-red-500"
-                                />
-
-                              </button>
-
-                            </div>
-
-                            <div className="mt-4 flex gap-3">
-
-                              <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-700">
-
-                                ⭐ 4.8
-
-                              </span>
-
-                              <span className="rounded-full bg-orange-100 px-3 py-1 text-sm font-semibold text-orange-600">
-
-                                🔥 Bestseller
-
-                              </span>
-
                             </div>
 
                           </div>
@@ -288,20 +248,13 @@ export default function Cart() {
 
                               </p>
 
-                              <p className="text-gray-400 line-through">
-
-                                ₹{Math.round(item.price * 1.3)}
-
-                              </p>
-
                             </div>
 
                             <div className="flex items-center gap-4">
 
                               <button
-                                onClick={() =>
-                                  decreaseQuantity(item.id)
-                                }
+                                onClick={() => runCartAction(() => decreaseQuantity(item.id))}
+                                aria-label={`Decrease ${item.name} quantity`}
                                 className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-100 hover:bg-orange-200"
                               >
 
@@ -316,9 +269,8 @@ export default function Cart() {
                               </span>
 
                               <button
-                                onClick={() =>
-                                  increaseQuantity(item.id)
-                                }
+                                onClick={() => runCartAction(() => increaseQuantity(item.id))}
+                                aria-label={`Increase ${item.name} quantity`}
                                 className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500 text-white hover:bg-orange-600"
                               >
 
@@ -331,9 +283,7 @@ export default function Cart() {
                           </div>
 
                           <button
-                            onClick={() =>
-                              removeFromCart(item.id)
-                            }
+                            onClick={() => runCartAction(() => removeFromCart(item.id))}
                             className="mt-5 flex w-fit items-center gap-2 rounded-xl bg-red-50 px-4 py-2 font-semibold text-red-500 transition hover:bg-red-100"
                           >
 
@@ -384,10 +334,11 @@ export default function Cart() {
 
                     <input
                       value={coupon}
-                      onChange={(e) =>
-                        setCoupon(e.target.value)
-                      }
-                      placeholder="RUCHIGO50"
+                      onChange={(e) => {
+                        setCoupon(e.target.value);
+                        if (couponCode && e.target.value.trim().toUpperCase() !== couponCode) clearCoupon();
+                      }}
+                      placeholder="Enter coupon code"
                       className="flex-1 px-4 py-4 outline-none"
                     />
 
@@ -417,7 +368,7 @@ export default function Cart() {
                       </h3>
 
                       <p className="text-sm text-gray-500">
-                        Delivered in 25-30 Minutes
+                      Delivery time depends on restaurant preparation and distance.
                       </p>
 
                     </div>
@@ -494,22 +445,6 @@ export default function Cart() {
 
                   </div>
 
-                  {couponApplied && (
-
-                    <div className="flex justify-between text-green-600">
-
-                      <span>
-                        Coupon Discount
-                      </span>
-
-                      <span>
-                        - ₹{couponDiscount}
-                      </span>
-
-                    </div>
-
-                  )}
-
                 </div>
 
                 <div className="my-8 border-t border-dashed"></div>
@@ -521,7 +456,7 @@ export default function Cart() {
                   </span>
 
                   <span className="text-4xl font-bold text-orange-600">
-                    ₹{finalTotal}
+                    ₹{total}
                   </span>
 
                 </div>

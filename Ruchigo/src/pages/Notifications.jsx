@@ -3,7 +3,6 @@ import {
   Bell,
   PackageCheck,
   Tag,
-  Truck,
   CheckCircle2,
 } from "lucide-react";
 
@@ -19,55 +18,16 @@ const tabs = [
   "Offers",
 ];
 
-const initialNotifications = [
-  {
-    id: 1,
-    title: "Order Confirmed",
-    message: "Your order #RG202600128 has been confirmed.",
-    time: "2 mins ago",
-    type: "Orders",
-    read: false,
-    icon: PackageCheck,
-  },
-  {
-    id: 2,
-    title: "Delivery Partner Assigned",
-    message: "Rahul Kumar is on the way to deliver your food.",
-    time: "15 mins ago",
-    type: "Orders",
-    read: false,
-    icon: Truck,
-  },
-  {
-    id: 3,
-    title: "Flat ₹100 OFF",
-    message: "Use coupon RUCHIGO100 on your next order.",
-    time: "1 hour ago",
-    type: "Offers",
-    read: true,
-    icon: Tag,
-  },
-  {
-    id: 4,
-    title: "Cashback Received",
-    message: "₹50 cashback has been added to your wallet.",
-    time: "Yesterday",
-    type: "Offers",
-    read: true,
-    icon: CheckCircle2,
-  },
-];
-
 export default function Notifications() {
 
   const [activeTab, setActiveTab] =
     useState("All");
 
   const { token } = useAuth();
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
-    apiRequest("/notifications/", { token }).then((data) => setNotifications((data.results || data).map((item) => ({ id: item.id, title: item.title, message: item.message, time: new Date(item.created_at).toLocaleString(), type: item.kind === "order" ? "Orders" : "Offers", read: item.is_read, icon: item.kind === "order" ? PackageCheck : Tag })))).catch((error) => toast.error(error.message));
+    apiRequest("/notifications/", { token }).then((data) => setNotifications((data.results || data).map((item) => ({ id: item.id, title: item.title, message: item.message, time: new Date(item.created_at).toLocaleString(), type: item.kind === "order" ? "Orders" : item.kind === "offer" ? "Offers" : "Account", read: item.is_read, icon: item.kind === "order" ? PackageCheck : item.kind === "offer" ? Tag : CheckCircle2 })))).catch((error) => { setNotifications([]); toast.error(error.message); });
   }, [token]);
 
   const updateNotification = async (id, body) => {

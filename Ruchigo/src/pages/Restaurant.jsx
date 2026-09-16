@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useCart } from "../context/CartContext.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
 
 // ===============================
@@ -237,17 +238,26 @@ export default function Restaurant() {
 
   const [restaurant, setRestaurant] = useState(restaurants[id] || restaurants[1]);
   const [menu, setMenu] = useState(menuItems);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const { addToCart } = useCart();
+  const { isAuthenticated } = useAuth();
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
   useEffect(() => {
-    apiRequest(`/restaurants/${id}/`).then((data) => setRestaurant({ id: data.id, name: data.name, cuisine: data.description || "Restaurant", rating: data.average_rating, time: "30-40 min", delivery: "₹40 Delivery", location: `${data.city}, ${data.address}`, image: data.image || food1 }));
-    apiRequest(`/menu-items/?restaurant=${id}`).then((data) => {
-      const results = data.results || data;
-      setMenu(results.map((item) => ({ id: item.id, name: item.name, description: item.description, price: Number(item.price), rating: item.restaurant_detail?.average_rating || "New", image: item.image || food1, category: item.category_name || "Menu", veg: item.is_vegetarian, bestseller: false })));
-    }).catch(() => toast.error("Unable to load this restaurant menu."));
+    Promise.all([apiRequest(`/restaurants/${id}/`), apiRequest(`/menu-items/?restaurant=${id}`)])
+      .then(([data, menuData]) => {
+        setRestaurant({ id: data.id, name: data.name, cuisine: data.description || "Restaurant", rating: data.average_rating, time: "30-40 min", delivery: "₹40 Delivery", location: `${data.city}, ${data.address}`, image: data.image || food1 });
+        const results = menuData.results || menuData;
+        setMenu(results.map((item) => ({ id: item.id, name: item.name, description: item.description, price: Number(item.price), rating: item.restaurant_detail?.average_rating || "New", image: item.image || food1, category: item.category_name || "Menu", veg: item.is_vegetarian, bestseller: false })));
+      })
+      .catch((requestError) => {
+        setError(requestError.message);
+        toast.error("Unable to load this restaurant.");
+      })
+      .finally(() => setLoading(false));
   }, [id]);
 
   const filteredMenu = menu.filter((item) => {
@@ -261,6 +271,9 @@ export default function Restaurant() {
 
     return matchesSearch && matchesCategory;
   });
+
+  if (loading) return <><Navbar /><main className="min-h-screen bg-[#fffaf7] p-10 text-center">Loading restaurant…</main></>;
+  if (error) return <><Navbar /><main className="min-h-screen bg-[#fffaf7] p-10 text-center text-red-600">{error}</main></>;
 
 
   return (
@@ -280,7 +293,7 @@ export default function Restaurant() {
               <div>
 
                 <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-orange-100">
-                  ⭐ Popular Restaurant
+                  Restaurant
                 </p>
 
                 <h1 className="text-5xl font-bold text-white">
@@ -421,12 +434,6 @@ export default function Restaurant() {
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-110"
                       />
 
-                      {/* Discount Badge */}
-
-                      <span className="absolute left-3 top-3 rounded-lg bg-red-500 px-2 py-1 text-xs font-bold text-white">
-                        30% OFF
-                      </span>
-
                       {/* Veg / Non Veg */}
 
                       <span
@@ -436,12 +443,6 @@ export default function Restaurant() {
                       >
                         {item.veg ? "Veg" : "Non Veg"}
                       </span>
-
-                      {/* Wishlist */}
-
-                      <button className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md transition hover:scale-110">
-                        ❤️
-                      </button>
 
                     </div>
 
@@ -474,24 +475,6 @@ export default function Restaurant() {
                           {item.description}
                         </p>
 
-                        <div className="mt-3 flex flex-wrap gap-2">
-
-                          {item.bestseller && (
-                            <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-600">
-                              Best Seller
-                            </span>
-                          )}
-
-                          <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
-                            Free Delivery
-                          </span>
-
-                          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                            Fresh
-                          </span>
-
-                        </div>
-
                       </div>
 
                       <div className="mt-5 flex items-center justify-between">
@@ -503,7 +486,7 @@ export default function Restaurant() {
                         <button
                           onClick={async () => {
                             try { await addToCart(item); toast.success("Added to cart."); }
-                            catch (error) { toast.error(error.message); navigate("/login", { state: { from: { pathname: `/restaurant/${id}` } } }); }
+                            catch (error) { toast.error(error.message); if (!isAuthenticated) navigate("/login", { state: { from: { pathname: `/restaurant/${id}` } } }); }
                           }}
                           className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-6 py-3 font-semibold text-white shadow-lg transition duration-300 hover:scale-105 hover:shadow-xl"
                         >

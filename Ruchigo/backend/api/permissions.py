@@ -6,6 +6,7 @@ class IsRole(BasePermission):
 class IsRestaurant(IsRole): roles=[User.Role.RESTAURANT]
 class IsDelivery(IsRole): roles=[User.Role.DELIVERY]
 class IsAdmin(IsRole): roles=[User.Role.ADMIN]
+class IsCustomer(IsRole): roles=[User.Role.CUSTOMER]
 class IsRestaurantOrAdmin(IsRole): roles=[User.Role.RESTAURANT, User.Role.ADMIN]
 class IsOwnerOrAdmin(BasePermission):
     def has_object_permission(self, request, view, obj): return request.user.is_superuser or getattr(obj, "user", getattr(obj, "customer", None)) == request.user

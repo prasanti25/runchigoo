@@ -3,6 +3,7 @@ import {
   User,
   Truck,
   UtensilsCrossed,
+  ShieldCheck,
 } from "lucide-react";
 
 const roles = [
@@ -30,7 +31,12 @@ const RoleSelector = ({
   selectedRole,
   onSelectRole,
   availableRoles = roles,
+  allowAdmin = false,
 }) => {
+  const displayedRoles = allowAdmin
+    ? [...availableRoles, { id: "admin", label: "Admin", icon: ShieldCheck, color: "from-slate-600 to-slate-900" }]
+    : availableRoles;
+
   return (
     <div className="mb-6">
       <label className="block mb-3 text-sm font-semibold text-gray-700">
@@ -38,7 +44,7 @@ const RoleSelector = ({
       </label>
 
       <div className="grid grid-cols-2 gap-4">
-        {availableRoles.map((role) => {
+        {displayedRoles.map((role) => {
           const Icon = role.icon;
 
           return (

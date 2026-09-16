@@ -14,54 +14,22 @@ import { apiRequest } from "../lib/api.js";
 
 const tabs = ["Active", "Completed", "Cancelled"];
 
-const initialOrders = [
-  {
-    id: "#RG202600128",
-    restaurant: "Paradise Biryani",
-    items: [
-      "Chicken Dum Biryani",
-      "Chicken 65",
-    ],
-    total: 433,
-    status: "On the Way",
-    payment: "Paid",
-    date: "18 July 2026",
-    icon: "🍛",
-  },
-
-  {
-    id: "#RG202600097",
-    restaurant: "Pizza Hub",
-    items: [
-      "Farmhouse Pizza",
-      "Garlic Bread",
-    ],
-    total: 529,
-    status: "Delivered",
-    payment: "Paid",
-    date: "15 July 2026",
-    icon: "🍕",
-  },
-
-  {
-    id: "#RG202600061",
-    restaurant: "Burger Point",
-    items: [
-      "Veg Burger",
-      "French Fries",
-    ],
-    total: 289,
-    status: "Cancelled",
-    payment: "Refunded",
-    date: "12 July 2026",
-    icon: "🍔",
-  },
-];
+const statusLabels = {
+  pending: "Order placed",
+  confirmed: "Confirmed",
+  preparing: "Preparing",
+  ready: "Ready for pickup",
+  out_for_delivery: "On the Way",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
+};
 
 export default function Orders() {
 
   const { token } = useAuth();
-  const [orders, setOrders] = useState(initialOrders);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const [activeTab, setActiveTab] =
     useState("Active");
@@ -76,18 +44,22 @@ export default function Orders() {
         restaurant: order.restaurant_detail?.name || "Restaurant",
         items: (order.items || []).map((item) => item.name),
         total: Number(order.total),
-        status: order.status === "delivered" ? "Delivered" : order.status === "cancelled" ? "Cancelled" : order.status === "out_for_delivery" ? "On the Way" : "Preparing",
+        rawStatus: order.status,
+        status: statusLabels[order.status] || order.status,
         payment: order.payment?.status === "paid" ? "Paid" : "Cash on delivery",
         date: new Date(order.created_at).toLocaleDateString(),
         icon: "🍽️",
       })));
-    }).catch(() => setOrders([]));
+    }).catch((requestError) => {
+      setOrders([]);
+      setError(requestError.message);
+    }).finally(() => setLoading(false));
   }, [token]);
 
   const filteredOrders = orders.filter((order) => {
 
     if (activeTab === "Active")
-      return order.status === "On the Way";
+      return !["delivered", "cancelled"].includes(order.rawStatus);
 
     if (activeTab === "Completed")
       return order.status === "Delivered";
@@ -237,7 +209,11 @@ export default function Orders() {
           {/* Orders */}
 
           <div className="mt-8 space-y-6">
-                        {filteredOrders.length === 0 ? (
+            {loading ? (
+              <div className="rounded-3xl border border-orange-100 bg-white py-20 text-center shadow-sm">Loading orders…</div>
+            ) : error ? (
+              <div className="rounded-3xl border border-red-100 bg-white py-20 text-center text-red-600 shadow-sm">{error}</div>
+            ) : filteredOrders.length === 0 ? (
 
               <div className="rounded-3xl border border-dashed border-orange-200 bg-white py-20 text-center shadow-sm">
 
@@ -428,32 +404,20 @@ export default function Orders() {
 
                   <div className="mt-8 flex flex-wrap gap-4">
 
-                    {order.status === "On the Way" && (
+                    {!['delivered', 'cancelled'].includes(order.rawStatus) && (
 
                       <Link
                         to={`/tracking/${order.trackingId}`}
                         className="rounded-xl bg-orange-500 px-6 py-3 font-semibold text-white transition hover:bg-orange-600"
                       >
-                        Track Order
+                        Track order
                       </Link>
 
                     )}
 
-                    <button className="rounded-xl border border-orange-300 px-6 py-3 font-semibold text-orange-500 transition hover:bg-orange-500 hover:text-white">
-                      View Details
-                    </button>
-
-                    {order.status !== "On the Way" && (
-
-                      <button className="rounded-xl border border-green-300 px-6 py-3 font-semibold text-green-600 transition hover:bg-green-500 hover:text-white">
-                        Reorder
-                      </button>
-
-                    )}
-
-                    <button className="rounded-xl border border-blue-300 px-6 py-3 font-semibold text-blue-600 transition hover:bg-blue-500 hover:text-white">
-                      Download Invoice
-                    </button>
+                    <Link to={`/tracking/${order.trackingId}`} className="rounded-xl border border-orange-300 px-6 py-3 font-semibold text-orange-500 transition hover:bg-orange-500 hover:text-white">
+                      View details
+                    </Link>
 
                   </div>
 

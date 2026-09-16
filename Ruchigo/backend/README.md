@@ -5,9 +5,11 @@ Production-oriented Django REST API for the RuchiGo React frontend.
 ## Local run
 
 1. Create a virtual environment and install `pip install -r requirements.txt`.
-2. Copy `.env.example` to `.env`; SQLite is the default local database. Set `DJANGO_DB_ENGINE=mysql` plus the MySQL values for production.
+2. Copy `.env.example` to `.env`; SQLite is the default local database.
 3. Run `python manage.py migrate`, `python manage.py createsuperuser`, then `python manage.py runserver`.
 4. Open `http://127.0.0.1:8000/api/docs/` for the OpenAPI/Swagger UI and use the API at `/api/v1/`.
+
+SQLite needs no system database libraries. For MySQL, install the operating system's MySQL client development package and then run `pip install -r requirements-mysql.txt`.
 
 ## Frontend connection
 

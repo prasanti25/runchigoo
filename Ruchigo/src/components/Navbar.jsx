@@ -77,12 +77,13 @@ export default function Navbar() {
             ? customerItems
             : guestItems;
 
-  const profileItems = [
+  const customerProfileItems = [
     { name: "My Profile", icon: User, path: "/profile" },
     { name: "My Orders", icon: Package, path: "/orders" },
     { name: "Saved Addresses", icon: MapPin, path: "/addresses" },
     { name: "Settings", icon: Settings, path: "/settings" },
   ];
+  const profileItems = role === "customer" ? customerProfileItems : [];
 
   const roleLabel =
     role === "restaurant"

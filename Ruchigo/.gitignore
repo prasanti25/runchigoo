@@ -10,6 +10,16 @@ lerna-debug.log*
 node_modules
 .venv
 backend/.venv
+.env
+backend/.env
+*.sqlite3
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+backend/media/
+backend/staticfiles/
 dist
 dist-ssr
 *.local
