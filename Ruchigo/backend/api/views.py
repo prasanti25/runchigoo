@@ -319,8 +319,10 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsDelivery])
     @transaction.atomic
     def accept(self, request, pk=None):
-        order = Order.objects.select_for_update().filter(pk=pk, status=Order.Status.READY, delivery__isnull=True).first()
-        if not order:
+        # Lock only the order row. PostgreSQL rejects SELECT FOR UPDATE when a
+        # nullable reverse one-to-one relation creates an outer join.
+        order = Order.objects.select_for_update().filter(pk=pk, status=Order.Status.READY).first()
+        if not order or DeliveryAssignment.objects.filter(order=order).exists():
             return Response({"detail": "Order is no longer available for pickup."}, status=409)
         try:
             DeliveryAssignment.objects.create(order=order, partner=request.user, pickup_at=timezone.now())
