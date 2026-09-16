@@ -2,6 +2,7 @@ import Logo from "./common/Logo.jsx";
 import {
   BarChart3,
   ChefHat,
+  ChevronRight,
   Heart,
   Home,
   LayoutDashboard,
@@ -11,6 +12,7 @@ import {
   Package,
   Search,
   Settings,
+  ShieldCheck,
   ShoppingCart,
   Truck,
   User,
@@ -21,6 +23,13 @@ import {
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useState } from "react";
+
+const accountDetails = {
+  customer: { label: "Customer", eyebrow: "My account", icon: User },
+  restaurant: { label: "Restaurant", eyebrow: "Partner portal", icon: ChefHat },
+  delivery: { label: "Delivery", eyebrow: "Rider workspace", icon: Truck },
+  admin: { label: "Admin", eyebrow: "Control centre", icon: ShieldCheck },
+};
 
 export default function Navbar() {
   const { isAuthenticated, role, logout } = useAuth();
@@ -93,6 +102,8 @@ export default function Navbar() {
         : role === "admin"
           ? "Admin"
           : "Customer";
+  const account = accountDetails[role] || accountDetails.customer;
+  const AccountIcon = account.icon;
 
   const accountPath =
     role === "restaurant"
@@ -144,9 +155,21 @@ export default function Navbar() {
               <NavLink
                 to={accountPath}
                 title={`Open ${roleLabel} dashboard`}
-                className="whitespace-nowrap rounded-xl bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 transition hover:bg-orange-100"
+                aria-label={`Open ${roleLabel} dashboard`}
+                className="group flex items-center gap-2.5 whitespace-nowrap rounded-2xl border border-orange-200 bg-gradient-to-br from-white to-orange-50 px-2.5 py-1.5 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2"
               >
-                {roleLabel}
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-red-500 text-white shadow-sm shadow-orange-200">
+                  <AccountIcon size={17} aria-hidden="true" />
+                </span>
+                <span className="leading-tight">
+                  <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                    {account.eyebrow}
+                  </span>
+                  <span className="mt-0.5 block text-sm font-bold text-gray-800">
+                    {account.label}
+                  </span>
+                </span>
+                <ChevronRight size={15} className="ml-0.5 text-orange-400 transition group-hover:translate-x-0.5" aria-hidden="true" />
               </NavLink>
               <div className="flex items-center gap-1 rounded-xl border border-orange-100 bg-white p-1.5">
                 {role === "customer" && (
