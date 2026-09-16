@@ -159,7 +159,8 @@ export default function DeliveryOrders() {
     setLoading(true);
     try {
       await apiRequest(`/orders/${orderId}/status/`, { method: "POST", token, body: { status: "delivered" } });
-      await fetchOrders("Active");
+      setActiveTab("Completed");
+      await fetchOrders("Completed");
       await fetchCounts();
     } catch (err) {
       setError(err.message);
