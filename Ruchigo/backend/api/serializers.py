@@ -229,7 +229,8 @@ def applicable_coupon(code, subtotal, *, lock=False):
 class CheckoutSerializer(serializers.Serializer):
     address_id = serializers.PrimaryKeyRelatedField(queryset=Address.objects.all(), source="address")
     coupon_code = serializers.CharField(required=False, allow_blank=True)
-    payment_method = serializers.ChoiceField(choices=["cod", "card", "upi"], default="cod")
+    # Card/UPI must not create an order until a payment provider confirms payment.
+    payment_method = serializers.ChoiceField(choices=["cod"], default="cod")
     notes = serializers.CharField(required=False, allow_blank=True, max_length=1000)
     def validate_address(self, address):
         if address.user != self.context["request"].user: raise serializers.ValidationError("Choose one of your addresses.")

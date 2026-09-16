@@ -149,6 +149,13 @@ class ApiFlowTests(APITestCase):
         r=self.client.post("/api/v1/cart/items/", {"menu_item":other_item.id,"quantity":1}, format="json")
         self.assertEqual(r.status_code,status.HTTP_201_CREATED)
 
+    def test_checkout_rejects_unconfigured_online_payment_methods(self):
+        self.authenticate(self.customer)
+        self.client.post("/api/v1/cart/items/", {"menu_item":self.item.id,"quantity":1}, format="json")
+        response=self.client.post("/api/v1/cart/checkout/", {"address_id":self.address.id,"payment_method":"card"}, format="json")
+        self.assertEqual(response.status_code,status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Order.objects.count(),0)
+
     def test_cart_rejects_invalid_quantities(self):
         self.authenticate(self.customer)
         for quantity in (0, -1, 100, "not-a-number"):
