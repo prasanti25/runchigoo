@@ -36,3 +36,5 @@ dist-ssr
 *.sw?
 .vercel
 .env.local
+.agents/
+skills-lock.json

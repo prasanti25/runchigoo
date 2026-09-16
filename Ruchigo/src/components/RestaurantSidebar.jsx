@@ -47,7 +47,7 @@ export default function RestaurantSidebar() {
     <>
     <div className="lg:hidden"><Navbar /></div>
     <aside className="fixed left-0 top-0 hidden h-screen w-72 flex-col border-r border-orange-100 bg-white p-6 lg:flex">
-      <div className="flex items-center gap-3">
+      <NavLink to="/" aria-label="Go to RuchiGo home" className="flex items-center gap-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500">
         <Logo type="icon" size="sm" />
 
         <div>
@@ -59,7 +59,7 @@ export default function RestaurantSidebar() {
             Restaurant Partner
           </p>
         </div>
-      </div>
+      </NavLink>
 
       <div className="mt-8 rounded-2xl bg-orange-50 p-4">
         <div className="flex items-center gap-3">

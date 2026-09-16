@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import Logo from "../common/Logo";
 
 const floatingIcons = [
@@ -45,7 +46,9 @@ const AuthLayout = ({
 
             <div className="relative z-10 flex h-full flex-col justify-between p-10 text-white">
               <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-                <Logo showText />
+                <Link to="/" aria-label="Go to RuchiGo home" className="inline-flex rounded-xl focus:outline-none focus:ring-2 focus:ring-white">
+                  <Logo showText />
+                </Link>
               </motion.div>
 
               <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8 }}>
@@ -78,7 +81,9 @@ const AuthLayout = ({
               className="w-full max-w-lg rounded-[28px] border border-orange-100 bg-white/85 p-6 shadow-2xl shadow-orange-100 backdrop-blur-xl sm:p-8"
             >
               <div className="mb-6 flex justify-center lg:hidden">
-                <Logo showText={false} className="h-14 w-auto" />
+                <Link to="/" aria-label="Go to RuchiGo home" className="inline-flex rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500">
+                  <Logo showText={false} className="h-14 w-auto" />
+                </Link>
               </div>
 
               <div className="mb-6 text-center">
