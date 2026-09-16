@@ -485,7 +485,7 @@ export default function Restaurant() {
 
                         <button
                           onClick={async () => {
-                            try { await addToCart(item); toast.success("Added to cart."); }
+                            try { if (await addToCart(item)) toast.success("Added to cart."); }
                             catch (error) { toast.error(error.message); if (!isAuthenticated) navigate("/login", { state: { from: { pathname: `/restaurant/${id}` } } }); }
                           }}
                           className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-6 py-3 font-semibold text-white shadow-lg transition duration-300 hover:scale-105 hover:shadow-xl"

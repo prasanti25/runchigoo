@@ -53,10 +53,46 @@ export function CartProvider({ children }) {
     if (!isAuthenticated) throw new Error("Please log in to add items to your cart.");
     if (role !== "customer") throw new Error("Only customer accounts can place orders.");
     const menuItemId = food.menuItemId || food.id;
-    const cart = await apiRequest("/cart/items/", { token, method: "POST", body: { menu_item: menuItemId, quantity } });
-    setCartItems(mapCart(cart));
-    setCoupon(null);
-  }, [isAuthenticated, role, token]);
+    const incomingRestaurantId = food.restaurantId || food.restaurant;
+    const localConflict = cartItems.length > 0
+      && incomingRestaurantId
+      && cartItems.some((item) => Number(item.restaurantId) !== Number(incomingRestaurantId));
+    let cartWasCleared = false;
+
+    const confirmReplacement = () => window.confirm(
+      "Your cart contains items from another restaurant. Replace them with this item?"
+    );
+    const clearServerCart = async (items = cartItems) => {
+      for (const item of items) {
+        await apiRequest(`/cart/items/${item.id}/`, { token, method: "DELETE" });
+      }
+      setCartItems([]);
+      setCoupon(null);
+      cartWasCleared = true;
+    };
+
+    if (localConflict) {
+      if (!confirmReplacement()) return false;
+      await clearServerCart();
+    }
+
+    try {
+      const cart = await apiRequest("/cart/items/", { token, method: "POST", body: { menu_item: menuItemId, quantity } });
+      setCartItems(mapCart(cart));
+      setCoupon(null);
+      return true;
+    } catch (error) {
+      const isRestaurantConflict = error.message.toLowerCase().includes("one restaurant only");
+      if (!isRestaurantConflict || cartWasCleared || !confirmReplacement()) throw error;
+
+      const currentCart = await apiRequest("/cart/", { token });
+      await clearServerCart(currentCart.items || []);
+      const cart = await apiRequest("/cart/items/", { token, method: "POST", body: { menu_item: menuItemId, quantity } });
+      setCartItems(mapCart(cart));
+      setCoupon(null);
+      return true;
+    }
+  }, [cartItems, isAuthenticated, role, token]);
 
   const updateQuantity = useCallback(async (id, quantity) => {
     if (quantity <= 0) return apiRequest(`/cart/items/${id}/`, { token, method: "DELETE" }).then((cart) => { setCartItems(mapCart(cart)); setCoupon(null); });

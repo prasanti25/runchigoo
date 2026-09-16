@@ -50,8 +50,7 @@ export default function RestaurantLive() {
       return;
     }
     try {
-      await addToCart(item);
-      toast.success(`${item.name} added to cart.`);
+      if (await addToCart(item)) toast.success(`${item.name} added to cart.`);
     } catch (requestError) {
       toast.error(requestError.message);
     }

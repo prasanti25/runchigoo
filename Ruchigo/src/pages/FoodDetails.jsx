@@ -78,7 +78,7 @@ export default function FoodDetails() {
     }
 
     try {
-      await addToCart(food, quantity);
+      if (!(await addToCart(food, quantity))) return;
     } catch (error) {
       toast.error(error.message);
       return;
@@ -96,7 +96,7 @@ export default function FoodDetails() {
       return;
     }
     try {
-      await addToCart(food, quantity);
+      if (!(await addToCart(food, quantity))) return;
       navigate("/checkout");
     } catch (requestError) {
       toast.error(requestError.message);
@@ -508,7 +508,7 @@ export default function FoodDetails() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          void addToCart(item).then(() => toast.success("Added to cart.")).catch((requestError) => toast.error(requestError.message));
+                          void addToCart(item).then((added) => { if (added) toast.success("Added to cart."); }).catch((requestError) => toast.error(requestError.message));
                         }}
                         className="rounded-xl bg-orange-500 px-5 py-2 font-semibold text-white transition hover:bg-orange-600"
                       >

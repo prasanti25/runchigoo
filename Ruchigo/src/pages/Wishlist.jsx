@@ -266,7 +266,7 @@ export default function Wishlist() {
 
                     <div className="mt-6 flex gap-3">
 
-                      <button onClick={async () => { try { await addToCart({ id: food.menuItemId || food.id }); toast.success("Added to cart."); } catch (error) { toast.error(error.message); } }} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 font-semibold text-white transition hover:bg-orange-600">
+                      <button onClick={async () => { try { if (await addToCart({ id: food.menuItemId || food.id })) toast.success("Added to cart."); } catch (error) { toast.error(error.message); } }} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 font-semibold text-white transition hover:bg-orange-600">
 
                         <ShoppingCart size={18} />
 

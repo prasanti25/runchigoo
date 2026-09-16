@@ -292,8 +292,7 @@ export default function SearchPage() {
                       <button
                         onClick={async () => {
                           try {
-                            await addToCart(item);
-                            toast.success("Added to cart.");
+                            if (await addToCart(item)) toast.success("Added to cart.");
                           } catch (error) {
                             toast.error(error.message);
                             if (!isAuthenticated) navigate("/login", { state: { from: { pathname: "/search" } } });
