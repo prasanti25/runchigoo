@@ -41,4 +41,4 @@ urlpatterns = [
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-urlpatterns += [re_path(r"^(?!api/|admin/|api/v1/|api/schema/|api/docs/|media/|static/).*$", spa_index_view)]
+urlpatterns += [re_path(r"^(?!api/|admin/|api/v1/|api/schema/|api/docs/|media/|static/)(?P<path>.*)$", spa_index_view)]

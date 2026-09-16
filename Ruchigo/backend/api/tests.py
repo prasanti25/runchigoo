@@ -17,6 +17,10 @@ class SpaRoutingTests(SimpleTestCase):
         response = spa_index_view(RequestFactory().get("/"), "../backend/.env")
         self.assertEqual(response.status_code, 404)
 
+    def test_missing_spa_asset_is_not_replaced_with_html(self):
+        response = self.client.get("/assets/does-not-exist.js")
+        self.assertEqual(response.status_code, 404)
+
 
 class ApiFlowTests(APITestCase):
     def setUp(self):
