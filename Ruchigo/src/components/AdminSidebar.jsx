@@ -9,8 +9,9 @@ import {
   LogOut,
 } from "lucide-react";
 
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import Logo from "./common/Logo";
+import { useAuth } from "../context/AuthContext.jsx";
 
 const menuItems = [
   {
@@ -51,11 +52,7 @@ const menuItems = [
 ];
 
 export default function AdminSidebar() {
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    navigate("/");
-  };
+  const { logout } = useAuth();
 
   return (
     <aside className="fixed left-0 top-0 z-50 flex h-screen w-72 flex-col border-r border-orange-100 bg-white p-6">
@@ -130,7 +127,7 @@ export default function AdminSidebar() {
       <div className="border-t border-gray-100 pt-5">
         <button
           type="button"
-          onClick={handleLogout}
+          onClick={() => logout()}
           className="flex w-full items-center gap-4 rounded-2xl px-5 py-4 font-semibold text-red-500 transition hover:bg-red-50"
         >
           <LogOut size={21} />

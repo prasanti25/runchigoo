@@ -79,7 +79,7 @@ export default function Home() {
       <Navbar />
 
       <main className="min-h-screen bg-[#fffaf7] text-gray-900">
-        <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-7xl px-4 pb-6 pt-2 sm:px-6 lg:px-8">
           <motion.section
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}

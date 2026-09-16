@@ -8,8 +8,9 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import Logo from "./common/Logo";
+import { useAuth } from "../context/AuthContext.jsx";
 
 const menuItems = [
   {
@@ -40,6 +41,7 @@ const menuItems = [
 ];
 
 export default function RestaurantSidebar() {
+  const { user, logout } = useAuth();
   return (
     <aside className="fixed left-0 top-0 flex h-screen w-72 flex-col border-r border-orange-100 bg-white p-6">
       <div className="flex items-center gap-3">
@@ -68,40 +70,36 @@ export default function RestaurantSidebar() {
             </p>
 
             <p className="font-bold text-gray-900">
-              Paradise Biryani
+              {user?.email || "Restaurant account"}
             </p>
           </div>
         </div>
       </div>
 
       <nav className="mt-8 flex-1 space-y-2">
-        {menuItems.map((item, index) => {
+        {menuItems.map((item) => {
           const Icon = item.icon;
 
           return (
-            <Link
+            <NavLink
               key={item.name}
               to={item.path}
-              className={`flex items-center gap-4 rounded-2xl px-5 py-4 font-semibold transition ${
-                index === 0
-                  ? "bg-orange-500 text-white shadow-lg"
-                  : "text-gray-600 hover:bg-orange-50 hover:text-orange-500"
-              }`}
+              className={({ isActive }) => `flex items-center gap-4 rounded-2xl px-5 py-4 font-semibold transition ${isActive ? "bg-orange-500 text-white shadow-lg" : "text-gray-600 hover:bg-orange-50 hover:text-orange-500"}`}
             >
               <Icon size={21} />
               {item.name}
-            </Link>
+            </NavLink>
           );
         })}
       </nav>
 
       <div className="space-y-2 border-t border-gray-100 pt-5">
-        <button className="flex w-full items-center gap-4 rounded-2xl px-5 py-4 font-semibold text-gray-600 transition hover:bg-orange-50 hover:text-orange-500">
+        <NavLink to="/settings" className="flex w-full items-center gap-4 rounded-2xl px-5 py-4 font-semibold text-gray-600 transition hover:bg-orange-50 hover:text-orange-500">
           <Settings size={21} />
           Settings
-        </button>
+        </NavLink>
 
-        <button className="flex w-full items-center gap-4 rounded-2xl px-5 py-4 font-semibold text-red-500 transition hover:bg-red-50">
+        <button onClick={() => logout()} className="flex w-full items-center gap-4 rounded-2xl px-5 py-4 font-semibold text-red-500 transition hover:bg-red-50">
           <LogOut size={21} />
           Logout
         </button>

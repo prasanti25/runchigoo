@@ -94,6 +94,15 @@ export default function Navbar() {
           ? "Admin"
           : "Customer";
 
+  const accountPath =
+    role === "restaurant"
+      ? "/restaurant-dashboard"
+      : role === "delivery"
+        ? "/delivery-dashboard"
+        : role === "admin"
+          ? "/admin-dashboard"
+          : "/profile";
+
   const handleLogout = () => {
     logout();
     setMobileOpen(false);
@@ -132,9 +141,13 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           {isAuthenticated ? (
             <div className="hidden shrink-0 items-center gap-2 xl:flex">
-              <span className="whitespace-nowrap rounded-xl bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700">
+              <NavLink
+                to={accountPath}
+                title={`Open ${roleLabel} dashboard`}
+                className="whitespace-nowrap rounded-xl bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 transition hover:bg-orange-100"
+              >
                 {roleLabel}
-              </span>
+              </NavLink>
               <div className="flex items-center gap-1 rounded-xl border border-orange-100 bg-white p-1.5">
                 {role === "customer" && (
                   <NavLink
