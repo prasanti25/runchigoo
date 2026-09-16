@@ -144,7 +144,8 @@ export default function DeliveryOrders() {
     setLoading(true);
     try {
       await apiRequest(`/orders/${orderId}/accept/`, { method: "POST", token });
-      await fetchOrders("Available");
+      setActiveTab("Active");
+      await fetchOrders("Active");
       await fetchCounts();
     } catch (err) {
       setError(err.message);

@@ -131,6 +131,24 @@ class ApiFlowTests(APITestCase):
         self.assertEqual(user.role, User.Role.RESTAURANT)
         self.assertFalse(user.is_active)
 
+    def test_admin_cannot_delete_customer_with_order_history(self):
+        Order.objects.create(
+            customer=self.customer,
+            restaurant=self.restaurant,
+            delivery_address=self.address,
+            subtotal=Decimal("199.00"),
+            delivery_fee=Decimal("40.00"),
+            discount=Decimal("0.00"),
+            total=Decimal("239.00"),
+        )
+        admin = User.objects.create_superuser("delete-guard-admin@example.com", "StrongPass123")
+        self.authenticate(admin)
+
+        response = self.client.delete(f"/api/v1/users/{self.customer.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(User.objects.filter(pk=self.customer.id).exists())
+
     def test_password_reset_uses_single_use_otp(self):
         self.client.post("/api/v1/auth/forgot_password/", {"email":self.customer.email}, format="json")
         otp=OTP.objects.get(user=self.customer, purpose=OTP.Purpose.RESET_PASSWORD)

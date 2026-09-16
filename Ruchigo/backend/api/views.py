@@ -401,6 +401,12 @@ class UserManagementViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         if instance.is_superuser or instance == self.request.user:
             raise serializers.ValidationError({"detail": "This administrator account cannot be deleted here."})
+        if Order.objects.filter(customer=instance).exists():
+            raise serializers.ValidationError({"detail": "Customers with order history cannot be deleted. Block the account instead."})
+        if Restaurant.objects.filter(owner=instance, orders__isnull=False).exists():
+            raise serializers.ValidationError({"detail": "Restaurant owners with order history cannot be deleted. Block the account instead."})
+        if DeliveryAssignment.objects.filter(partner=instance, order__status=Order.Status.OUT).exists():
+            raise serializers.ValidationError({"detail": "A delivery partner with an active delivery cannot be deleted."})
         instance.delete()
 
     @action(detail=True, methods=["post"], permission_classes=[IsAdmin])
