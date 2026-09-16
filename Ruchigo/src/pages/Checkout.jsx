@@ -294,7 +294,7 @@ export default function Checkout() {
                 </div>
 
                 <p className="mt-2 text-sm text-gray-500">
-                  {cartItems.length} Item(s) in your order
+                  {cartItems.length} {cartItems.length === 1 ? "item" : "items"} in your order
                 </p>
 
                 <div className="mt-6 space-y-5">

@@ -59,7 +59,7 @@ function normalizeOrder(order) {
     time: order.delivery?.pickup_at ? "Assigned" : "—",
     earning: `₹${order.delivery_fee || 0}`,
     status,
-    items: `${order.items?.length || 0} Items`,
+    items: `${order.items?.length || 0} ${(order.items?.length || 0) === 1 ? "Item" : "Items"}`,
     raw: order,
   };
 }

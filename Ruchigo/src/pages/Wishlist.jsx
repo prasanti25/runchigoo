@@ -198,7 +198,7 @@ export default function Wishlist() {
               </h2>
 
               <span className="rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-500">
-                {filteredFoods.length} Items
+                {filteredFoods.length} {filteredFoods.length === 1 ? "Item" : "Items"}
               </span>
 
             </div>
