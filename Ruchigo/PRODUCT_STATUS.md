@@ -3,7 +3,7 @@
 Updated 23 September 2026. This compares the supplied Swiggy/Zomato-style feature list with the active code; it is not a claim of parity with either live service.
 
 Release storage/rollout notes are in [DATA_STORAGE.md](DATA_STORAGE.md). The
-273-test backend regression suite now passes on isolated PostgreSQL, including
+292-test backend regression suite now passes on isolated PostgreSQL, including
 restored-database migration rehearsal; production load/concurrency certification
 remains outstanding. Earlier local-only deployment references below are
 historical checkpoints, not evidence of the current Vercel alias.
@@ -24,6 +24,13 @@ See [FEATURE_MATRIX.md](FEATURE_MATRIX.md) for all 300 numbered entries, includi
 - Route/auth loading and shared data-loading states use the original RuchiGo logo with rotating rings. The logo stays stationary; reduced-motion is respected. No artificial delay/progress is introduced, and conversation typing remains distinct.
 - Strict non-veg filtering fixes the reported pizza conversation. Bounded follow-ups retain the last dish/diet/budget; named foods and ingredient combinations are constrained before provider ranking. A saved vegetarian-profile conflict is explained, never silently overwritten. No-match responses explain real availability and budget rather than inserting unrelated dishes.
 - Actual local Gemini/browser checks returned only a non-vegetarian pizza for both reported messages, and no items under ₹200. Model IDs/debug status remain outside the customer UI. Provider failures still use explicitly menu-based fallback/clarification; this is not a provider-uptime guarantee.
+
+## Coupon discovery and basket savings
+
+- Cart and checkout expose searchable, paginated available/unavailable coupons with current saving, expiry, minimum spend and eligibility reasons. First-order, restaurant, account/global use limits and inactive campaigns are enforced server-side. Listing, applying and checkout share calculation rules.
+- Spend-to-unlock cards use current food/add-on totals and configured coupon thresholds. Delivery progress uses the checkout address/zone rules, including overlapping-zone minimums. Missing/unserviceable addresses or no free-delivery policy never produce a fabricated free-delivery promise.
+- A short confetti/checkmark confirmation appears only after successful coupon validation; reduced-motion disables the burst. Invalid codes do not celebrate. Coupons replace rather than stack, revalidate after bag changes and are removed when no longer eligible. Redemptions are consumed only at checkout.
+- No new production coupon, merchant, order, fee policy or delivery zone is created by this increment. ₹80/₹150 campaign examples in browser evidence are explicitly isolated local fixtures, cleaned after testing. Existing sample commercial data still requires business review.
 
 ## Dashboard and delivery-conversation increment
 
@@ -115,7 +122,7 @@ Use the commands in README. Backend tests cover existing API behavior and new ch
 
 `scripts/product-e2e.mjs` exercises real local customer login, discovery, COD checkout/coupon, kitchen transitions, courier delivery, review, support, saved dishes, address editing, notification reads and responsive customer/partner routes. It creates local preview records and must not run against a shared production dataset. `scripts/product-preview.mjs` produces desktop/mobile screenshots. Chrome is required.
 
-Latest consolidated backend verification: **273 tests pass on isolated PostgreSQL**, including reporting with 10,001 orders, account safety/audit, granular administrator delegation, filtered queues, private delivery conversations, deployment storage gates and strict food constraints. The final forecast-fixture adjustment also passed a 20-test intelligence rerun on SQLite. Dashboard/chat, permission editor, read-only queue, cancellation, support-conversation and full product browser suites passed at their recorded checkpoints; this increment reran People/loading and actual-provider food conversation checks. Desktop and 320/390px checks passed; the People suite also checks 768/1024px. User order **16** remains cancelled with only pending → cancelled events and no assignment; no test reopened or advanced it. Migrations through 0022 and lint/build checks pass. These checks do not certify live provider settlement, native background tracking/chat, production SQL contention or completion of all 300 entries. See `VERIFICATION_REPORT.md` for scope and retained local fixtures.
+Latest consolidated backend verification: **292 tests pass on isolated PostgreSQL**, including reporting with 10,001 orders, account safety/audit, granular administrator delegation, filtered queues, private delivery conversations, deployment storage gates, strict food constraints and 19 coupon/savings tests. Coupon browser checks passed twice without order/redemption writes, and the full product browser journey passed again on retained local order 37. The prior People/loading and actual-provider food conversation checks also passed, including real Gemini on the live alias. Desktop and 320/390px checks passed; People also checks 768/1024px and the full journey checks 360px. User order **16** remains cancelled with only pending → cancelled events and no assignment; no test reopened or advanced it. Migrations through 0022 and lint/build checks pass. These checks do not certify live provider settlement, native background tracking/chat, production SQL contention or completion of all 300 entries. See `VERIFICATION_REPORT.md` for scope and retained local fixtures.
 
 ## Recommended next release order
 

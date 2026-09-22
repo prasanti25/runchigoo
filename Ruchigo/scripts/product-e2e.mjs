@@ -151,8 +151,17 @@ try {
     await page.getByRole("button", { name: /^Add \d+ items? ·/ }).click();
   }
   await page.getByRole("link", { name: /View cart/ }).click();
-  await page.getByRole("textbox", { name: "Coupon code" }).fill("RUCHI20");
-  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await page
+    .getByRole("button", { name: /Find a coupon for your meal/ })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Search coupons or enter code" })
+    .fill("RUCHI20");
+  await page.getByRole("button", { name: "Apply code", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "A little win for your meal" })
+    .getByRole("button", { name: "Nice, continue" })
+    .click();
   await page.getByText("RUCHI20 applied").waitFor();
   await page.getByRole("link", { name: "Continue to checkout" }).click();
   await page.getByRole("button", { name: "Place order", exact: true }).click();

@@ -1,5 +1,33 @@
 # Product verification — 23 September 2026
 
+## Coupon search, thresholds and confirmation
+
+- `test:coupon-savings` passed twice against the local browser/API/database.
+  Covers available/unavailable search, minimum-spend explanations, expired-code
+  refusal without celebration, server-confirmed success burst, live coupon
+  revalidation, non-stacking replacement, matching checkout bill, automatic
+  minimum-spend removal and manual removal. Widths 1440/390/320 and reduced
+  motion passed, with zero browser errors.
+- Each coupon UI run created one unique local customer/cart/address and three
+  clearly marked temporary campaigns, then deleted those exact records. No
+  order, payment, inventory reservation or coupon redemption was created by
+  this suite. Existing user order 16's status/events remained unchanged.
+- The first 16 coupon tests passed on isolated PostgreSQL. The subsequent
+  18-test SQLite pass also covers strict add-on prices and public usage privacy.
+  A full 289-test PostgreSQL run passed before the last three edge tests were
+  added; the final **292-test PostgreSQL suite passed**, including all 19 coupon
+  tests. Lint and the production build passed without errors or warnings.
+- `test:product` passed again on retained local fixture order **37**, including
+  the new coupon drawer/confirmation, actual COD checkout, kitchen progression,
+  real stored GPS, courier code, ratings/cleanup, support and responsive role
+  pages. Zero browser errors; the temporary public review was removed by its
+  exact fixture ID. This is a separate order-creating suite from coupon-only QA.
+- The first zone tests had not explicitly activated their isolated fixtures;
+  setting those test zones active fixed the setup. Production zone defaults
+  remain off. No assertions or serviceability rules were relaxed.
+- No migration, business-rate change, live coupon creation or production
+  customer-cart mutation is required for this UI/API increment.
+
 ## People, branded loading and non-veg conversation increment
 
 - `test:people-loading` passed, including server search/filter counts, create,
@@ -27,8 +55,11 @@
   SQLite. Configured-secret scanning covered 388 source files and 148 built
   assets with no matches; one known local example-key placeholder was excluded.
   No preview-account credentials or delivery-demo route appeared in the bundle.
-- This increment has no schema migration. Production UI/provider verification
-  must follow deployment; local Gemini results alone do not prove the live alias.
+- This increment was pushed as `8220e3e` and deployed to the production alias
+  (`dpl_5hBoiu2YjYqXjvsStzTwThhD6WoU`). The same real-Gemini browser test then
+  passed on `https://runchigoo.vercel.app`, including both non-veg prompts,
+  budget no-match, 1440/390/320px and zero business writes/browser errors.
+  No schema migration was required for that increment.
 
 ## Release verification
 

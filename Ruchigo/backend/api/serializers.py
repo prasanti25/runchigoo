@@ -406,36 +406,17 @@ class CouponCodeSerializer(serializers.Serializer):
 
 
 def applicable_coupon(code, subtotal, *, lock=False, user=None, restaurant=None):
-    now = timezone.now()
-    queryset = Coupon.objects.filter(
-        code__iexact=(code or "").strip(),
-        is_active=True,
-        starts_at__lte=now,
-        ends_at__gt=now,
-    )
+    from .coupon_savings import coupon_discount, coupon_status
+    queryset = Coupon.objects.filter(code__iexact=(code or "").strip())
     if lock:
         queryset = queryset.select_for_update()
     coupon = queryset.first()
-    if not coupon or subtotal < coupon.min_order_amount:
-        raise serializers.ValidationError({"coupon_code": "Coupon is invalid or not applicable."})
-    if coupon.usage_limit is not None and coupon.usage_count >= coupon.usage_limit:
-        raise serializers.ValidationError({"coupon_code": "This coupon has reached its usage limit."})
-    if coupon.restaurant_id and coupon.restaurant_id != getattr(restaurant, "pk", None):
-        raise serializers.ValidationError({"coupon_code": "This coupon belongs to a different restaurant."})
-    history = Order.objects.filter(customer=user).exclude(status=Order.Status.CANCELLED) if user else Order.objects.none()
-    if coupon.first_order_only and (not user or history.exists()):
-        raise serializers.ValidationError({"coupon_code": "This offer is available on your first order only."})
-    if coupon.per_user_limit and (not user or history.filter(coupon=coupon).count() >= coupon.per_user_limit):
-        raise serializers.ValidationError({"coupon_code": "You have reached the limit for this coupon."})
-
-    amount = coupon.discount_amount or Decimal("0")
-    percent = coupon.discount_percent or Decimal("0")
-    if amount <= 0 and percent <= 0:
-        raise serializers.ValidationError({"coupon_code": "Coupon has no valid discount."})
-    discount = amount if amount > 0 else subtotal * percent / Decimal("100")
-    if coupon.max_discount is not None:
-        discount = min(discount, coupon.max_discount)
-    return coupon, min(discount, subtotal)
+    if not coupon:
+        raise serializers.ValidationError({"coupon_code": "We couldn’t find that coupon. Check the code and try again."})
+    eligibility = coupon_status(coupon, subtotal, user=user, restaurant=restaurant)
+    if not eligibility["eligible"]:
+        raise serializers.ValidationError({"coupon_code": eligibility["reason"]})
+    return coupon, coupon_discount(coupon, subtotal)
 
 class CheckoutSerializer(serializers.Serializer):
     address_id = serializers.PrimaryKeyRelatedField(queryset=Address.objects.all(), source="address")

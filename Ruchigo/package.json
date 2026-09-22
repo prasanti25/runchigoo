@@ -32,7 +32,8 @@
     "test:admin-access": "node scripts/admin-access-e2e.mjs",
     "test:dashboard-queues": "node scripts/dashboard-queues-e2e.mjs",
     "test:people-loading": "node scripts/people-loading-e2e.mjs",
-    "test:food-constraints:live": "node scripts/food-constraints-live-e2e.mjs"
+    "test:food-constraints:live": "node scripts/food-constraints-live-e2e.mjs",
+    "test:coupon-savings": "node scripts/coupon-savings-e2e.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

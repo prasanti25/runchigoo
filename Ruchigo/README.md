@@ -183,13 +183,38 @@ restricted Maps JavaScript API key/billing setup are still needed for that
 provider. Do not reuse the server-side Gemini key or copy undocumented Google
 tile endpoints. See [tracking notes](TRACKING_DESIGN_NOTES.md).
 
-Release `28a191e` was pushed to `prasanti25/runchigoo` main and manually deployed at https://runchigoo.vercel.app. Vercel's Git link remains connected to a different repository; align it before relying on automatic deployments. Production migrations through 0022 were applied after an isolated backup/restore rehearsal, preserving existing users/orders and other pre-existing application rows.
+Release `8220e3e` (People, logo loading and non-veg conversation) followed `28a191e` on `prasanti25/runchigoo` main and was manually deployed at https://runchigoo.vercel.app. Its actual-provider production chat test passed. Vercel's Git link remains connected to a different repository; align it before relying on automatic deployments. Production migrations through 0022 were applied after an isolated backup/restore rehearsal, preserving existing users/orders and other pre-existing application rows.
 
 The People-directory, original-logo loader and strict food-conversation fixes require no new migration. Never point local fixture scripts at production. Before a public paid launch, complete the blockers in [PRODUCT_STATUS.md](PRODUCT_STATUS.md), configure durable media, shared cache, transactional email and production payment/refund/reconciliation operations, then verify backups and concurrency/load/security behavior.
 
-## Intelligence and personalisation
+## Feature coverage
 
 All 300 requested entries, including partial/missing/provider-dependent work, are tracked in [FEATURE_MATRIX.md](FEATURE_MATRIX.md). Do not count unused legacy mock dashboards as implemented features.
+
+## Coupons and spend-to-unlock savings
+
+Cart and checkout have a searchable coupon drawer, available/unavailable cards,
+minimum-spend guidance, clear restrictions and a confirmation-only celebration.
+`GET /api/v1/cart/savings/` is customer-only, paginated and private/no-store.
+Discovery, application and checkout share coupon eligibility and rounded amounts.
+Bag changes revalidate a selected coupon; dropping below its minimum removes it.
+Replacement coupons never stack. Applying does not reserve a redemption.
+
+Delivery progress uses the checkout serviceability rules for an owned address.
+The cart's default-address result is labelled an estimate; checkout uses the
+selected address. Overlapping zones account for their own minimum orders and
+free-delivery thresholds. No configured free-delivery threshold means no invented
+unlock promise. The existing fallback remains ₹40 below ₹500; this release does
+not approve new fees or create ₹80/₹150 production campaigns.
+
+Manage campaigns in Admin → Offers & coupons, and delivery thresholds in enabled
+delivery zones. These values remain database-backed; selected coupon UI state is
+temporary and checkout is always authoritative. `npm run test:coupon-savings`
+uses an isolated local customer/cart and exact temporary coupons, checks
+desktop/mobile, expiry, replacement, live revalidation and reduced-motion, then
+deletes those fixtures. It never places an order or consumes a coupon redemption.
+
+## Intelligence and personalisation details
 
 - `/for-you?tab=chat`: follow-up food assistant, grounded support guidance and explicit restaurant-menu handoff.
 - Non-vegetarian requests and follow-up corrections retain the dish, diet and budget; unavailable food is not replaced by unrelated items. Known constraints are enforced before Gemini ranks eligible menu IDs. `npm run test:food-constraints:live` exercises the actual provider without business writes; set `RUCHIGO_SMOKE_URL=https://runchigoo.vercel.app` only for the explicitly allowlisted anonymous production smoke.

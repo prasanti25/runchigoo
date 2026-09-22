@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import toast from "react-hot-toast";
@@ -34,6 +35,41 @@ export function CartProvider({ children }) {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [coupon, setCoupon] = useState(null);
+  const cartKey = JSON.stringify(cartItems);
+  const cartScope = useRef({ key: cartKey, token });
+  const couponRequest = useRef(0);
+  useEffect(() => {
+    cartScope.current = { key: cartKey, token };
+  }, [cartKey, token]);
+  const selectedCoupon = coupon?.token === token ? coupon?.code || "" : "";
+  useEffect(() => {
+    if (!selectedCoupon || !cartItems.length) return;
+    const controller = new AbortController();
+    const operation = ++couponRequest.current;
+    apiRequest("/cart/validate-coupon/", {
+      token,
+      method: "POST",
+      signal: controller.signal,
+      body: { code: selectedCoupon },
+    })
+      .then((data) => {
+        if (controller.signal.aborted || operation !== couponRequest.current)
+          return;
+        setCoupon({
+          code: data.code,
+          discount: Number(data.discount),
+          key: cartKey,
+          token,
+        });
+      })
+      .catch((error) => {
+        if (controller.signal.aborted || operation !== couponRequest.current)
+          return;
+        setCoupon(null);
+        toast.error(`${selectedCoupon} was removed: ${error.message}`);
+      });
+    return () => controller.abort();
+  }, [cartKey, cartItems.length, selectedCoupon, token]);
 
   const loadCart = useCallback(async () => {
     if (!isAuthenticated || !token || role !== "customer") {
@@ -104,7 +140,6 @@ export function CartProvider({ children }) {
           body: { menu_item: menuItemId, quantity, addon_ids: addonIds },
         });
         setCartItems(mapCart(cart));
-        setCoupon(null);
         return true;
       } catch (error) {
         const isRestaurantConflict = error.message
@@ -121,7 +156,6 @@ export function CartProvider({ children }) {
           body: { menu_item: menuItemId, quantity, addon_ids: addonIds },
         });
         setCartItems(mapCart(cart));
-        setCoupon(null);
         return true;
       }
     },
@@ -136,7 +170,7 @@ export function CartProvider({ children }) {
           method: "DELETE",
         }).then((cart) => {
           setCartItems(mapCart(cart));
-          setCoupon(null);
+          if (!cart.items?.length) setCoupon(null);
         });
       const cart = await apiRequest(`/cart/items/${id}/`, {
         token,
@@ -144,7 +178,6 @@ export function CartProvider({ children }) {
         body: { quantity },
       });
       setCartItems(mapCart(cart));
-      setCoupon(null);
     },
     [token],
   );
@@ -175,18 +208,35 @@ export function CartProvider({ children }) {
 
   const applyCoupon = useCallback(
     async (code) => {
+      const operation = ++couponRequest.current;
       const data = await apiRequest("/cart/validate-coupon/", {
         token,
         method: "POST",
         body: { code },
       });
-      setCoupon({ code: data.code, discount: Number(data.discount || 0) });
+      if (
+        operation !== couponRequest.current ||
+        cartScope.current.key !== cartKey ||
+        cartScope.current.token !== token
+      )
+        throw new Error(
+          "Your bag changed while applying the coupon. Please try again.",
+        );
+      setCoupon({
+        code: data.code,
+        discount: Number(data.discount || 0),
+        key: cartKey,
+        token,
+      });
       return data;
     },
-    [token],
+    [token, cartKey],
   );
 
-  const clearCoupon = useCallback(() => setCoupon(null), []);
+  const clearCoupon = useCallback(() => {
+    couponRequest.current++;
+    setCoupon(null);
+  }, []);
 
   const itemTotal = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
@@ -194,7 +244,11 @@ export function CartProvider({ children }) {
   );
   const deliveryFee = itemTotal > 0 && itemTotal < 500 ? 40 : 0;
   const platformFee = 0;
-  const discount = coupon?.discount || 0;
+  const discount =
+    coupon?.token === token && coupon?.key === cartKey
+      ? coupon?.discount || 0
+      : 0;
+  const couponChecking = Boolean(selectedCoupon && coupon?.key !== cartKey);
   const total = Math.max(0, itemTotal + deliveryFee - discount);
 
   const value = useMemo(
@@ -209,7 +263,8 @@ export function CartProvider({ children }) {
       clearCart,
       applyCoupon,
       clearCoupon,
-      couponCode: coupon?.code || "",
+      couponCode: selectedCoupon,
+      couponChecking,
       itemTotal,
       deliveryFee,
       platformFee,
@@ -227,7 +282,8 @@ export function CartProvider({ children }) {
       clearCart,
       applyCoupon,
       clearCoupon,
-      coupon,
+      selectedCoupon,
+      couponChecking,
       itemTotal,
       deliveryFee,
       discount,

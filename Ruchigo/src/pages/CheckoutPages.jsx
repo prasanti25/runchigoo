@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import LoadingScreen from "../components/common/LoadingScreen.jsx";
+import CouponSavings from "../components/product/CouponSavings.jsx";
 import {
   ArrowRight,
   Check,
   MapPin,
   Plus,
   ShieldCheck,
-  Tag,
   Trash2,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -83,29 +83,8 @@ export function Bill({ children, quote, checking = false, checkout = false }) {
 }
 
 export function CartPage() {
-  const {
-    cartItems,
-    loading,
-    removeFromCart,
-    applyCoupon,
-    clearCoupon,
-    couponCode,
-  } = useCart();
-  const [code, setCode] = useState("");
-  const [busy, setBusy] = useState(false);
+  const { cartItems, loading, removeFromCart } = useCart();
   const [removing, setRemoving] = useState(null);
-  const apply = async (event) => {
-    event.preventDefault();
-    setBusy(true);
-    try {
-      await applyCoupon(code);
-      toast.success("Your coupon is applied");
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setBusy(false);
-    }
-  };
   const remove = async (id) => {
     setRemoving(id);
     try {
@@ -126,7 +105,7 @@ export function CartPage() {
             <h1>Your bag of happiness.</h1>
           </div>
           {loading && !cartItems.length ? (
-            <p className="muted">Getting your bag ready…</p>
+            <LoadingScreen inline message="Getting your bag ready…" />
           ) : !cartItems.length ? (
             <EmptyState
               title="Your next meal starts here"
@@ -191,44 +170,7 @@ export function CartPage() {
                     </article>
                   ))}
                 </section>
-                <section className="panel">
-                  <div className="flex-row">
-                    <Tag size={18} />
-                    <h2>A little saving?</h2>
-                  </div>
-                  {couponCode ? (
-                    <div className="saving-line flex-row between">
-                      <span>
-                        <Check size={15} className="inline mr-2" />
-                        {couponCode} applied
-                      </span>
-                      <button onClick={clearCoupon} className="text-link">
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <form className="flex-row mt-5" onSubmit={apply}>
-                      <input
-                        className="coupon-input"
-                        required
-                        maxLength={40}
-                        value={code}
-                        onChange={(event) =>
-                          setCode(event.target.value.toUpperCase())
-                        }
-                        placeholder="Enter coupon code"
-                        aria-label="Coupon code"
-                      />
-                      <button className="btn secondary" disabled={busy}>
-                        {busy ? "Applying…" : "Apply"}
-                      </button>
-                    </form>
-                  )}
-                  <Link to="/offers" className="text-link mt-4">
-                    Explore current offers
-                    <ArrowRight size={14} />
-                  </Link>
-                </section>
+                <CouponSavings />
               </div>
               <Bill>
                 <Link className="btn primary w-full mt-6" to="/checkout">
@@ -618,6 +560,7 @@ export function CheckoutPage() {
                     </label>
                   )}
                 </section>
+                <CouponSavings addressId={addressId} />
                 <ErrorNotice error={error} />
               </div>
               <Bill quote={quote} checking={checkingQuote} checkout>

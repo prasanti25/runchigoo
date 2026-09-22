@@ -38,7 +38,7 @@ def delivery_quote(restaurant, address, subtotal):
     cancellation_snapshot = {"cutoff": cancellation.cutoff, "allow_prepaid_refunds": cancellation.allow_prepaid_refunds, "revision": cancellation.revision}
     if not policy or not policy.enabled:
         fee = Decimal("40.00") if subtotal < 500 else Decimal("0.00")
-        return {"delivery_fee": str(fee), "zone": None, "distance_km": None, "distance_basis": None, "policy_revision": policy.revision if policy else 1, "cancellation_policy": cancellation_snapshot}
+        return {"delivery_fee": str(fee), "free_delivery_above": "500.00", "zone": None, "distance_km": None, "distance_basis": None, "policy_revision": policy.revision if policy else 1, "cancellation_policy": cancellation_snapshot}
     if address.latitude is None or address.longitude is None:
         raise serializers.ValidationError({"address_id": "Add a location pin to this address so we can check delivery availability."})
     if restaurant.latitude is None or restaurant.longitude is None:
@@ -65,7 +65,10 @@ def delivery_quote(restaurant, address, subtotal):
         raise serializers.ValidationError({"address_id": "This address is outside this kitchen’s delivery area. Choose a closer address or another restaurant."})
     # Overlap rule is deterministic and customer-friendly: cheapest eligible zone.
     zone, fee = min(eligible, key=lambda row: (row[1], row[0].pk))
+    free_thresholds = [max(candidate.minimum_order, candidate.free_delivery_above) for candidate, _ in candidates if candidate.free_delivery_above is not None]
+    free_thresholds.extend(candidate.minimum_order for candidate, _ in candidates if candidate.base_fee + max(Decimal(0), distance-candidate.included_km) * candidate.per_km_fee == 0)
     return {"delivery_fee": str(fee), "zone": zone.name, "zone_id": zone.pk,
+            "free_delivery_above": str(min(free_thresholds)) if free_thresholds else None,
             "zone_revision": zone.updated_at.isoformat(), "policy_revision": policy.revision,
             "distance_km": str(distance.quantize(Decimal("0.01"))), "distance_basis": "straight_line", "cancellation_policy": cancellation_snapshot}
 

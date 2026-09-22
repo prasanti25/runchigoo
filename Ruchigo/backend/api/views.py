@@ -399,8 +399,14 @@ class CartViewSet(AdminScopeMixin, viewsets.ViewSet):
             raise serializers.ValidationError({"cart": "Cart is empty."})
         subtotal = sum((cart_unit_price(item, strict=True) * item.quantity for item in items), Decimal("0"))
         coupon, discount = applicable_coupon(payload.validated_data["code"], subtotal, user=request.user, restaurant=cart.restaurant)
-        fee = Decimal("40.00") if subtotal < Decimal("500.00") else Decimal("0")
-        return Response({"code": coupon.code, "subtotal": subtotal, "delivery_fee": fee, "discount": discount, "total": subtotal + fee - discount, "delivery_estimate_only": True})
+        # Applying a coupon validates food savings, not a delivery-address quote.
+        response = Response({"code": coupon.code, "subtotal": subtotal, "discount": discount, "food_total": subtotal-discount})
+        response["Cache-Control"] = "private, no-store"
+        return response
+    @action(detail=False, methods=["get"])
+    def savings(self, request):
+        from .cart_savings import savings_response
+        return savings_response(request)
     @action(detail=False, methods=["post"])
     def quote(self, request):
         payload = CheckoutSerializer(data=request.data, context={"request": request})
