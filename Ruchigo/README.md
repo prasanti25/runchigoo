@@ -107,17 +107,27 @@ available. GPS cannot reliably identify a house entrance, flat or floor.
 LocationIQ is now configured server-side locally and in Vercel Production.
 `npm run test:address-location:live` passed against the local app using the real
 provider at a controlled public-landmark GPS point, including address autofill,
-flat editing, database save and reload. Production deployment verification is
-pending for this increment. The separate `npm run test:address-location` suite
+flat editing, database save and reload. The same suite passed against the
+production alias in public-only mode: real lookup, desktop/mobile map,
+confirmation and browser persistence, without production business writes.
+The separate `npm run test:address-location` suite
 uses controlled provider fixtures for failure/race/permission scenarios. Neither
 suite claims that GPS can identify a flat or that every address is serviceable.
 
 If GPS returns permission denied, check both this site's browser permission and
 the device's Location Services. On macOS, Google Chrome needs its own Location
-Services toggle in addition to the browser's Allow setting. The picker includes
-recovery steps/retry; websites cannot bypass an OS denial. Guest manual addresses
+Services toggle in addition to the browser's Allow setting. The picker offers
+a short error, retry and manual entry, without OS-specific troubleshooting steps
+or assuming which permission failed. Websites cannot bypass an OS denial. Guest manual addresses
 persist across reload without needing GPS, and account addresses are cleared from
 browser selection on sign-out.
+
+Device acquisition uses a first-fix `watchPosition`, cleared on completion,
+cancellation or timeout, with a 15-second application deadline even if a browser
+extension never calls back. This avoids a broken one-shot wrapper found in Urban
+VPN without disabling privacy controls. `npm run test:location-device` checks
+these paths. All users confirm a pin then review editable delivery details;
+unmapped streets and flat numbers are never guessed.
 
 ## Live rider location
 

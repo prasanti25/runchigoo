@@ -36,6 +36,7 @@ export default function AddressLocationPicker({
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [lookupError, setLookupError] = useState("");
   const request = useRef(null),
+    gpsRequest = useRef(null),
     mounted = useRef(true),
     gpsVersion = useRef({ value: 0 });
   const mapConfig = useRemote(point ? "/location/map-config/" : null);
@@ -81,8 +82,13 @@ export default function AddressLocationPicker({
   }, []);
   const receiveGPS = useCallback(async () => {
     const version = ++gpsVersion.current.value;
+    gpsRequest.current?.abort();
+    const controller = new AbortController();
+    gpsRequest.current = controller;
+    setLocating(true);
+    setError("");
     try {
-      const next = await currentPosition();
+      const next = await currentPosition({ signal: controller.signal });
       if (!mounted.current || version !== gpsVersion.current.value) return;
       setPoint(next);
       setError("");
@@ -107,6 +113,7 @@ export default function AddressLocationPicker({
       window.clearTimeout(timer);
       mounted.current = false;
       gps.value++;
+      gpsRequest.current?.abort();
       request.current?.abort();
     };
   }, [autoLocate, receiveGPS]);
@@ -116,7 +123,6 @@ export default function AddressLocationPicker({
       active = true;
     const changed = () => {
       if (active && permission?.state === "granted") {
-        setLocating(true);
         void receiveGPS();
       }
     };
@@ -134,6 +140,16 @@ export default function AddressLocationPicker({
     };
   }, [permissionDenied, receiveGPS]);
   const address = result?.key === pointKey(point) ? result.address : null;
+  const missingAddressFields = address
+    ? [
+        ["line1", "street or locality"],
+        ["city", "city"],
+        ["state", "state"],
+        ["postal_code", "postal code"],
+      ]
+        .filter(([key]) => !address[key]?.trim())
+        .map(([, label]) => label)
+    : [];
   const pendingPin = point && !address && !resolving;
   const confirm = () => {
     if (!point || resolving || locating) return;
@@ -193,6 +209,7 @@ export default function AddressLocationPicker({
               onChange={(next) => {
                 if (pointKey(next) === pointKey(point)) return;
                 gpsVersion.current.value++;
+                gpsRequest.current?.abort();
                 setLocating(false);
                 request.current?.abort();
                 setResolving(false);
@@ -206,14 +223,14 @@ export default function AddressLocationPicker({
             className="address-gps-button"
             type="button"
             disabled={locating}
-            onClick={() => {
-              setLocating(true);
-              setError("");
-              void receiveGPS();
-            }}
+            onClick={() => void receiveGPS()}
           >
             <LocateFixed size={17} />
-            {locating ? "Locating…" : "Use current location"}
+            {locating
+              ? "Locating…"
+              : error
+                ? "Try again"
+                : "Use current location"}
           </button>
         </div>
         <div className="address-picker-details">
@@ -242,38 +259,13 @@ export default function AddressLocationPicker({
               entrance.
             </p>
           )}
-          {address?.partial && (
-            <p className="address-accuracy-warning">
-              Some address details are missing from the map. You can complete
-              them on the next step.
+          {missingAddressFields.length > 0 && (
+            <p className="address-details-hint">
+              Add your {missingAddressFields.join(", ")} with your delivery
+              details.
             </p>
           )}
           <ErrorNotice error={error || lookupError} />
-          {permissionDenied && (
-            <details className="location-permission-help" open>
-              <summary>How to allow location</summary>
-              <ol>
-                <li>
-                  Click the controls icon beside this page’s address. Set
-                  Location to Allow.
-                </li>
-                <li>
-                  {/Mac/.test(navigator.platform) &&
-                  navigator.maxTouchPoints <= 1
-                    ? "On your Mac: System Settings → Privacy & Security → Location Services. Turn it on and allow Google Chrome (or your current browser)."
-                    : "In your device settings, turn on Location Services and allow this browser to use your location."}
-                </li>
-                <li>
-                  Return here and choose Use current location. If you changed
-                  device permissions, you may need to restart the browser.
-                </li>
-              </ol>
-              <p>
-                Permission is separate for localhost, 127.0.0.1 and the live
-                website.
-              </p>
-            </details>
-          )}
           {pendingPin && (
             <button
               type="button"

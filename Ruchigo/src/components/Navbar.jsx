@@ -428,8 +428,7 @@ export default function Navbar() {
             }}
             onConfirm={(next) => {
               setPickerOpen(false);
-              if (role === "customer" && token) setAddressDraft(next);
-              else saveDeliveryLocation(next);
+              setAddressDraft(next);
             }}
           />
         </Suspense>

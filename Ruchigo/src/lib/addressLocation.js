@@ -62,44 +62,72 @@ export function deliveryLocationFromAddress(address) {
   };
 }
 
-export function currentPosition() {
+export function currentPosition({ signal } = {}) {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation)
+    const geolocation = navigator.geolocation;
+    if (!geolocation?.watchPosition)
       return reject(
         new Error(
           "This browser can’t access your location. You can enter your address manually.",
         ),
       );
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) =>
-        resolve({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          accuracy: coords.accuracy,
-          source: "gps",
-        }),
-      async (error) => {
-        let permission = "unknown";
+    let watchId,
+      timer,
+      settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      if (watchId != null) {
+        const id = watchId;
+        watchId = null;
         try {
-          permission =
-            (await navigator.permissions?.query({ name: "geolocation" }))
-              ?.state || "unknown";
+          geolocation.clearWatch(id);
         } catch {
-          /* Browser support varies. */
+          /* A browser extension may throw. */
         }
-        const message =
-          error.code === 1
-            ? permission === "granted"
-              ? "Location permission is off on your device. This browser is allowed, but the device denied access. Check Location Services, then try again."
-              : "Location permission is off. Check both this site’s permission and your device’s Location Services, then try again."
-            : error.code === 3
-              ? "Finding your location took too long. Try again near a window or enter your address manually."
-              : "Your device couldn’t find a location. Check Location Services and your connection, or enter your address manually.";
-        const failure = new Error(message);
-        failure.geolocationCode = error.code;
-        reject(failure);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
+      }
+    };
+    const finish = (error, position) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve(position);
+    };
+    const abort = () =>
+      finish(new DOMException("Location request cancelled", "AbortError"));
+    const fail = ({ code = 2 } = {}) => {
+      const message =
+        code === 1
+          ? "We couldn’t access your location. Try again or enter your address manually."
+          : code === 3
+            ? "Finding your location took too long. Try again or enter your address manually."
+            : "Your location is unavailable right now. Try again or enter your address manually.";
+      const error = new Error(message);
+      error.geolocationCode = code;
+      finish(error);
+    };
+    if (signal?.aborted) return abort();
+    signal?.addEventListener("abort", abort, { once: true });
+    // A first-fix watch respects browser permission and avoids broken one-shot
+    // wrappers. It is cleared on every terminal path: never background tracking.
+    // Own deadline also bounds extension callbacks / permission waits, which
+    // aren't necessarily included in the browser's native timeout.
+    timer = setTimeout(() => fail({ code: 3 }), 15000);
+    try {
+      watchId = geolocation.watchPosition(
+        ({ coords }) => {
+          const point = locationPoint(coords);
+          if (!point) return fail({ code: 2 });
+          finish(null, { ...point, accuracy: coords.accuracy, source: "gps" });
+        },
+        fail,
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+      );
+      // Some wrappers call back synchronously before returning their watch ID.
+      if (settled) cleanup();
+    } catch {
+      fail({ code: 2 });
+    }
   });
 }

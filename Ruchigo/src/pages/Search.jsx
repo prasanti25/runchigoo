@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Search,
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
 import VoiceInput from "../components/product/VoiceInput.jsx";
+import { currentPosition } from "../lib/addressLocation.js";
 import {
   EmptyState,
   ErrorNotice,
@@ -34,6 +35,8 @@ export default function SearchPage() {
   const [query, setQuery] = useState(input);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
+  const locationRequest = useRef(null);
+  useEffect(() => () => locationRequest.current?.abort(), []);
   const nearby =
     Boolean(params.get("radius_km")) || params.get("sort") === "distance";
   const hasCoordinates =
@@ -89,7 +92,7 @@ export default function SearchPage() {
   const count = view === "dishes" ? data?.item_count : data?.restaurant_count;
   const toggle = (key, value = "true") =>
     update(key, params.get(key) === value ? "" : value);
-  const chooseNearby = () => {
+  const chooseNearby = async () => {
     setLocationError("");
     const activate = () =>
       setParams((current) => {
@@ -103,31 +106,24 @@ export default function SearchPage() {
       activate();
       return;
     }
-    if (!navigator.geolocation) {
-      setLocationError(
-        "Location isn’t supported here. Choose a city in the header instead.",
-      );
-      return;
-    }
+    locationRequest.current?.abort();
+    const controller = new AbortController();
+    locationRequest.current = controller;
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        saveDeliveryLocation({
-          ...location,
-          latitude: Number(position.coords.latitude.toFixed(3)),
-          longitude: Number(position.coords.longitude.toFixed(3)),
-        });
-        setLocating(false);
-        activate();
-      },
-      () => {
-        setLocating(false);
-        setLocationError(
-          "Location wasn’t shared. Allow it in your browser or browse by city instead.",
-        );
-      },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
-    );
+    try {
+      const position = await currentPosition({ signal: controller.signal });
+      if (controller.signal.aborted) return;
+      saveDeliveryLocation({
+        ...location,
+        latitude: Number(position.latitude.toFixed(3)),
+        longitude: Number(position.longitude.toFixed(3)),
+      });
+      activate();
+    } catch (error) {
+      if (!controller.signal.aborted) setLocationError(error.message);
+    } finally {
+      if (!controller.signal.aborted) setLocating(false);
+    }
   };
   const clearFilters = () =>
     setParams((current) => {

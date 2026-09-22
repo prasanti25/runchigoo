@@ -12,7 +12,7 @@ historical checkpoints, not evidence of the current Vercel alias.
 
 RuchiGo now has a consistent customer experience and operational workspaces connected to its Django API: discovery → menu → cart/coupon → checkout → kitchen states → delivery confirmation → review/support. The implementation is a working product foundation, **not a completed 300-feature commercial platform**.
 
-### Delivery-location increment — live provider verified locally
+### Delivery-location increment — production public lookup verified
 
 The desktop-first header/address flow now supports opt-in GPS, an adjustable map
 pin, zoom/expand, street/locality autofill through an optional server-side
@@ -26,17 +26,36 @@ LocationIQ is configured in the local backend and Vercel Production environment.
 The real-provider browser test passed locally at a public Connaught Place pin:
 street/locality/city/state/postcode autofill, typed flat details, account saving,
 coordinate preservation and reload. No provider response was mocked in that test;
-only device GPS was controlled. Production deployment verification is pending.
-The 303-test SQLite regression and additional Delhi-territory normalization tests
-pass; the 292-test PostgreSQL result above applies to the preceding deployed
+only device GPS was controlled. Public-only production checks also passed at
+https://runchigoo.vercel.app: real provider lookup, desktop/mobile maps, confirmation
+and browser persistence, without production business writes. This verifies runtime
+commit `c6cc983`, deployment `dpl_A8n3Sye7XzvL6Vh6HTWCx88gMwyj`.
+The full 313-test SQLite regression, including geocoding and rider-location tests,
+passes; the 292-test PostgreSQL result above applies to the preceding deployed
 release. No database migration is required.
 
 Approximate IP/network selection has been removed from the customer interface.
 Guests can enter a full address without GPS; manual city filtering is explicitly
-browsing-only. Browser-vs-device permission recovery/retry is implemented.
-The user's actual Chrome localhost setting and global macOS Location Services
-were verified enabled, but app-specific Chrome OS permission could not be read
-or changed because macOS denied the agent accessibility control.
+browsing-only. A subsequent location fix removes OS-specific instructions and
+the definite permission-off diagnosis; the picker keeps a short error, retry and
+manual entry. All users, including guests, confirm their pin then edit delivery
+details. Missing provider streets are not invented, and flat numbers remain
+user-entered. A locality-only result no longer gets a generic warning when its
+required address fields are present. This follow-up is not yet deployed.
+The user's Chrome localhost permission and global macOS Location Services were
+verified enabled; their screenshot also confirms Chrome's OS toggle is on.
+Read-only process inspection found Chrome running framework 153.0.8010.48 while
+the installed version was 153.0.8010.53. After explicit user approval, Chrome was
+normally restarted and the new process was verified loading 153.0.8010.53.
+The restart did not fix acquisition. Temporary localhost-only diagnostics then
+identified a replaced one-shot geolocation method returning denial despite granted
+browser permission; Urban VPN 5.14.4's installed wrapper contains the matching
+error/fall-through. A standard first-fix watch succeeded in the actual browser,
+and the user supplied a screenshot with their map/locality loaded after the fix.
+The picker and nearby search now share that method with a 15-second application
+deadline and cleanup on completion, timeout, replacement and close. No privacy
+setting was bypassed, no extension was disabled, and no IP-derived pin was used.
+Temporary diagnostics were removed; no device coordinates were recorded by them.
 
 The customer rider map now has a separate one-second owned GPS polling channel,
 with rider writes limited to once per second and stale fixes labelled after

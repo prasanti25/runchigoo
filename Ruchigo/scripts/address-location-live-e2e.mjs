@@ -186,9 +186,19 @@ try {
     );
   } else {
     await expect(picker).not.toBeVisible();
-    await expect(page.locator(".location-trigger")).toContainText(
-      address.locality,
+    const form = page.getByRole("dialog", {
+      name: "Where should we bring your food?",
+    });
+    await expect(form.getByLabel("House / flat number and street")).toHaveValue(
+      address.line1,
     );
+    await form
+      .getByLabel("House / flat number and street")
+      .fill(`QA unit, ${address.line1}`);
+    await form
+      .getByRole("button", { name: "Use this address", exact: true })
+      .click();
+    await expect(form).not.toBeVisible();
     await expect(page.locator(".location-trigger")).toContainText(
       address.line1,
     );
@@ -219,6 +229,7 @@ try {
         "Actual provider-backed address lookup",
         "Desktop/mobile map and confirmation",
         "Header persistence",
+        ...(!local ? ["Guest delivery details and browser-only save"] : []),
         ...(local
           ? [
               "Flat edit and actual local account save",

@@ -57,6 +57,11 @@ async function contextFor(auth, extra = {}) {
     permissions: ["geolocation"],
     ...extra,
   });
+  // Reproduce the extension's broken one-shot API without altering watchPosition.
+  await context.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = (_ok, fail) =>
+      fail({ code: 1, message: "User denied Geolocation" });
+  });
   if (auth)
     await context.addInitScript(({ user, tokens }) => {
       localStorage.setItem(
@@ -106,12 +111,26 @@ async function contextFor(auth, extra = {}) {
     else
       await route.fulfill({
         json:
-          mode === "partial"
+          mode === "locality-only"
             ? {
                 ...fixture,
-                address: { ...fixture.address, partial: true, postal_code: "" },
+                address: {
+                  ...fixture.address,
+                  line1: "Connaught Place",
+                  line2: "",
+                  partial: true,
+                },
               }
-            : fixture,
+            : mode === "partial"
+              ? {
+                  ...fixture,
+                  address: {
+                    ...fixture.address,
+                    partial: true,
+                    postal_code: "",
+                  },
+                }
+              : fixture,
       });
   });
   return context;
@@ -388,7 +407,9 @@ try {
   await form.getByRole("button", { name: "Close dialog" }).click();
   responseMode = "partial";
   await openPicker(page);
-  await expect(picker).toContainText("Some address details are missing");
+  await expect(picker).toContainText(
+    "Add your postal code with your delivery details",
+  );
   await picker.getByRole("button", { name: "Close dialog" }).click();
   addresses = await api("/addresses/", { token });
   assert.equal(addresses.count, 2);
@@ -401,30 +422,65 @@ try {
     )
     .toBe(null);
   await context.close();
-  // Permission denied, GPS timeout and low-accuracy flows; no authenticated writes.
-  for (const code of [1, 3]) {
+  responseMode = "ready";
+  // Denied, unavailable and timed-out GPS; no authenticated writes.
+  for (const code of [1, 2, 3]) {
     const denied = await contextFor(null, {
       viewport: { width: 390, height: 844 },
       reducedMotion: "reduce",
     });
     await denied.addInitScript((code) => {
-      navigator.geolocation.getCurrentPosition = (_ok, fail) => fail({ code });
+      navigator.geolocation.watchPosition = (_ok, fail) => {
+        fail({ code });
+        return 0;
+      };
+      navigator.geolocation.clearWatch = () => {};
     }, code);
     const testPage = await denied.newPage();
     testPage.on("pageerror", (error) => errors.push(error.message));
     await testPage.goto(base);
     const deniedPicker = await openPicker(testPage);
     await expect(deniedPicker.getByRole("alert")).toContainText(
-      code === 1 ? "permission is off" : "too long",
+      code === 1
+        ? "We couldn’t access your location"
+        : code === 2
+          ? "unavailable right now"
+          : "too long",
     );
     await expect(
       deniedPicker.getByRole("button", { name: "Use this pin", exact: true }),
     ).toBeDisabled();
     await noOverflow(testPage);
-    if (code === 1) {
-      await expect(deniedPicker).toContainText("This browser is allowed");
-      await expect(deniedPicker.locator(".location-permission-help")).toBeVisible();
-    }
+    await expect(deniedPicker.locator("details")).toHaveCount(0);
+    await expect(deniedPicker).not.toContainText(
+      /System Settings|Location Services|Google Chrome|localhost|permission is off/,
+    );
+    const retry = deniedPicker.getByRole("button", {
+      name: "Try again",
+      exact: true,
+    });
+    await retry.click();
+    await expect(retry).toBeEnabled();
+    await testPage.screenshot({
+      path: `/private/tmp/ruchigo-location-recovery-${code}.png`,
+    });
+    await testPage.evaluate((point) => {
+      navigator.geolocation.watchPosition = (receive) => {
+        receive({ coords: point });
+        return 0;
+      };
+    }, point);
+    await retry.click();
+    await expect(
+      deniedPicker.getByRole("heading", { name: "Connaught Place" }),
+    ).toBeVisible();
+    await expect(deniedPicker.getByRole("alert")).toHaveCount(0);
+    await expect(
+      deniedPicker.getByRole("button", {
+        name: "Confirm location",
+        exact: true,
+      }),
+    ).toBeEnabled();
     await deniedPicker
       .getByRole("button", { name: "Enter address manually" })
       .click();
@@ -446,16 +502,96 @@ try {
     await expect(testPage.locator(".location-trigger")).toContainText(
       "Manual fixture, Outer Circle",
     );
-    if (code === 1) {
-      await testPage.evaluate((point) => {
-        navigator.geolocation.getCurrentPosition = (receive) => receive({ coords: point });
-      }, point);
-      const retried = await openPicker(testPage);
-      await expect(retried.getByRole("heading", { name: "Connaught Place" })).toBeVisible();
-      await expect(retried.locator(".location-permission-help")).toHaveCount(0);
-    }
     await denied.close();
   }
+  // Locality-only lookup is usable, but every guest still gets delivery details.
+  responseMode = "locality-only";
+  const guest = await contextFor(null);
+  const guestPage = await guest.newPage();
+  guestPage.on("pageerror", (error) => errors.push(error.message));
+  await guestPage.goto(base);
+  const guestPicker = await openPicker(guestPage);
+  await expect(
+    guestPicker.getByRole("heading", { name: "Connaught Place" }),
+  ).toBeVisible();
+  await expect(guestPicker.locator(".address-accuracy-warning")).toHaveCount(0);
+  await expect(guestPicker).not.toContainText(
+    "Some address details are missing",
+  );
+  await guestPicker
+    .getByRole("button", { name: "Confirm location", exact: true })
+    .click();
+  const guestForm = guestPage.getByRole("dialog", {
+    name: "Where should we bring your food?",
+  });
+  await expect(
+    guestForm.getByLabel("House / flat number and street"),
+  ).toHaveValue("Connaught Place");
+  await guestForm
+    .getByLabel("House / flat number and street")
+    .fill("QA unit 4, Connaught Place");
+  await guestForm
+    .getByLabel("Landmark or additional details")
+    .fill("Public test landmark");
+  await guestForm
+    .getByRole("button", { name: "Use this address", exact: true })
+    .click();
+  await expect(guestPage.locator(".location-trigger")).toContainText(
+    "QA unit 4",
+  );
+  await guestPage.reload();
+  await expect(guestPage.locator(".location-trigger")).toContainText(
+    "QA unit 4",
+  );
+  const savedGuest = await guestPage.evaluate(() =>
+    JSON.parse(localStorage.getItem("ruchigo-delivery-location")),
+  );
+  assert.equal(Number(savedGuest.latitude), point.latitude);
+  assert.equal(Number(savedGuest.longitude), point.longitude);
+  await guest.close();
+  responseMode = "ready";
+  // Nearby discovery must use the same bounded location acquisition.
+  const nearby = await contextFor(null);
+  const nearbyPage = await nearby.newPage();
+  nearbyPage.on("pageerror", (error) => errors.push(error.message));
+  await nearbyPage.goto(`${base}/search`);
+  await nearbyPage
+    .getByRole("button", { name: "Near me", exact: true })
+    .click();
+  await expect(nearbyPage).toHaveURL(/radius_km=5/);
+  await expect(
+    nearbyPage.getByRole("button", { name: "Near me", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await nearby.close();
+  // A wrapper that never invokes either callback must not leave a stuck spinner.
+  const silent = await contextFor(null);
+  await silent.addInitScript(() => {
+    window.locationWatchClears = 0;
+    navigator.geolocation.watchPosition = () => 0;
+    navigator.geolocation.clearWatch = () => {
+      window.locationWatchClears++;
+    };
+  });
+  const silentPage = await silent.newPage();
+  silentPage.on("pageerror", (error) => errors.push(error.message));
+  await silentPage.clock.install();
+  await silentPage.goto(base);
+  const silentPicker = await openPicker(silentPage);
+  await expect(
+    silentPicker.getByRole("button", { name: "Locating…", exact: true }),
+  ).toBeDisabled();
+  await silentPage.clock.fastForward(16000);
+  await expect(silentPicker.getByRole("alert")).toContainText("too long");
+  await expect(
+    silentPicker.getByRole("button", { name: "Try again", exact: true }),
+  ).toBeEnabled();
+  assert.equal(await silentPage.evaluate(() => window.locationWatchClears), 1);
+  await silentPicker
+    .getByRole("button", { name: "Try again", exact: true })
+    .click();
+  await silentPicker.getByRole("button", { name: "Close dialog" }).click();
+  assert.equal(await silentPage.evaluate(() => window.locationWatchClears), 2);
+  await silent.close();
   responseMode = "ready";
   const touch = await contextFor(null, {
     viewport: { width: 390, height: 844 },
@@ -517,6 +653,10 @@ try {
         "Stale lookup ignored",
         "Unavailable/partial lookup fallback",
         "Permission denied/timeout/full manual guest address",
+        "Same-dialog GPS retry recovery without OS troubleshooting copy",
+        "Broken one-shot wrapper and silent callback deadline",
+        "Guest pin confirmation opens editable delivery details",
+        "Locality-only result and nearby discovery",
         "Approximate network location removed",
         "Touch pinch zoom and low accuracy warning",
         "Logout clears precise address",

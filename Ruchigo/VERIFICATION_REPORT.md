@@ -4,10 +4,13 @@
 
 - Approximate-network selection removed; the location UI no longer calls IPinfo.
   Full guest manual entry, reload persistence, device-denied/browser-allowed
-  recovery copy, instructions and retry are covered by browser checks.
+  recovery copy and retry are covered by browser checks. A locally verified
+  follow-up removes the OS troubleshooting box and unproven permission-off claim.
+  Denied/unavailable/timeout errors recover through the same-dialog retry;
+  manual entry remains available. This UI follow-up is not yet deployed.
 - `test:rider-location` passed using isolated local customer/owner/courier/order
   fixtures and real API/provider calls. Browser-controlled GPS at a public point
-  reached the customer's map in **1,434 ms** in one run; road lookup was actual
+  reached the customer's map in **1,434 ms** and **1,453 ms** in two runs; road lookup was actual
   LocationIQ. Provider failure did not stop movement. Stop-sharing naturally aged
   into last-shared state, completion removed the marker, and 1440/390/320 views
   passed without browser errors. The exact temporary fixture was deleted; no
@@ -18,12 +21,42 @@
   independent street-cache cadence, failure isolation and concurrent lookup lock.
 - Device investigation confirmed the actual Chrome profile grants localhost
   location and the macOS global Location Services switch is on. System Settings
-  was opened. App-specific Chrome OS permission remains user-controlled because
-  macOS rejected `osascript` assistive access. No privacy setting or OS security
-  restriction was bypassed or silently reset.
+  was opened, and the user's subsequent screenshot confirms Chrome's individual
+  OS toggle is enabled too. The running Chrome process had framework
+  153.0.8010.48 loaded, while the installed version was 153.0.8010.53. With explicit
+  user approval, Chrome was normally restarted; a new process loading
+  153.0.8010.53 and the restored RuchiGo tab were verified. Restart did not resolve
+  acquisition; it was not the cause. Chrome disallows AppleScript JavaScript
+  execution; no privacy setting or OS restriction was bypassed or silently reset.
+- Temporary localhost-only diagnostics captured error 1, browser permission
+  granted, secure context and enabled geolocation policy, but a replaced
+  `getCurrentPosition`. Urban VPN 5.14.4's installed location wrapper contains
+  the matching `User denied Geolocation` error and one-shot fall-through.
+  Standard `watchPosition` succeeded twice in the user's actual Chrome without
+  any mocked coordinates. The diagnostic recorded success/failure flags only,
+  not coordinates. After switching the app, the user supplied a screenshot with
+  their actual map/locality loaded. All temporary diagnostics were removed.
+- `test:location-device`: **12 tests passed**, covering first-fix/watch-ID-zero
+  cleanup, genuine denial, a silent wrapper bounded by 15 seconds, stale callbacks,
+  abort/unmount, synchronous callbacks, native timeout, invalid coordinates,
+  throwing wrappers and unsupported browsers. No IP or fabricated fallback.
+  The same acquisition helper now powers nearby discovery too.
+- Guests now receive the editable delivery-details form after confirming a pin,
+  just like account customers; guest details stay in browser storage. Flat/house
+  numbers and missing streets require user entry. Locality-only lookup is not
+  shown as an error when required form fields exist; genuinely missing fields
+  are named. No extra geocoding requests or inferred street names were added.
+- Final local browser rerun passed with the one-shot API deliberately broken:
+  owned address/checkout selection, guest GPS → details → browser save/reload,
+  locality-only lookup, nearby discovery, silent callback deadline and cleanup,
+  denied/unavailable/timeout retry, 1440/768/390/320 layouts and touch expansion.
+  No browser errors or orders created. Actual local LocationIQ acceptance also
+  passed again with controlled public-landmark GPS and real address persistence.
+  Lint/build and whitespace checks passed; a 454-file source/build scan found
+  no configured provider-secret values.
 
-- Full current backend regression: **303 tests passed on isolated SQLite**,
-  including 11 new reverse-geocoding tests. The previous 292-test PostgreSQL
+- Full current backend regression: **313 tests passed on isolated SQLite**,
+  including 13 reverse-geocoding and 8 rider-location tests. The previous 292-test PostgreSQL
   result below remains evidence for the prior release, not this increment.
 - New tests cover explicit consent, coordinate bounds/precision, zero coordinates,
   provider timeouts/HTTP failures, malformed results, missing configuration,
@@ -57,11 +90,18 @@
   India-only Delhi administrative alias fills that field without inventing
   streets/postcodes or states for foreign/unknown cities. The focused 13-test
   geocoding suite passed, including both new normalization guards.
+- Production public-only `test:address-location:live` passed on runtime commit
+  `c6cc983`, deployment `dpl_A8n3Sye7XzvL6Vh6HTWCx88gMwyj`, at
+  https://runchigoo.vercel.app. Real LocationIQ returned the public landmark's
+  address; desktop/mobile tiles, pin confirmation and header persistence passed.
+  No browser errors, browser provider calls or production business writes.
+  Device GPS was controlled, so this does not certify the user's physical GPS.
+  Anonymous requests to both new order live-location and rider-place endpoints
+  returned HTTP 401 without exposing order coordinates.
 - Missing keys/provider failures still preserve manual entry; no public
-  Nominatim fallback is used. Production deployment verification is pending.
-  No schema migration is required.
+  Nominatim fallback is used. No schema migration is required.
 - Final lint/production build, migration-drift check and whitespace validation
-  passed. A scan of 514 source/build files found no configured provider-secret
+  passed. A scan of 518 source/build files found no configured provider-secret
   values. The map/picker remains lazy-loaded outside the initial header bundle.
 
 ## Coupon search, thresholds and confirmation
