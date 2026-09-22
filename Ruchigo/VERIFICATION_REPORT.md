@@ -27,6 +27,18 @@
   remain off. No assertions or serviceability rules were relaxed.
 - No migration, business-rate change, live coupon creation or production
   customer-cart mutation is required for this UI/API increment.
+- Runtime release **`e7ae89c`** was pushed to main and deployed to the existing
+  production alias as `dpl_4EZVZMm3PS8mkV2TmsGiYfnh79sN`. A read-only live browser
+  smoke verified the coupon bundle, protected savings endpoint, six public
+  routes at 1440/390/320px, admin login guard, actual pending original-logo
+  loader and reduced motion, with zero browser errors/business writes. The
+  real-Gemini non-veg/budget conversation passed again on this deployment.
+  Authenticated coupon mutations were tested locally, not against live users.
+- Final source/bundle scanning covered 394 files and 149 built assets with no
+  configured-secret matches or private preview fixtures in browser JavaScript.
+  Migration drift was empty. The isolated PostgreSQL verification server was
+  stopped and the temporary production-environment copy deleted; the restricted
+  pre-migration backup remains outside the repository. No user data was deleted.
 
 ## People, branded loading and non-veg conversation increment
 

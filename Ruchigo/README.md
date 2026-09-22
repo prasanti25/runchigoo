@@ -185,7 +185,7 @@ tile endpoints. See [tracking notes](TRACKING_DESIGN_NOTES.md).
 
 Release `8220e3e` (People, logo loading and non-veg conversation) followed `28a191e` on `prasanti25/runchigoo` main and was manually deployed at https://runchigoo.vercel.app. Its actual-provider production chat test passed. Vercel's Git link remains connected to a different repository; align it before relying on automatic deployments. Production migrations through 0022 were applied after an isolated backup/restore rehearsal, preserving existing users/orders and other pre-existing application rows.
 
-The People-directory, original-logo loader and strict food-conversation fixes require no new migration. Never point local fixture scripts at production. Before a public paid launch, complete the blockers in [PRODUCT_STATUS.md](PRODUCT_STATUS.md), configure durable media, shared cache, transactional email and production payment/refund/reconciliation operations, then verify backups and concurrency/load/security behavior.
+Coupon/savings release `e7ae89c` is now deployed on the same alias, with live read-only checks and the real-Gemini regression passing. The People-directory, logo loading, food-conversation and coupon fixes require no new migration. Never point local fixture scripts at production. Before a public paid launch, complete the blockers in [PRODUCT_STATUS.md](PRODUCT_STATUS.md), configure durable media, shared cache, transactional email and production payment/refund/reconciliation operations, then verify backups and concurrency/load/security behavior.
 
 ## Feature coverage
 
