@@ -1,6 +1,6 @@
 # Product verification — 23 September 2026
 
-## Complete doorstep details and modern pin — local checks
+## Complete doorstep details and modern pin — release checks
 
 - New-address forms require a blank user-entered house/flat/building field,
   separate from geocoded street/area; floor is optional. A locality alone cannot
@@ -23,8 +23,14 @@
   The two unique local fixture orders 41/42 were deleted; existing user orders
   were not modified. Measured update delays (98/95 ms) reflect local polling phase,
   not a millisecond GPS or production latency guarantee.
-- Full lint/build and whitespace validation passed. This final doorstep/pin
-  increment is not yet deployed.
+- Full lint/build and whitespace validation passed; a 454-file source/build scan
+  found no configured provider-secret values.
+- Deployed runtime `1dfc9b5`, deployment `dpl_6RwUt1zYtEYxoNLmMjbmAmWpzMCm`, to
+  https://runchigoo.vercel.app. Production public-only real-provider acceptance
+  passed for the custom pin, desktop/mobile map, required house/flat input,
+  guest details/save/reload, and no provider credentials/browser errors.
+  No production business records were created. Rider acceptance remains an
+  isolated local fixture check, not a live production delivery test.
 
 ## Delivery address selection — release checks
 

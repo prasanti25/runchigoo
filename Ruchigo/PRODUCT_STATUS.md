@@ -73,8 +73,11 @@ snapshots remain compatible; legacy edits preserve their existing free-form text
 Rider directions now prefer saved restaurant/customer coordinates rather than
 re-geocoding an area label. The pin uses a custom orange vector marker, centred
 target, drag lift/settle feedback and reduced-motion support. Local browser tests,
-18 device/address unit tests, actual provider persistence and rider checks pass;
-rollout of this final doorstep/pin increment is pending.
+18 device/address unit tests, actual provider persistence and rider checks pass.
+This doorstep/pin increment is now live at https://runchigoo.vercel.app,
+runtime `1dfc9b5`, deployment `dpl_6RwUt1zYtEYxoNLmMjbmAmWpzMCm`. Public-only
+production checks passed for real-provider lookup, the custom pin, required
+house/flat entry, guest save and reload. No production business records were created.
 
 The customer rider map now has a separate one-second owned GPS polling channel,
 with rider writes limited to once per second and stale fixes labelled after
