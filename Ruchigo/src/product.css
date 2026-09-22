@@ -4094,11 +4094,48 @@ button:disabled {
   margin-bottom: 14px;
 }
 .thread-quick-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  text-align: left;
   border: 1px solid var(--line);
   border-radius: 20px;
   padding: 9px 12px;
   font-size: 12px;
   background: #fff;
+}
+.thread-quick-actions button:hover:not(:disabled) {
+  background: #f3f5ef;
+  border-color: #a4b396;
+}
+.thread-quick-actions button:disabled {
+  opacity: 0.55;
+}
+.support-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.support-view-tabs a {
+  padding: 12px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 14px;
+}
+.support-view-tabs a.active {
+  background: #edf2e7;
+  border-color: #a4b396;
+}
+.thread-context-note {
+  padding: 18px 24px;
+  background: #f6f8f2;
+  font-size: 13px;
+}
+.thread-context-note p {
+  margin: 6px 0 10px;
+  line-height: 1.6;
 }
 .thread-message-form {
   display: flex;

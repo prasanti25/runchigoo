@@ -509,7 +509,7 @@ export function KitchenOrders() {
       await apiRequest(`/orders/${order.id}/status/`, {
         token,
         method: "POST",
-        body: { status: next },
+        body: { status: next, expected_status: order.status },
       });
       reload();
       toast.success("Order updated");

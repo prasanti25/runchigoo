@@ -24,7 +24,12 @@ const supportTopics = {
 
 export default function SupportPage() {
   const { user } = useAuth();
-  if (user?.role === "admin" && !hasAdminScope(user, "support"))
+  const [params] = useSearchParams();
+  if (
+    params.get("view") === "team" &&
+    user?.role === "admin" &&
+    !hasAdminScope(user, "support")
+  )
     return (
       <main className="container customer-main">
         <h1>Support access required</h1>
@@ -34,27 +39,28 @@ export default function SupportPage() {
         </Link>
       </main>
     );
-  return <SupportWorkspace />;
+  return <SupportWorkspace key={params.get("view") || "mine"} />;
 }
 
 function SupportWorkspace() {
-  const { token, isAuthenticated, role } = useAuth();
+  const { token, isAuthenticated, role, user } = useAuth();
   const [params, setParams] = useSearchParams();
+  const teamView = role === "admin" && params.get("view") === "team";
   const orderId = /^[1-9]\d*$/.test(params.get("order") || "")
     ? Number(params.get("order"))
     : null;
   const linkedOrder = useRemote(
-    token && orderId && role === "customer" ? `/orders/${orderId}/` : null,
+    token && orderId ? `/orders/${orderId}/` : null,
     token,
     10000,
   );
   const [page, setPage] = useState(1);
   const tickets = useRemote(
     token
-      ? `/support/?page=${page}${orderId ? `&order=${orderId}` : ""}`
+      ? `/support/?view=${teamView ? "team" : "mine"}&page=${page}${orderId ? `&order=${orderId}` : ""}`
       : null,
     token,
-    15000,
+    5000,
   );
   const linkedId = /^[1-9]\d*$/.test(params.get("ticket") || "")
     ? Number(params.get("ticket"))
@@ -62,7 +68,7 @@ function SupportWorkspace() {
   const linkedTicket = useRemote(
     token && linkedId ? `/support/${linkedId}/` : null,
     token,
-    15000,
+    3000,
   );
   const [selected, setSelected] = useState(linkedId);
   useEffect(() => {
@@ -109,10 +115,27 @@ function SupportWorkspace() {
     }
   };
   const list = tickets.data?.results || [];
+  useEffect(() => {
+    if (selected || linkedId || !tickets.data?.results?.length) return;
+    const timer = window.setTimeout(
+      () => setSelected(tickets.data.results[0].id),
+      0,
+    );
+    return () => window.clearTimeout(timer);
+  }, [selected, linkedId, tickets.data]);
+  // An inaccessible deep link must never fall back to a different person's
+  // conversation. Also keep the selection stable when inbox ordering changes.
+  const listedTicket = selected
+    ? list.find((item) => item.id === selected) ||
+      (selected === linkedId ? linkedTicket.data : null)
+    : list[0];
   const ticket =
-    list.find((item) => item.id === selected) ||
-    (selected === linkedId ? linkedTicket.data : null) ||
-    list[0];
+    linkedTicket.data &&
+    listedTicket &&
+    linkedTicket.data.id === listedTicket.id &&
+    new Date(linkedTicket.data.updated_at) >= new Date(listedTicket.updated_at)
+      ? linkedTicket.data
+      : listedTicket;
   const mutate = async (path, body, done) => {
     setBusy(true);
     setError("");
@@ -145,6 +168,7 @@ function SupportWorkspace() {
   };
   const issueChat =
     creating &&
+    !teamView &&
     linkedOrder.data &&
     [
       "food_quality",
@@ -162,13 +186,14 @@ function SupportWorkspace() {
             <p className="eyebrow">HELP & SUPPORT</p>
             <div className="section-title">
               <div>
-                <h1>Let’s sort it out.</h1>
+                <h1>{teamView ? "Support inbox" : "Let’s sort it out."}</h1>
                 <p className="muted mt-3">
-                  Order questions, missing items or account help. We’re
-                  listening.
+                  {teamView
+                    ? "Review customer conversations and send replies as RuchiGo support."
+                    : "Order questions, missing items or account help. We’re listening."}
                 </p>
               </div>
-              {isAuthenticated && (
+              {isAuthenticated && !teamView && (
                 <button
                   className="btn primary"
                   onClick={() => setCreating(true)}
@@ -179,6 +204,24 @@ function SupportWorkspace() {
               )}
             </div>
           </div>
+          {role === "admin" && (
+            <nav className="support-view-tabs" aria-label="Support workspace">
+              <Link
+                className={!teamView ? "active" : ""}
+                to="/support?view=mine"
+              >
+                My order help
+              </Link>
+              {hasAdminScope(user, "support") && (
+                <Link
+                  className={teamView ? "active" : ""}
+                  to="/support?view=team"
+                >
+                  Customer support inbox
+                </Link>
+              )}
+            </nav>
+          )}
           <ErrorNotice error={linkedOrder.error} onRetry={linkedOrder.reload} />
           {linkedOrder.data && (
             <Link to={`/tracking/${orderId}`} className="support-order-context">
@@ -203,7 +246,8 @@ function SupportWorkspace() {
               onSubmit={(body) => mutate("/support/", body, created)}
             />
           ) : (
-            linkedOrder.data && (
+            !teamView &&
+            linkedOrder.data?.customer === user?.id && (
               <OrderHelp
                 order={linkedOrder.data}
                 onChoose={(category, subject) => {
@@ -214,7 +258,7 @@ function SupportWorkspace() {
               />
             )
           )}
-          {role !== "admin" && !issueChat && !ticket && !linkedId && (
+          {!teamView && !issueChat && !ticket && !linkedId && (
             <FoodAssistant support orderId={orderId} />
           )}
           {!isAuthenticated ? (
@@ -257,6 +301,9 @@ function SupportWorkspace() {
                         key={item.id}
                         onClick={() => {
                           setSelected(item.id);
+                          const next = new URLSearchParams(params);
+                          next.set("ticket", item.id);
+                          setParams(next, { replace: true });
                           setError("");
                         }}
                       >
@@ -274,7 +321,11 @@ function SupportWorkspace() {
                 !tickets.error && (
                   <EmptyState
                     title="No open conversations"
-                    description="Need a hand? Create a ticket and our team will respond here."
+                    description={
+                      teamView
+                        ? "Customer requests will appear here when submitted."
+                        : "Need a hand? Create a ticket for order help and follow replies here."
+                    }
                   />
                 )
               )}

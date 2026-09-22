@@ -173,6 +173,15 @@ class TicketMessageSerializer(serializers.ModelSerializer):
 
 
 class SupportTicketSerializer(serializers.ModelSerializer):
+    viewer_is_requester = serializers.SerializerMethodField()
+    quick_choices = serializers.SerializerMethodField()
+    def get_viewer_is_requester(self, obj):
+        return obj.user_id == self.context["request"].user.pk
+    def get_quick_choices(self, obj):
+        if not self.get_viewer_is_requester(obj):
+            return []
+        from .support_assistant import quick_choices
+        return quick_choices(obj.order)
     messages = TicketMessageSerializer(many=True, read_only=True)
     message = serializers.CharField(write_only=True, max_length=3000, required=False, trim_whitespace=True)
     affected_item_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), max_length=50, required=False, write_only=True)
@@ -180,7 +189,7 @@ class SupportTicketSerializer(serializers.ModelSerializer):
     refund_request = RefundSerializer(read_only=True)
     class Meta:
         model = SupportTicket
-        fields = ["id", "order", "category", "subject", "status", "message", "messages", "affected_items", "affected_item_ids", "request_refund", "refund_request", "feedback_score", "feedback_comment", "feedback_at", "staff_requested_at", "created_at", "updated_at"]
+        fields = ["id", "order", "category", "subject", "status", "message", "messages", "affected_items", "affected_item_ids", "request_refund", "refund_request", "feedback_score", "feedback_comment", "feedback_at", "staff_requested_at", "created_at", "updated_at", "viewer_is_requester", "quick_choices"]
         read_only_fields = ["status", "affected_items", "feedback_score", "feedback_comment", "feedback_at", "staff_requested_at", "created_at", "updated_at"]
     def validate_order(self, order):
         if order and order.customer_id != self.context["request"].user.id:
@@ -229,11 +238,11 @@ class SupportViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     http_method_names = ["get", "post", "head", "options"]
     def get_queryset(self):
-        qs = SupportTicket.objects.select_related("refund_request").prefetch_related("messages__author")
+        qs = SupportTicket.objects.select_related("refund_request", "order").prefetch_related("messages__author")
         if self.request.query_params.get("order"):
             order_id = serializers.IntegerField(min_value=1).run_validation(self.request.query_params["order"])
             qs = qs.filter(order_id=order_id)
-        return qs if self.request.user.role == User.Role.ADMIN else qs.filter(user=self.request.user)
+        return qs if self.request.user.role == User.Role.ADMIN and self.request.query_params.get("view") != "mine" else qs.filter(user=self.request.user)
 
     @action(detail=True, methods=["post"])
     @transaction.atomic
@@ -252,11 +261,11 @@ class SupportViewSet(AdminScopeMixin, viewsets.ModelViewSet):
         ticket._prefetched_objects_cache = {}
         if ticket.status == SupportTicket.Status.RESOLVED:
             ticket.status = SupportTicket.Status.OPEN
-        if request.user.role == User.Role.ADMIN:
+        is_staff = request.user.pk != ticket.user_id
+        if is_staff:
             ticket.staff_requested_at = ticket.staff_requested_at or timezone.now()
             ticket.status = SupportTicket.Status.IN_PROGRESS
         ticket.save()
-        is_staff = request.user.role == User.Role.ADMIN
         recipients = [ticket.user_id] if is_staff else admin_ids()
         notify(recipients, event=f"support-reply:{reply.pk}", title="Support replied" if is_staff else "New reply on a support ticket", message=f"You have a reply on ticket #{ticket.id}.", kind="support", metadata={"ticket_id": ticket.id})
         return Response(self.get_serializer(ticket).data)
@@ -269,6 +278,17 @@ class SupportViewSet(AdminScopeMixin, viewsets.ModelViewSet):
         message_id = serializers.IntegerField(min_value=1).run_validation(request.data.get("message_id"))
         from .support_assistant import respond
         ticket = respond(ticket.pk, request.user, message_id)
+        return Response(self.get_serializer(ticket).data)
+
+    @action(detail=True, methods=["post"], url_path="quick-help", throttle_classes=[RecommendationThrottle])
+    def quick_help(self, request, pk=None):
+        ticket = self.get_object()
+        if ticket.user_id != request.user.pk:
+            return Response({"detail": "Only the conversation owner can request quick assistance."}, status=403)
+        from .support_assistant import QUICK_TOPICS, quick_help
+        topic = serializers.ChoiceField(choices=list(QUICK_TOPICS)).run_validation(request.data.get("topic"))
+        client_id = serializers.UUIDField().run_validation(request.data.get("client_id"))
+        ticket = quick_help(ticket.pk, request.user, topic, client_id)
         return Response(self.get_serializer(ticket).data)
 
     @action(detail=True, methods=["post"])

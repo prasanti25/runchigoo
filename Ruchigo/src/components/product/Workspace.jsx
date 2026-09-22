@@ -107,7 +107,7 @@ export function WorkspaceNav({ type }) {
         </nav>
         <div className="workspace-bottom">
           {(type !== "admin" || canOpenAdminRoute(user, "/support")) && (
-            <NavLink to="/support">
+            <NavLink to={type === "admin" ? "/support?view=team" : "/support"}>
               <LifeBuoy size={17} />
               Help & support
             </NavLink>

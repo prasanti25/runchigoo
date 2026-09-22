@@ -197,7 +197,7 @@ class CancellationTests(APITestCase):
             with self.subTest(status=status):
                 order = self.order(status=status)
                 for new in ["pending", "awaiting_payment"]:
-                    self.assertEqual(self.client.post(f"/api/v1/orders/{order.pk}/status/", {"status": new}).status_code, 400)
+                    self.assertEqual(self.client.post(f"/api/v1/orders/{order.pk}/status/", {"status": new}).status_code, 403)
                 order.refresh_from_db()
                 self.assertEqual(order.status, status)
                 self.assertFalse(self.details(order)["allowed"])

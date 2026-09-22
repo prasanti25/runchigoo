@@ -12,6 +12,35 @@ historical checkpoints, not evidence of the current Vercel alias.
 
 RuchiGo now has a consistent customer experience and operational workspaces connected to its Django API: discovery → menu → cart/coupon → checkout → kitchen states → delivery confirmation → review/support. The implementation is a working product foundation, **not a completed 300-feature commercial platform**.
 
+### Support conversations and fulfilment ownership — release candidate
+
+Support now distinguishes the requester from staff using server-derived ticket
+ownership, not their account role. Administrators shopping for themselves get
+normal replies and feedback; other customers' tickets clearly show staff mode.
+My order help and the customer support inbox are separate. Delegated admins can
+access their own help without gaining another customer's data or inbox access.
+
+Order-aware quick choices use current kitchen, delivery, cancellation and payment
+records. A queued customer can explicitly check facts without dropping the human
+review. Text messages in that queue remain for the team; there is no claim of a
+human agent being online. Replies are persisted, retries are idempotent, and a
+reply arriving through polling cannot leave typing/buttons stuck. Selected chat
+updates are polled every 3 seconds (the inbox every 5); this is not WebSocket or
+millisecond delivery. Requests time out after 20 seconds with recovery messaging.
+
+Only the owning restaurant can accept/prepare/mark ready. Only a delivery-role
+account can claim pickup, and only the assigned rider can pick up/complete with
+the delivery code. Admin/superuser normal-stage bypasses and kitchen buttons are
+removed. Exceptional audited hold/resume/cancel/refund review remains separate.
+Quick help never executes a cancellation, refund approval or transfer itself.
+No schema migration, new provider credential or change to the Google demo.
+
+Verification: 342 isolated SQLite backend tests; real local support conversation,
+cancellation and dashboard-queue browser regressions; desktop/320px/390px views;
+lint/build and migration drift checks. Final support fixture: local order 52,
+ticket 55; user order 16 unchanged and no real refunds submitted. Main push and
+production deployment are pending at this checkpoint.
+
 ### Google rider map and public demo — deployed and verified
 
 The address and delivery maps now share the Google renderer configuration. Live

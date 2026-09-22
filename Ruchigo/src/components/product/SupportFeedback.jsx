@@ -12,12 +12,12 @@ const faces = [
   [5, "Delighted", Laugh],
 ];
 export default function SupportFeedback({ ticket, onSaved }) {
-  const { token, role } = useAuth();
+  const { token } = useAuth();
   const [score, setScore] = useState(ticket.feedback_score || 0);
   const [comment, setComment] = useState(ticket.feedback_comment || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  if (role === "admin")
+  if (!ticket.viewer_is_requester)
     return ticket.feedback_score ? (
       <p className="support-feedback-summary">
         Customer rated this conversation {ticket.feedback_score}/5

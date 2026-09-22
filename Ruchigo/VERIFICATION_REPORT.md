@@ -1,5 +1,42 @@
 # Product verification — 23 September 2026
 
+## Support replies and operational ownership — local release verification
+
+- Backend: **342 tests pass on isolated SQLite**, including administrator-as-
+  shopper chat, delegated own-ticket access, denied cross-ticket assistance,
+  stage-aware choices, queued factual help, retry idempotency, normal-stage
+  admin/superuser denial, cross-partner ownership and kitchen → courier → OTP
+  delivery without admin intervention. No schema changes detected.
+- `npm run test:support-conversation` passes with actual local persisted messages:
+  greeting, status, inappropriate pre-delivery meal complaint clarification,
+  cooking cancellation refusal, queued refund-status check, staff reply visible
+  without refresh, resolution/face feedback, restaurant issue/hold, admin
+  exceptional resume/cancel, admin's own shopping chat and inaccessible-link
+  isolation. Lost-response and delayed-POST subcases deliberately control only
+  HTTP delivery; the underlying questions/answers are saved by the real API.
+  Retrying a lost response produces exactly one question/answer. A poll-delivered
+  answer unlocks the composer while its original POST is still in transit.
+- Final support browser fixture is order **52**, ticket **55**. Earlier scoped
+  local attempts retained clearly labelled QA records, not production data.
+  Cancellation regression passes with local orders 49/50. User order 16 is
+  unchanged; no real refund submitted. Screenshots at 1440/390/320px show no
+  horizontal overflow; desktop and mobile chat screenshots visually inspected.
+- `npm run test:dashboard-queues` passes: read-only paginated order/activity
+  oversight, ledger filters, refund-review UI, role guards and responsive layout;
+  zero business writes. Admin kitchen controls are absent in both order UIs.
+- `npm run check`, migration drift and `git diff --check` pass. A source/build
+  scan of 571 files found none of four configured private provider credentials.
+  The intentionally public restricted Google browser key is not a server secret.
+- The first browser attempt exposed a loading-state null guard; a later retry
+  harness assertion needed to await its response. Both were corrected and the
+  final complete browser run passed, with zero page errors.
+- Conversation updates use short polling, not WebSockets. Gemini classifies
+  unfamiliar messages; factual button checks do not depend on it. Human queues
+  still need real staff, and refund processing still needs the payment provider
+  and authorized review. This does not certify the complete 300-feature list.
+- Main push and production deployment are pending at this checkpoint. No
+  production ticket/order mutations were used for verification.
+
 ## Google address + rider rollout — production verified
 
 - Runtime commit `3543609` is pushed to `prasanti25/runchigoo` main. Vercel

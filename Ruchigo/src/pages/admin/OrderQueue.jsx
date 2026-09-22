@@ -2,9 +2,7 @@ import { useState } from "react";
 import LoadingScreen from "../../components/common/LoadingScreen.jsx";
 import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
-import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { apiRequest } from "../../lib/api.js";
 import { hasAdminScope } from "../../lib/adminAccess.js";
 import {
   dateTime,
@@ -17,11 +15,7 @@ import {
   WorkspaceFrame,
   Metrics,
 } from "../../components/product/Workspace.jsx";
-import {
-  EmptyState,
-  ErrorNotice,
-  Modal,
-} from "../../components/product/UI.jsx";
+import { EmptyState, ErrorNotice } from "../../components/product/UI.jsx";
 import OrderOperations from "../../components/product/OrderOperations.jsx";
 import "../../components/product/Operations.css";
 
@@ -36,11 +30,6 @@ const statuses = [
   "delivered",
   "cancelled",
 ];
-const nextStages = {
-  pending: ["confirmed", "Accept order"],
-  confirmed: ["preparing", "Start preparation"],
-  preparing: ["ready", "Mark ready for pickup"],
-};
 
 export default function OrderQueue() {
   const { token, user } = useAuth();
@@ -54,9 +43,6 @@ export default function OrderQueue() {
     page: 1,
   });
   const [search, setSearch] = useState("");
-  const [decision, setDecision] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const params = new URLSearchParams(
     Object.entries(filters).filter(([, value]) => value !== ""),
   );
@@ -73,28 +59,6 @@ export default function OrderQueue() {
   function refresh() {
     orders.reload();
     stats.reload();
-  }
-  async function advance(event) {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      await apiRequest(`/orders/${decision.id}/status/`, {
-        token,
-        method: "POST",
-        body: {
-          status: nextStages[decision.status][0],
-          expected_status: decision.status,
-        },
-      });
-      setDecision(null);
-      refresh();
-      toast.success("Order status updated");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
   }
   return (
     <WorkspaceFrame
@@ -266,19 +230,15 @@ export default function OrderQueue() {
               </details>
               <div className="people-actions">
                 <OrderOperations order={order} onUpdated={refresh} />
-                {!order.fulfillment_paused_at && nextStages[order.status] && (
-                  <button
-                    className="btn primary"
-                    onClick={() => {
-                      setDecision(order);
-                      setError("");
-                    }}
-                  >
-                    {nextStages[order.status][1]}
-                  </button>
-                )}
+                <p className="form-help">
+                  Restaurant updates preparation; the assigned rider confirms
+                  pickup and delivery.
+                </p>
                 {hasAdminScope(user, "support") && (
-                  <Link className="text-link" to={`/support?order=${order.id}`}>
+                  <Link
+                    className="text-link"
+                    to={`/support?view=team&order=${order.id}`}
+                  >
                     Order support
                   </Link>
                 )}
@@ -306,38 +266,6 @@ export default function OrderQueue() {
           </button>
         </div>
       </section>
-      {decision && (
-        <Modal
-          title={nextStages[decision.status][1]}
-          onClose={() => !busy && setDecision(null)}
-        >
-          <form className="people-form" onSubmit={advance}>
-            <p>
-              Order #{orderNumber(decision)} ·{" "}
-              {decision.restaurant_detail?.name}
-            </p>
-            <p className="muted">
-              Confirm this update with the kitchen. It changes the customer’s
-              tracking status and sends an order notification. Stale updates
-              will be rejected.
-            </p>
-            <ErrorNotice error={error} />
-            <div className="people-actions">
-              <button
-                type="button"
-                className="btn secondary"
-                disabled={busy}
-                onClick={() => setDecision(null)}
-              >
-                Keep unchanged
-              </button>
-              <button className="btn primary" disabled={busy}>
-                {busy ? "Updating…" : "Confirm status update"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
     </WorkspaceFrame>
   );
 }

@@ -14,17 +14,6 @@ import { apiRequest } from "../../lib/api.js";
 import { fetchAllPages } from "../../lib/collections.js";
 import { canOpenAdminRoute, hasAdminScope } from "../../lib/adminAccess.js";
 
-const orderStatuses = [
-  "awaiting_payment",
-  "pending",
-  "confirmed",
-  "preparing",
-  "ready",
-  "assigned",
-  "out_for_delivery",
-  "delivered",
-  "cancelled",
-];
 const money = (value) =>
   `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const date = (value) => (value ? new Date(value).toLocaleString() : "—");
@@ -40,9 +29,7 @@ function AdminFrame({ title, subtitle, children }) {
 
 function Notice({ loading, error, empty }) {
   if (loading)
-    return (
-      <LoadingScreen inline message="Loading your workspace…" />
-    );
+    return <LoadingScreen inline message="Loading your workspace…" />;
   if (error)
     return <p className="rounded-2xl bg-red-50 p-6 text-red-700">{error}</p>;
   if (empty)
@@ -451,28 +438,11 @@ export function AdminDeliveryPartners() {
 }
 
 export function AdminOrders() {
-  const { token } = useAuth();
   const { records, loading, error, reload } = useCollection("/orders/");
-  const update = useCallback(
-    async (order, nextStatus) => {
-      try {
-        await apiRequest(`/orders/${order.id}/status/`, {
-          token,
-          method: "POST",
-          body: { status: nextStatus },
-        });
-        toast.success("Order status updated.");
-        reload();
-      } catch (requestError) {
-        toast.error(requestError.message);
-      }
-    },
-    [reload, token],
-  );
   return (
     <AdminFrame
       title="Orders"
-      subtitle="Inspect and correct live order states."
+      subtitle="Monitor kitchen and rider updates. Handle exceptions through support."
     >
       <Metrics
         entries={[
@@ -523,33 +493,7 @@ export function AdminOrders() {
                   <td>{money(order.total)}</td>
                   <td>{date(order.created_at)}</td>
                   <td>
-                    <select
-                      value={order.status}
-                      aria-label={`Status for order ${String(order.number).slice(0, 8)}`}
-                      disabled={
-                        ["awaiting_payment", "cancelled", "delivered"].includes(
-                          order.status,
-                        ) || Boolean(order.fulfillment_paused_at)
-                      }
-                      onChange={(event) => update(order, event.target.value)}
-                      className="rounded-lg border border-gray-200 px-3 py-2 capitalize"
-                    >
-                      {orderStatuses.map((value) => (
-                        <option
-                          key={value}
-                          value={value}
-                          disabled={
-                            orderStatuses.indexOf(value) <
-                              orderStatuses.indexOf(order.status) ||
-                            (value === "cancelled" &&
-                              order.payment?.method === "razorpay" &&
-                              order.payment?.status === "paid")
-                          }
-                        >
-                          {label(value)}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="status-pill">{label(order.status)}</span>
                     <div className="mt-3">
                       <OrderOperations order={order} onUpdated={reload} />
                     </div>

@@ -150,7 +150,7 @@ class MenuOperationsTests(APITestCase):
         order = self.checkout().data
         self.client.post(f"/api/v1/orders/{order['id']}/cancel/")
         self.client.force_authenticate(self.admin)
-        self.assertEqual(self.client.post(f"/api/v1/orders/{order['id']}/status/", {"status": "confirmed"}).status_code, 400)
+        self.assertEqual(self.client.post(f"/api/v1/orders/{order['id']}/status/", {"status": "confirmed"}).status_code, 403)
 
     def test_weekly_hours_validate_and_manual_pause_wins(self):
         hours = [{"closed": False, "open": "09:00", "close": "22:00"} for _ in range(7)]

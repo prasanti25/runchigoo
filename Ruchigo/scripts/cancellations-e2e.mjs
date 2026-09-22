@@ -260,6 +260,9 @@ try {
       name: "Mark ready for pickup",
       exact: true,
     }),
+  ).toHaveCount(0);
+  await expect(
+    preparingCard.getByRole("button", { name: "Support actions", exact: true }),
   ).toBeVisible();
   await expect(
     preparingCard.getByRole("button", { name: "Accept order", exact: true }),
@@ -279,7 +282,7 @@ try {
     token: admin.token,
     method: "POST",
     body: { status: "pending" },
-    status: 400,
+    status: 403,
   });
   passed.push(
     "Admin cannot select backwards progress or reopen a cancelled order",

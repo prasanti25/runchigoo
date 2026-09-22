@@ -63,7 +63,7 @@ export default function OrderOperations({ order, onUpdated, ticketId }) {
           >
             <CircleAlert size={15} />
             {role === "admin"
-              ? "Order actions"
+              ? "Support actions"
               : order.fulfillment_paused_at
                 ? "View reported issue"
                 : "Report a fulfilment issue"}
@@ -73,7 +73,7 @@ export default function OrderOperations({ order, onUpdated, ticketId }) {
         <Modal
           title={
             role === "admin"
-              ? "Review this order"
+              ? "Review an order issue"
               : "Problem fulfilling this order?"
           }
           onClose={() => {

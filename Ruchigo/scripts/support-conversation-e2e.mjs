@@ -136,7 +136,7 @@ try {
   const log = thread.getByRole("log", { name: "Conversation messages" });
   await expect(log).toContainText("Hi! I’m here to help", { timeout: 15000 });
   await expect(page.locator(".food-assistant")).toHaveCount(0);
-  await page.route("**/api/v1/support/*/respond/", async (route) => {
+  await page.route("**/api/v1/support/*/quick-help/", async (route) => {
     const response = await route.fetch();
     await new Promise((resolve) => setTimeout(resolve, 600));
     await route.fulfill({ response });
@@ -147,7 +147,7 @@ try {
   await expect(thread.locator(".support-typing")).toBeVisible();
   await expect(log).toContainText("hasn’t accepted", { timeout: 15000 });
   await expect(thread.locator(".support-typing")).toHaveCount(0);
-  await page.unroute("**/api/v1/support/*/respond/");
+  await page.unroute("**/api/v1/support/*/quick-help/");
   await thread
     .getByLabel("Your reply", { exact: true })
     .fill("The food is spoiled");
@@ -161,9 +161,16 @@ try {
       method: "POST",
       body: { status },
     });
+  await expect(
+    thread.getByRole("button", {
+      name: "Can I cancel this order?",
+      exact: true,
+    }),
+  ).toHaveCount(0, { timeout: 10000 });
   await thread
-    .getByRole("button", { name: "Can I cancel?", exact: true })
-    .click();
+    .getByLabel("Your reply", { exact: true })
+    .fill("Can I cancel my order?");
+  await thread.getByRole("button", { name: "Send reply", exact: true }).click();
   await expect(log).toContainText("already being prepared", { timeout: 15000 });
   assert.equal(
     (await api(`/orders/${order.id}/`, { token: customer.token })).status,
@@ -180,6 +187,14 @@ try {
     .getByRole("button", { name: "Talk to the team", exact: true })
     .click();
   await expect(log).toContainText("conversation is in the support queue");
+  await thread
+    .getByRole("button", { name: "Check payment or refund", exact: true })
+    .click();
+  await expect(log).toContainText("no confirmed payment");
+  assert.ok(
+    (await api(`/support/${ticket.id}/`, { token: customer.token }))
+      .staff_requested_at,
+  );
   await admin.page.goto(`${base}/support?ticket=${ticket.id}`, {
     waitUntil: "networkidle",
   });
@@ -187,6 +202,10 @@ try {
     name: "Support conversation",
     exact: true,
   });
+  await expect(adminThread).toContainText("You’re replying as support");
+  await expect(
+    adminThread.getByRole("group", { name: "Quick order help" }),
+  ).toHaveCount(0);
   await adminThread
     .getByLabel("Your reply", { exact: true })
     .fill(`${marker} Team reply persistence check.`);
@@ -196,6 +215,9 @@ try {
   await expect(adminThread.getByRole("log")).toContainText(
     "Team reply persistence check",
   );
+  await expect(log).toContainText("Team reply persistence check", {
+    timeout: 10000,
+  });
   await adminThread
     .getByRole("button", { name: "Mark resolved", exact: true })
     .click();
@@ -210,7 +232,7 @@ try {
   await expect(feedback).toContainText("Thanks for telling us how we did");
   await screenshot(page, "working-support-feedback");
   passed.push(
-    "Explicit team handoff stops quick replies; staff reply, resolution and persisted face feedback work in the same thread",
+    "Explicit team handoff pauses automatic replies but permits factual button checks; staff reply appears without refresh, resolution and persisted face feedback work",
   );
 
   await kitchen.page.goto(`${base}/restaurant-orders`, {
@@ -252,9 +274,11 @@ try {
     waitUntil: "networkidle",
   });
   await adminThread
-    .getByRole("button", { name: "Order actions", exact: true })
+    .getByRole("button", { name: "Support actions", exact: true })
     .click();
-  let decision = admin.page.getByRole("dialog", { name: "Review this order" });
+  let decision = admin.page.getByRole("dialog", {
+    name: "Review an order issue",
+  });
   await decision.getByLabel("Support decision").selectOption("resume");
   await decision
     .getByLabel("Decision note (visible to customer)")
@@ -265,9 +289,9 @@ try {
   assert.equal(held.status, "preparing");
   assert.equal(held.fulfillment_paused_at, null);
   await adminThread
-    .getByRole("button", { name: "Order actions", exact: true })
+    .getByRole("button", { name: "Support actions", exact: true })
     .click();
-  decision = admin.page.getByRole("dialog", { name: "Review this order" });
+  decision = admin.page.getByRole("dialog", { name: "Review an order issue" });
   await decision.getByLabel("Support decision").selectOption("cancel");
   await decision
     .getByLabel("Decision note (visible to customer)")
@@ -282,6 +306,128 @@ try {
   assert.equal(final.refunds.length, 0);
   passed.push(
     "Kitchen reports hold, progress blocked, customer sees hold, admin resumes without rewinding then explicitly cancels the test COD order",
+  );
+  const own = await api("/support/", {
+    token: admin.token,
+    method: "POST",
+    body: {
+      category: "other",
+      subject: `${marker} Admin shopping help`,
+      message: "hi",
+    },
+  });
+  await admin.page.goto(`${base}/support?ticket=${own.id}`, {
+    waitUntil: "networkidle",
+  });
+  await expect(adminThread.getByRole("log")).toContainText(
+    "Hi! I’m here to help",
+  );
+  await expect(adminThread.locator(".thread-context-note")).toHaveCount(0);
+  await expect(
+    adminThread.getByRole("group", { name: "Quick order help" }),
+  ).toBeVisible();
+  await adminThread
+    .getByLabel("Your reply", { exact: true })
+    .fill("Help with my account password");
+  await adminThread
+    .getByRole("button", { name: "Send reply", exact: true })
+    .click();
+  await expect(adminThread.getByRole("log")).toContainText(
+    "Don’t share passwords",
+  );
+  const ownResult = await api(`/support/${own.id}/`, { token: admin.token });
+  assert.equal(ownResult.viewer_is_requester, true);
+  assert.equal(ownResult.staff_requested_at, null);
+  assert.equal(ownResult.messages.filter((m) => !m.from_support).length, 2);
+  const choiceRequests = [];
+  await admin.page.route("**/api/v1/support/*/quick-help/", async (route) => {
+    choiceRequests.push(route.request().postDataJSON());
+    const response = await route.fetch();
+    if (choiceRequests.length === 1)
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({
+          detail: "Connection interrupted. Please try again.",
+        }),
+      });
+    else await route.fulfill({ response });
+  });
+  const quickAccount = adminThread.getByRole("button", {
+    name: "Help with my account",
+    exact: true,
+  });
+  await quickAccount.click();
+  await expect(adminThread.getByRole("alert")).toContainText(
+    "Connection interrupted",
+  );
+  await quickAccount.click();
+  await expect(adminThread.getByRole("alert")).toHaveCount(0);
+  await expect.poll(() => choiceRequests.length).toBe(2);
+  await expect(quickAccount).toBeEnabled();
+  assert.equal(choiceRequests.length, 2);
+  assert.equal(choiceRequests[0].client_id, choiceRequests[1].client_id);
+  const recovered = await api(`/support/${own.id}/`, { token: admin.token });
+  assert.equal(
+    recovered.messages.length,
+    ownResult.messages.length + 2,
+    "Lost response retry must not duplicate the question or answer",
+  );
+  await admin.page.unroute("**/api/v1/support/*/quick-help/");
+  // Hold only the response in transit. Polling should show the real persisted
+  // answer and unlock the composer without waiting for that delayed POST.
+  let releaseResponse;
+  const responseGate = new Promise((resolve) => {
+    releaseResponse = resolve;
+  });
+  await admin.page.route("**/api/v1/support/*/respond/", async (route) => {
+    const response = await route.fetch();
+    await responseGate;
+    await route.fulfill({ response }).catch(() => {});
+  });
+  await adminThread
+    .getByLabel("Your reply", { exact: true })
+    .fill("Food allergy help");
+  await adminThread
+    .getByRole("button", { name: "Send reply", exact: true })
+    .click();
+  try {
+    await expect(adminThread.getByRole("log")).toContainText(
+      "I can’t verify allergens",
+      { timeout: 10000 },
+    );
+    await expect(adminThread.locator(".support-typing")).toHaveCount(0);
+    await expect(quickAccount).toBeEnabled();
+  } finally {
+    releaseResponse();
+  }
+  await admin.page.unroute("**/api/v1/support/*/respond/");
+  passed.push(
+    "Lost-response retry is idempotent; persisted answers arriving through polling do not leave typing or buttons stuck",
+  );
+  await screenshot(admin.page, "admin-own-support");
+  await adminThread
+    .getByRole("button", { name: "That helped, close chat" })
+    .click();
+  await expect(
+    adminThread.getByRole("form", { name: "Rate support conversation" }),
+  ).toBeVisible();
+  await admin.page.goto(`${base}/admin-orders`, { waitUntil: "networkidle" });
+  await expect(
+    admin.page.getByRole("button", {
+      name: /^(Accept order|Start preparation|Mark ready for pickup)$/,
+    }),
+  ).toHaveCount(0);
+  passed.push(
+    "Admin shopping conversations reply as requester with feedback; operational admin queue has no kitchen controls",
+  );
+  await admin.page.goto(`${base}/support?ticket=2147483647`, {
+    waitUntil: "networkidle",
+  });
+  await expect(admin.page.getByRole("alert")).toBeVisible();
+  await expect(adminThread).toHaveCount(0);
+  passed.push(
+    "An inaccessible ticket never falls back to an unrelated conversation",
   );
   const preserved = await api("/orders/16/", { token: admin.token });
   assert.equal(preserved.status, original.status);

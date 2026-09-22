@@ -17,7 +17,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from .models import *
-from .permissions import IsAdmin, IsCustomer, IsDelivery, IsRestaurant, IsRestaurantOrAdmin
+from .permissions import IsAdmin, IsCustomer, IsRestaurant, IsRestaurantOrAdmin, IsFulfillmentActor, IsAssignedCourierRole
 from .serializers import *
 from .notifications import notify, admin_ids, notify_order, notify_payment
 from .menu_options import selected_addons, configuration_key, cart_unit_price
@@ -456,6 +456,12 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
             qs = Order.objects.select_related("delivery").only("id", "status", "fulfillment_paused_at", "customer_id", "restaurant_id", "delivery__id", "delivery__current_latitude", "delivery__current_longitude", "delivery__location_updated_at").order_by("-created_at")
         else:
             qs=Order.objects.select_related("restaurant", "customer", "delivery_address", "payment", "delivery", "review").prefetch_related("items", "events", "refund_requests").order_by("-created_at")
+        if self.action in {"status", "pickup"}:
+            if user.role == User.Role.RESTAURANT:
+                return qs.filter(restaurant__owner=user)
+            if user.role == User.Role.DELIVERY:
+                return qs.filter(delivery__partner=user)
+            return qs.none()
         if user.is_superuser or user.role==User.Role.ADMIN: return qs
         if user.role==User.Role.RESTAURANT: return qs.filter(restaurant__owner=user).exclude(status=Order.Status.AWAITING_PAYMENT)
         if user.role==User.Role.DELIVERY:
@@ -486,7 +492,7 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
             "by_status": list(orders.order_by().values("status").annotate(count=Count("id"), value=Sum("total"))),
         })
 
-    @action(detail=False, methods=["get"], permission_classes=[IsDelivery])
+    @action(detail=False, methods=["get"], permission_classes=[IsAssignedCourierRole])
     def available(self, request):
         qs = Order.objects.filter(status=Order.Status.READY, delivery__isnull=True, fulfillment_paused_at__isnull=True).select_related("restaurant", "customer").prefetch_related("items").order_by("created_at")
         page = self.paginate_queryset(qs)
@@ -503,7 +509,7 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
             return self.get_paginated_response([preview(order) for order in page])
         return Response([preview(order) for order in qs])
 
-    @action(detail=True, methods=["post"], permission_classes=[IsDelivery])
+    @action(detail=True, methods=["post"], permission_classes=[IsAssignedCourierRole])
     @transaction.atomic
     def accept(self, request, pk=None):
         if not request.user.is_available:
@@ -525,7 +531,7 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
         notify_order(order)
         return Response(OrderSerializer(order).data)
 
-    @action(detail=True, methods=["post"], permission_classes=[IsDelivery])
+    @action(detail=True, methods=["post"], permission_classes=[IsAssignedCourierRole])
     @transaction.atomic
     def pickup(self, request, pk=None):
         visible = self.get_object()
@@ -582,7 +588,7 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
         cart.save()
         return Response(CartSerializer(cart).data)
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["post"], permission_classes=[IsFulfillmentActor])
     @transaction.atomic
     def status(self, request, pk=None):
         visible_order = self.get_object()
@@ -612,10 +618,7 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
             },
             User.Role.DELIVERY: {Order.Status.OUT: {Order.Status.DELIVERED}},
         }
-        if request.user.is_superuser or request.user.role == User.Role.ADMIN:
-            allowed = {choice for choice, _ in Order.Status.choices}
-        else:
-            allowed = transitions.get(request.user.role, {}).get(order.status, set())
+        allowed = transitions.get(request.user.role, {}).get(order.status, set())
         if new not in allowed:
             return Response({"detail": "Status transition not allowed."}, status=403)
         if new == Order.Status.CANCELLED and Payment.objects.filter(order=order, method="razorpay", status=Payment.Status.PAID).exists():
@@ -909,7 +912,7 @@ class OfferViewSet(AdminScopeMixin, viewsets.ModelViewSet):
         else:
             serializer.save(restaurant=self.request.user.restaurant)
 class DeliveryViewSet(AdminScopeMixin, viewsets.ModelViewSet):
-    queryset=DeliveryAssignment.objects.select_related("order").order_by("-created_at"); serializer_class=DeliverySerializer; permission_classes=[IsDelivery]
+    queryset=DeliveryAssignment.objects.select_related("order").order_by("-created_at"); serializer_class=DeliverySerializer; permission_classes=[IsAssignedCourierRole]
     http_method_names=["get", "patch", "head", "options"]
     def get_queryset(self): return super().get_queryset().filter(partner=self.request.user)
     @transaction.atomic

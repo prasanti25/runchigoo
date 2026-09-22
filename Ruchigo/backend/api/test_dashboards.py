@@ -167,6 +167,7 @@ class DashboardTests(APITestCase):
         Order.objects.filter(pk=order.pk).update(fulfillment_paused_at=timezone.now())
         self.assertEqual(self.client.get("/api/v1/orders/?on_hold=true").data["count"], 1)
         self.assertEqual(self.client.get("/api/v1/orders/?on_hold=false").data["count"], 0)
+        self.client.force_authenticate(self.owner)
         result = self.client.post(f"/api/v1/orders/{order.pk}/status/", {"status": "confirmed", "expected_status": "pending"}, format="json")
         self.assertEqual(result.status_code, 409)
         order.refresh_from_db()

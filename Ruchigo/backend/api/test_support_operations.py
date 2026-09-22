@@ -5,7 +5,7 @@ from uuid import uuid4
 from django.core.cache import cache
 from django.test import override_settings
 from rest_framework.test import APITestCase
-from .models import Address, AuditLog, DeliveryAssignment, MenuItem, Notification, Order, OrderItem, Payment, RefundRequest, Restaurant, SupportTicket, TicketMessage, User
+from .models import Address, AdminAccessGrant, AuditLog, DeliveryAssignment, MenuItem, Notification, Order, OrderItem, Payment, RefundRequest, Restaurant, SupportTicket, TicketMessage, User
 
 
 @override_settings(GEMINI_API_KEY="", RAZORPAY_KEY_ID="", RAZORPAY_KEY_SECRET="")
@@ -145,6 +145,126 @@ class SupportOperationsTests(APITestCase):
         self.assertFalse(TicketMessage.objects.filter(reply_to=message).exists())
         self.assertEqual(AuditLog.objects.filter(action="support.team_requested").count(), 1)
         ticket.refresh_from_db(); self.assertTrue(ticket.staff_requested_at)
+
+    def test_admin_shopper_is_requester_and_gets_real_replies(self):
+        order = self.order("cancelled")
+        order.customer = self.admin
+        order.save()
+        self.client.force_authenticate(self.admin)
+        result = self.client.post("/api/v1/support/", {"order": order.pk, "category": "other", "subject": "My order", "message": "hi"})
+        self.assertEqual(result.status_code, 201, result.data)
+        self.assertTrue(result.data["viewer_is_requester"])
+        ticket = SupportTicket.objects.get(pk=result.data["id"])
+        reply = self.client.post(f"/api/v1/support/{ticket.pk}/reply/", {"message": "cancel my order"})
+        self.assertFalse(reply.data["messages"][-1]["from_support"])
+        self.assertIsNone(reply.data["staff_requested_at"])
+        message = ticket.messages.order_by("id").last()
+        response = self.respond(ticket, message)
+        self.assertIn("already cancelled", response.data["messages"][-1]["body"])
+        self.assertNotIn("cancel", [c["topic"] for c in response.data["quick_choices"]])
+
+    def test_queued_quick_help_is_explicit_persisted_and_preserves_review(self):
+        ticket, _ = self.ticket(self.order("cancelled"))
+        self.client.post(f"/api/v1/support/{ticket.pk}/handoff/")
+        ticket.refresh_from_db()
+        queued_at = ticket.staff_requested_at
+        body = {"topic": "refund", "client_id": str(uuid4())}
+        for _ in range(2):
+            result = self.client.post(f"/api/v1/support/{ticket.pk}/quick-help/", body)
+            self.assertEqual(result.status_code, 200, result.data)
+        message = ticket.messages.get(client_id=body["client_id"])
+        reply = TicketMessage.objects.get(reply_to=message)
+        self.assertIn("no confirmed payment", reply.body)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.staff_requested_at, queued_at)
+        self.assertEqual(ticket.status, "in_progress")
+        self.assertEqual(Notification.objects.filter(event_key=f"support-help:{reply.pk}").count(), 1)
+        self.assertFalse(RefundRequest.objects.exists())
+        self.client.force_authenticate(self.admin)
+        result = self.client.get(f"/api/v1/support/{ticket.pk}/")
+        self.assertFalse(result.data["viewer_is_requester"])
+        self.assertEqual(result.data["quick_choices"], [])
+        self.assertEqual(self.client.post(f"/api/v1/support/{ticket.pk}/quick-help/", body).status_code, 403)
+
+    def test_quick_help_validates_topic_message_key_and_cross_ticket_access(self):
+        ticket, _ = self.ticket(self.order("preparing"))
+        path = f"/api/v1/support/{ticket.pk}/quick-help/"
+        body = {"topic": "status", "client_id": str(uuid4())}
+        self.assertEqual(self.client.post(path, body).status_code, 200)
+        self.assertEqual(self.client.post(path, {**body, "topic": "cancel"}).status_code, 400)
+        self.assertEqual(self.client.post(path, {**body, "topic": "approve_refund"}).status_code, 400)
+        self.assertEqual(self.client.post(path, {"topic": "status"}).status_code, 400)
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.client.post(path, body).status_code, 404)
+
+    def test_choices_follow_actual_kitchen_and_delivery_state(self):
+        for stage in ["preparing", "cancelled", "delivered"]:
+            ticket, _ = self.ticket(self.order(stage))
+            result = self.client.get(f"/api/v1/support/{ticket.pk}/")
+            choices = {choice["topic"] for choice in result.data["quick_choices"]}
+            self.assertNotIn("cancel", choices)
+            self.assertEqual("food_quality" in choices, stage == "delivered")
+            self.assertEqual("review" in choices, stage == "delivered")
+
+    def test_delegated_admin_can_use_own_help_but_not_other_tickets(self):
+        other_ticket, _ = self.ticket()
+        AdminAccessGrant.objects.create(user=self.admin, full_access=False, scopes=["catalog"])
+        self.client.force_authenticate(self.admin)
+        result = self.client.post("/api/v1/support/", {"category": "other", "subject": "Account help", "message": "hi"})
+        self.assertEqual(result.status_code, 201)
+        own_id = result.data["id"]
+        listing = self.client.get("/api/v1/support/?view=mine")
+        self.assertEqual([row["id"] for row in listing.data["results"]], [own_id])
+        self.assertEqual(self.client.get(f"/api/v1/support/{own_id}/").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/v1/support/{other_ticket.pk}/?view=mine").status_code, 403)
+        self.assertEqual(self.client.get("/api/v1/support/?view=team").status_code, 403)
+
+    def test_admin_and_superuser_cannot_act_as_kitchen_or_courier(self):
+        for elevated in [False, True]:
+            self.admin.is_superuser = elevated
+            self.admin.is_available = True
+            self.admin.save()
+            self.client.force_authenticate(self.admin)
+            order = self.order("ready")
+            for stage in ["confirmed", "preparing", "ready", "delivered", "cancelled"]:
+                self.assertEqual(self.client.post(f"/api/v1/orders/{order.pk}/status/", {"status": stage}).status_code, 403)
+            for action in ["accept", "pickup"]:
+                self.assertEqual(self.client.post(f"/api/v1/orders/{order.pk}/{action}/").status_code, 403)
+            self.assertEqual(self.client.get("/api/v1/orders/available/").status_code, 403)
+            order.refresh_from_db()
+            self.assertEqual(order.status, "ready")
+            self.assertFalse(DeliveryAssignment.objects.filter(order=order).exists())
+
+    def test_kitchen_to_courier_lifecycle_needs_no_admin(self):
+        order = self.order()
+        order.delivery_code = "741852"
+        order.save()
+        self.client.force_authenticate(self.owner)
+        for stage in ["confirmed", "preparing", "ready"]:
+            result = self.client.post(f"/api/v1/orders/{order.pk}/status/", {"status": stage, "expected_status": order.status})
+            self.assertEqual(result.status_code, 200, result.data)
+            order.refresh_from_db()
+        self.client.force_authenticate(self.rider)
+        for action in ["accept", "pickup"]:
+            self.assertEqual(self.client.post(f"/api/v1/orders/{order.pk}/{action}/").status_code, 200)
+        self.assertEqual(self.client.post(f"/api/v1/orders/{order.pk}/status/", {"status": "delivered", "delivery_code": "000000"}).status_code, 400)
+        self.assertEqual(self.client.post(f"/api/v1/orders/{order.pk}/status/", {"status": "delivered", "delivery_code": "741852"}).status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, "delivered")
+        self.assertEqual(order.payment.status, "paid")
+        self.assertFalse(AuditLog.objects.filter(actor=self.admin).exists())
+
+    def test_elevated_partner_cannot_change_another_partners_order(self):
+        stranger = User.objects.create_user("other-kitchen@test.example", "test-password", role="restaurant", is_superuser=True)
+        order = self.order()
+        self.client.force_authenticate(stranger)
+        self.assertEqual(self.client.post(f"/api/v1/orders/{order.pk}/status/", {"status": "confirmed"}).status_code, 404)
+        stranger.role = "delivery"
+        stranger.save()
+        order.status = "out_for_delivery"
+        order.save()
+        DeliveryAssignment.objects.create(order=order, partner=self.rider)
+        self.assertEqual(self.client.post(f"/api/v1/orders/{order.pk}/status/", {"status": "delivered"}).status_code, 404)
 
     def test_staff_reply_takes_over_without_bot_interruption(self):
         ticket, message = self.ticket()

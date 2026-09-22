@@ -1,12 +1,57 @@
 """Persisted, factual ticket assistance. No financial or order mutations."""
 import re
 from django.db import transaction
-from django.utils import timezone
 from rest_framework import serializers
 from .ai_provider import structured_response
 from .cancellations import cancellation_details
 from .models import Order, Payment, SupportTicket, TicketMessage, User
 from .notifications import notify
+
+
+QUICK_TOPICS = {
+    "status": "Where is my order?",
+    "cancel": "Can I cancel this order?",
+    "refund": "Check payment or refund",
+    "food_quality": "There is a problem with the food",
+    "missing": "An item is missing or incorrect",
+    "review": "Rate my meal",
+    "account": "Help with my account",
+}
+
+
+def quick_choices(order):
+    if not order:
+        return [{"topic": "account", "label": QUICK_TOPICS["account"]}]
+    topics = ["status"]
+    if cancellation_details(order)["allowed"]:
+        topics.append("cancel")
+    if order.status in [Order.Status.OUT, Order.Status.DELIVERED]:
+        topics.extend(["food_quality", "missing"])
+    topics.append("refund")
+    if order.status == Order.Status.DELIVERED:
+        topics.append("review")
+    return [{"topic": topic, "label": "Check order details" if topic == "status" and order.status in [Order.Status.CANCELLED, Order.Status.DELIVERED] else QUICK_TOPICS[topic]} for topic in topics]
+
+
+def quick_help(ticket_id, user, topic, client_id):
+    """An explicit factual check, including while a human review stays queued."""
+    visible = SupportTicket.objects.get(pk=ticket_id, user=user)
+    with transaction.atomic():
+        order = Order.objects.select_for_update().filter(pk=visible.order_id).first() if visible.order_id else None
+        ticket = SupportTicket.objects.select_for_update().get(pk=visible.pk)
+        message = ticket.messages.filter(author=user, client_id=client_id).first()
+        if message and message.body != QUICK_TOPICS[topic]:
+            raise serializers.ValidationError("This message key was already used for a different choice.")
+        if message and TicketMessage.objects.filter(reply_to=message).exists():
+            return ticket
+        message = message or TicketMessage.objects.create(ticket=ticket, author=user, body=QUICK_TOPICS[topic], client_id=client_id)
+        body, actions = answer(ticket, topic, order)
+        reply = TicketMessage.objects.create(ticket=ticket, body=body, actions=actions, reply_to=message)
+        # Checking facts must not cancel the customer's queued review or reopen
+        # a resolved case. Financial/order changes use their dedicated workflows.
+        ticket.save(update_fields=["updated_at"])
+        notify([user.pk], event=f"support-help:{reply.pk}", title="An update in your conversation", message="Your order help is ready in this conversation.", kind="support", metadata={"ticket_id": ticket.pk, "order_id": ticket.order_id})
+        return ticket
 
 
 def classify(message):
@@ -28,6 +73,8 @@ def answer(ticket, topic, order):
     actions = []
     if order:
         actions.append({"label": "View order", "to": f"/tracking/{order.pk}"})
+    else:
+        actions.append({"label": "Choose an order", "to": "/orders"})
     if topic == "greeting":
         return "Hi! I’m here to help. What would you like to check—your order, a payment, or a problem with your meal?", actions
     if topic == "cancel" and order:
@@ -102,7 +149,7 @@ def respond(ticket_id, user, message_id):
         if ticket.staff_requested_at or ticket.status == "resolved" or TicketMessage.objects.filter(reply_to=message).exists():
             return ticket
         latest = ticket.messages.filter(author=user).order_by("-id").first()
-        if latest.pk != message.pk or ticket.messages.filter(id__gt=message.pk, author__role=User.Role.ADMIN).exists():
+        if latest.pk != message.pk or ticket.messages.filter(id__gt=message.pk, author__role=User.Role.ADMIN).exclude(author=user).exists():
             return ticket
         body, actions = answer(ticket, topic, order)
         reply = TicketMessage.objects.create(ticket=ticket, body=body, actions=actions, reply_to=message)

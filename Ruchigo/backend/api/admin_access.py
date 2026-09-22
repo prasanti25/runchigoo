@@ -52,6 +52,15 @@ class AdminScopeMixin:
         if "*" in scopes:
             return
         basename, action = getattr(self, "basename", None), getattr(self, "action", None)
+        if basename == "support":
+            # Shopping support remains available to delegated admins, but never
+            # grants access to another customer's conversation or the team inbox.
+            from .models import SupportTicket
+            if action == "create" or (action == "list" and request.query_params.get("view") == "mine"):
+                return
+            pk = self.kwargs.get("pk")
+            if str(pk).isdigit() and SupportTicket.objects.filter(pk=pk, user=user).exists():
+                return
         # Self-service and public catalog discovery retain their existing
         # ownership permissions. Unknown/new endpoints fail closed for delegates.
         if basename in {"auth", "notification", "address", "wishlist", "cart", "review", "location", "discovery", "restaurant-review", "intelligence"}:

@@ -15,7 +15,7 @@ const labels = {
   rejected: "Request not approved",
   failed: "Processing needs attention",
 };
-export default function RefundStatus({ refund, onUpdated }) {
+export default function RefundStatus({ refund, onUpdated, readOnly = false }) {
   const { user, token } = useAuth();
   const [note, setNote] = useState("");
   const [amount, setAmount] = useState(refund?.requested_amount || "");
@@ -85,7 +85,7 @@ export default function RefundStatus({ refund, onUpdated }) {
             ? "You can reply below if you have more information for the support team."
             : "Your request stays linked to this conversation. Requested or approved does not mean money has already been returned."}
       </p>
-      {hasAdminScope(user, "finance") && (
+      {!readOnly && hasAdminScope(user, "finance") && (
         <div className="refund-admin-controls">
           {["requested", "reviewing"].includes(refund.status) && (
             <form
