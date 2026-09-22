@@ -41,6 +41,26 @@
   width: 100%;
   height: 100%;
 }
+.address-map-load-error {
+  position: absolute;
+  inset: 80px 20px auto;
+  padding: 20px;
+  border-radius: 12px;
+  background: white;
+  color: #5b6457;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.address-map-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #edf0e8;
+}
+.google-address-map .address-map-hint {
+  bottom: 35px;
+}
 .address-map-center-pin {
   position: absolute;
   z-index: 500;
@@ -271,8 +291,7 @@
 .address-picker-privacy {
   color: #767d71;
 }
-.address-picker-privacy a,
-.address-lookup-attribution {
+.address-picker-privacy a {
   text-decoration: underline;
 }
 .address-manual-button {
@@ -284,10 +303,6 @@
   color: #5b6d4c;
   font-size: 12px;
   font-weight: 650;
-}
-.address-lookup-attribution {
-  font-size: 10px;
-  color: #767d71;
 }
 .address-accuracy-warning {
   background: #fff6e8;

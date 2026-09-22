@@ -9,7 +9,7 @@ from rest_framework.test import APITestCase
 from .models import Address, DeliveryAssignment, Order, Restaurant, User
 
 
-@override_settings(LOCATIONIQ_API_KEY="")
+@override_settings(LOCATIONIQ_API_KEY="", GOOGLE_MAPS_SERVER_API_KEY="")
 class RiderLocationTests(APITestCase):
     def setUp(self):
         cache.clear()

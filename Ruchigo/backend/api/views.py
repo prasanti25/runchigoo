@@ -29,6 +29,7 @@ from .order_operations import require_active_fulfillment
 from .admin_access import AdminScopeMixin, effective_scopes
 from .dashboard_filters import OrderDashboardFilter, PaymentDashboardFilter
 from .rider_location import LiveLocationThrottle, RiderPlaceThrottle, live_location, rider_place
+from .google_routing import RouteThrottle
 
 def tokens_for(user):
     refresh = RefreshToken.for_user(user)
@@ -471,6 +472,11 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"], url_path="rider-place", throttle_classes=[RiderPlaceThrottle])
     def rider_place(self, request, pk=None):
         return Response(rider_place(self.get_object()))
+
+    @action(detail=True, methods=["get"], url_path="road-route", throttle_classes=[RouteThrottle])
+    def road_route(self, request, pk=None):
+        from .google_routing import order_route
+        return Response(order_route(self.get_object()))
 
     @action(detail=False, methods=["get"])
     def summary(self, request):

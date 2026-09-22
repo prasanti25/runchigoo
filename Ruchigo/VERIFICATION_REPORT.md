@@ -1,5 +1,126 @@
 # Product verification — 23 September 2026
 
+## Google delivery map and read-only public demo — pre-deployment verification
+
+- Real Google Routes API and Maps JavaScript browser acceptance passed locally.
+  The demo uses fresh Google road geometry for both acceptance-to-kitchen and
+  kitchen-to-door legs. Scooter centres are checked within 1m of the **displayed
+  polyline**, not claimed within 1m of a real rider. Desktop/mobile layout,
+  expand/recenter/zoom, reduced motion, completion and provider failures pass.
+- The actual local courier→API→customer test passes: original address directions,
+  owned GPS/Google route/nearby-road reads, kitchen ETA, provider-outage isolation,
+  stale GPS, ETA removal and delivered-marker cleanup. One observed new-fix delay
+  was 1,298ms; this is not a latency guarantee. Controlled GPS uses public points;
+  only the test's temporary fixture order/users were created and cleaned up.
+- Backend: 334 tests pass on isolated in-memory SQLite (including 9 new routing
+  tests for ownership, snapshots, stale/missing/paused GPS, safe provider errors,
+  field allowlisting, bounded requests, no cache and fixed demo coordinates).
+- Address Google fixture acceptance, 18 device/address tests and lint pass.
+  Google keys were added to Vercel Production via protected stdin, never source
+  control or command-line values. Runtime deployment and production acceptance
+  remain pending at this checkpoint.
+- `/demo/delivery` is intentionally included in production now, is labelled as
+  simulated, and never calls real order endpoints or writes business records.
+  Road ETA uses DRIVE without live traffic; this does not implement guaranteed
+  GPS accuracy, two-wheeler optimization or a stored historical journey trace.
+
+## Google browser credential — local live acceptance passed
+
+- Separate browser credential added to ignored local environment; Django serves
+  the Google address-map configuration. Server key remains private and separate.
+- After the user saved `/*` website paths, live Google browser acceptance PASSES
+  at `/addresses` on both `http://localhost:5173` and `http://127.0.0.1:5173`.
+  The earlier homepage-only allowlist caused `RefererNotAllowedMapError` on
+  `/addresses`; no restrictions were bypassed or disabled to resolve it.
+- Both `npm run test:address-location:live` and the same command with
+  `RUCHIGO_LOCATION_BASE_URL=http://localhost:5173` pass: real Google tiles and
+  reverse geocoding, zoom/expand, 1440px/390px layouts, delivery-detail autofill,
+  required-house validation, local account save/reload, original GPS coordinate
+  preservation and no browser errors. Fresh desktop/mobile map screenshots were
+  visually inspected at `/private/tmp/ruchigo-address-local-live-1440.png` and
+  `/private/tmp/ruchigo-address-local-live-390.png`.
+- Only device GPS was controlled at public coordinates `28.6315,77.2167`.
+  Provider results were not mocked; Google returned Baba Kharak Singh Road,
+  Delhi, 110001. This does not establish the user's home-address coverage or
+  guarantee accurate house/flat/floor lookup. Geocoding requests stay server-side;
+  the separate restricted Maps JavaScript browser key is intentionally public.
+- Initial homepage-only probes were insufficient to certify the account page.
+  Live acceptance now waits for real tile readiness, checks Google errors, and
+  supports both local hostnames. The map displays a branded loader with bounded
+  tile/script failure states instead of showing a pin over an unrendered map.
+- Google fixture browser checks, the 18 device/address tests, existing address
+  browser checks and full lint/build pass again. LocationIQ fixtures explicitly
+  select their own renderer so production key configuration cannot alter them.
+- No production deployment or business writes. Local acceptance users are cleaned
+  up by the test scripts. The API's address form remains usable on map errors.
+
+## Optional Google address integration — earlier server-key checks
+
+- The supplied server credential is in ignored `backend/.env`, not the frontend
+  or source control. A real Google reverse-geocoding request at a public landmark
+  returned OK; the new adapter returned a street, city and building-number
+  suggestion. This is not a test of the user's personal address coverage.
+- Google lookup and its address map activate together only when a separate
+  browser key is configured. Reusing the server key as the browser key is rejected.
+  The rider's existing OSM/LocationIQ map path is unchanged. Google results are
+  not silently drawn on a non-Google map or cached by the reverse endpoint.
+- 33 focused backend tests pass for Google, existing geocoding and rider-location
+  contracts. They cover consent/coordinates, sanitized responses/errors, no
+  provider-centroid substitution, no Google result cache, throttling, partial
+  data and suppression of interpolated/partial-match house numbers.
+- `test:address-google` passes with mocked Google JS interfaces and reverse
+  fixtures: desktop/mobile layout and expansion, pin movement, house/street
+  autofill without duplication, preservation of typed edits, guest save/reload,
+  script failure, authentication failure and bounded script timeout. These are
+  not real Google Maps imagery or browser-key tests.
+- Full lint/build, 18 device/address unit tests and the existing address browser
+  regression pass. The configured real-provider browser test still passes via
+  LocationIQ. A 435-file source/build scan found no configured server-secret
+  values. No production business writes or new deployment were made.
+- Full backend regression also passes: 325 tests on isolated in-memory SQLite.
+  Test modules were enumerated explicitly because the namespace-only `api`
+  discovery label finds no tests. This is not a PostgreSQL concurrency test.
+- At this checkpoint, still required: a distinct website-restricted Maps JavaScript browser key,
+  a real Google-renderer test on allowed origins, and credential rotation because
+  the server key was shared in chat. Places autocomplete is not implemented here.
+
+## Manual address autofill — local checks
+
+- Both "Add delivery details" and "Enter address manually" now transfer the
+  matched lookup fields and selected coordinates. The navbar no longer discards
+  a known address when opening manual entry; the form's map return path uses the
+  same merge while preserving typed edits.
+- Returning from an unchanged existing pin keeps its address without another
+  lookup. Moving the pin discards unmatched lookup text; incomplete lookup fields
+  remain blank. Manual entry still works when GPS is unavailable or pending.
+- Full lint/build, 18 device/address unit tests and the expanded local browser
+  suite pass. Checks cover full/partial/locality-only prefill, guest/account
+  save/reload, existing address edits, retained house/floor/landmark edits, map
+  reopen without a lookup, missing GPS and stale results. No orders were created.
+- Real-provider acceptance passes through the manual-entry button with a public
+  landmark fixture, saved coordinates and unchanged city/state/postal code.
+  Backend and database schema are unchanged. This increment is local only; no
+  new provider or improvement to automatic street/house coverage is claimed.
+
+## Location-copy cleanup — local checks
+
+- Removed the standalone geocoder credit from the address picker and rider
+  status. The credit now links from Privacy → Location and maps; tile attribution
+  remains visible on the maps and the location-privacy links remain accessible.
+- Locality-only results say "Area located" and explicitly request street/house
+  details without claiming the locality is a complete delivery address. No
+  provider coverage, GPS precision or automatic house detection improvement is
+  claimed. No personal address was hardcoded or saved on the user's behalf.
+- Full lint/build, 18 device/address unit tests and local address browser checks
+  passed. Browser checks cover 1440/768/390/320 layouts, absence of provider text
+  in the picker, retained map credit, the privacy credit link and manually entered
+  street/house/floor persistence with unchanged coordinates.
+- Real-provider local acceptance passed at a controlled public landmark, including
+  street autofill, account save/reload and desktop/mobile screenshots. No browser
+  errors or orders created. Backend code is unchanged; no new full backend run.
+- This cleanup is locally verified, not yet deployed. The previous deployment
+  listed below remains the last verified production release.
+
 ## Complete doorstep details and modern pin — release checks
 
 - New-address forms require a blank user-entered house/flat/building field,

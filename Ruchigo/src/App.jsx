@@ -28,10 +28,8 @@ const Payment = lazy(() =>
 const Tracking = lazy(() =>
   import("./pages/OrderPages.jsx").then((m) => ({ default: m.TrackingPage })),
 );
-// The preview and its route data are tree-shaken out of production builds.
-const DeliveryDemo = import.meta.env.DEV
-  ? lazy(() => import("./pages/DeliveryDemo.jsx"))
-  : null;
+// Isolated, explicitly labelled read-only demo; never calls real order writes.
+const DeliveryDemo = lazy(() => import("./pages/DeliveryDemo.jsx"));
 const Profile = lazy(() => import("./pages/CustomerProfile.jsx"));
 const Orders = lazy(() =>
   import("./pages/OrderPages.jsx").then((m) => ({ default: m.OrdersPage })),
@@ -241,9 +239,7 @@ export default function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/for-you" element={<ForYou />} />
-          {import.meta.env.DEV && (
-            <Route path="/demo/delivery" element={<DeliveryDemo />} />
-          )}
+          <Route path="/demo/delivery" element={<DeliveryDemo />} />
           <Route path="/restaurant/:id" element={<Restaurant />} />
           <Route path="/food-details/:id" element={<FoodDetails />} />
           <Route

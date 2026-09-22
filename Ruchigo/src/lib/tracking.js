@@ -123,3 +123,43 @@ export function travelBearing(from, to) {
     Math.PI
   );
 }
+
+// Match only a nearby received GPS point to the displayed road. Off-route
+// samples remain real GPS; never pull a rider across buildings onto a route.
+export function projectOnRoute(points, point, maxMetres = 25) {
+  if (!points?.length || !point) return null;
+  const scale = Math.cos((point[0] * Math.PI) / 180);
+  const lengths = points
+    .slice(1)
+    .map((p, i) =>
+      Math.hypot(p[0] - points[i][0], (p[1] - points[i][1]) * scale),
+    );
+  const total = lengths.reduce((sum, value) => sum + value, 0);
+  let walked = 0,
+    best = null;
+  for (let i = 0; i < lengths.length; i++) {
+    const a = points[i],
+      b = points[i + 1];
+    const x = (b[1] - a[1]) * scale,
+      y = b[0] - a[0];
+    const fraction = Math.max(
+      0,
+      Math.min(
+        1,
+        ((point[1] - a[1]) * scale * x + (point[0] - a[0]) * y) /
+          (x * x + y * y) || 0,
+      ),
+    );
+    const match = [a[0] + y * fraction, a[1] + (b[1] - a[1]) * fraction];
+    const distance =
+      Math.hypot(point[0] - match[0], (point[1] - match[1]) * scale) * 111195;
+    if (!best || distance < best.distance)
+      best = {
+        point: match,
+        distance,
+        progress: total ? (walked + lengths[i] * fraction) / total : 0,
+      };
+    walked += lengths[i];
+  }
+  return best && best.distance <= maxMetres ? best : null;
+}

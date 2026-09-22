@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
 import LiveDeliveryMap from "../components/product/LiveDeliveryMap.jsx";
+import { apiRequest } from "../lib/api.js";
 import {
   deliveryDemoFrame,
   demoDuration,
@@ -22,6 +23,9 @@ import "./DeliveryDemo.css";
 export default function DeliveryDemo() {
   const [run, setRun] = useState(0);
   const [clock, setClock] = useState({ elapsed: 0, now: 0 });
+  const [journey, setJourney] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   useEffect(() => {
     if (!run) return;
     let elapsed = 0;
@@ -35,11 +39,26 @@ export default function DeliveryDemo() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [run]);
-  const start = () => {
-    setClock({ elapsed: 0, now: Date.now() });
-    setRun((value) => value + 1);
+  const start = async () => {
+    if (loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      const data =
+        journey ||
+        (await apiRequest("/location/demo-route/", {
+          signal: AbortSignal.timeout(20000),
+        }));
+      setJourney(data);
+      setClock({ elapsed: 0, now: Date.now() });
+      setRun((value) => value + 1);
+    } catch {
+      setError("The preview route couldn’t load. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
-  const frame = deliveryDemoFrame(clock.elapsed, clock.now);
+  const frame = deliveryDemoFrame(clock.elapsed, clock.now, journey);
   const active = demoStages[frame.stage];
   const complete = clock.elapsed === demoDuration;
   return (
@@ -52,7 +71,7 @@ export default function DeliveryDemo() {
               <ArrowLeft size={16} /> Back to RuchiGo
             </Link>
             <span className="demo-badge">
-              <ShieldCheck size={14} /> Local demo · simulated delivery
+              <ShieldCheck size={14} /> Demo · simulated delivery
             </span>
           </div>
           <header className="demo-heading">
@@ -87,7 +106,7 @@ export default function DeliveryDemo() {
                     order={frame.order}
                     initiallyEnabled
                     route={{ points: frame.route, progress: frame.progress }}
-                    mapLabel="Local demo · simulated delivery"
+                    mapLabel="Demo · simulated delivery"
                     statusTitle={frame.statusTitle}
                     arrival={{
                       headline: complete
@@ -119,25 +138,12 @@ export default function DeliveryDemo() {
                     </div>
                   </div>
                   <p className="demo-route-credit">
-                    Two example road legs in New Delhi: 1.80 km to the kitchen,
-                    then 1.56 km to the doorstep ·{" "}
-                    <a
-                      href="https://www.openstreetmap.org/copyright"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      OpenStreetMap
-                    </a>{" "}
-                    /{" "}
-                    <a
-                      href="https://project-osrm.org/"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      OSRM
-                    </a>
-                    . Accelerated simulation, not a live rider or arrival
-                    estimate.
+                    Example road journey in New Delhi:{" "}
+                    {(journey.pickup.distance_metres / 1000).toFixed(2)} km to
+                    the kitchen, then{" "}
+                    {(journey.delivery.distance_metres / 1000).toFixed(2)} km to
+                    the doorstep. Accelerated simulation using road estimates,
+                    not a live rider. No live traffic included.
                   </p>
                 </>
               ) : (
@@ -155,9 +161,16 @@ export default function DeliveryDemo() {
                     Kitchen updates. A road-following scooter. Your meal
                     arriving at the door. Watch it all happen here.
                   </p>
-                  <button type="button" className="btn dark" onClick={start}>
-                    Watch delivery <ArrowRight size={17} />
+                  <button
+                    type="button"
+                    className="btn dark"
+                    onClick={start}
+                    disabled={loading}
+                  >
+                    {loading ? "Preparing your route…" : "Watch delivery"}{" "}
+                    <ArrowRight size={17} />
                   </button>
+                  {error && <p role="alert">{error}</p>}
                   <small>
                     Starting loads third-party map tiles. No device location is
                     requested. <Link to="/privacy#location">Map privacy</Link>
@@ -203,7 +216,7 @@ export default function DeliveryDemo() {
                       </span>
                       <div>
                         <strong>{entry.label}</strong>
-                        {run && index === frame.stage && (
+                        {run > 0 && index === frame.stage && (
                           <small>{complete ? "All done" : "Now"}</small>
                         )}
                       </div>

@@ -23,6 +23,7 @@
     "test:menu-operations": "node scripts/menu-operations-e2e.mjs",
     "test:desktop": "node scripts/desktop-experience-e2e.mjs",
     "test:delivery-demo": "node scripts/delivery-demo-e2e.mjs",
+    "test:delivery-google": "node scripts/google-delivery-e2e.mjs",
     "test:assistant-recovery": "node scripts/assistant-recovery-e2e.mjs",
     "test:api-retry": "node scripts/api-retry-e2e.mjs",
     "test:checkout-support": "node scripts/checkout-support-e2e.mjs",
@@ -37,6 +38,7 @@
     "test:location-device": "node --test scripts/address-position.test.mjs",
     "test:address-location": "node scripts/address-location-e2e.mjs",
     "test:address-location:live": "node scripts/address-location-live-e2e.mjs",
+    "test:address-google": "node scripts/google-address-e2e.mjs",
     "test:rider-location": "node scripts/rider-location-e2e.mjs"
   },
   "dependencies": {

@@ -7557,6 +7557,46 @@ button:disabled {
   background: #edf0e8;
   z-index: 0;
 }
+.delivery-google-map {
+  height: 410px;
+  width: 100%;
+  background: #f4f5f0;
+}
+.delivery-map-wrap.is-expanded .delivery-google-map {
+  height: 100%;
+}
+.google-rider-marker,
+.google-delivery-pin {
+  position: absolute;
+}
+.google-rider-marker {
+  width: 48px;
+  height: 72px;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  will-change: left, top;
+}
+.google-delivery-pin {
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -100%);
+  z-index: 2;
+}
+.google-delivery-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 30px;
+  background: #f7f8f4;
+  z-index: 1;
+  text-align: center;
+}
+@media (max-width: 600px) {
+  .delivery-google-map {
+    height: 340px;
+  }
+}
 .delivery-leaflet-map .leaflet-tile-pane {
   filter: saturate(0.18) contrast(0.88) brightness(1.08);
 }

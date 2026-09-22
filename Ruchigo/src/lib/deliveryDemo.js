@@ -258,7 +258,13 @@ export const demoStages = [
 ];
 export const demoDuration = demoStages.at(-1).at;
 
-export function deliveryDemoFrame(elapsed, now) {
+export function deliveryDemoFrame(elapsed, now, journey = null) {
+  const pickupRoute = journey?.pickup.points || demoPickupRoute;
+  const doorstepRoute = journey?.delivery.points || demoRoute;
+  const pickupSeconds =
+    journey?.pickup.duration_seconds ?? demoPlan.pickupRouteSeconds;
+  const deliverySeconds =
+    journey?.delivery.duration_seconds ?? demoPlan.deliveryRouteSeconds;
   const stage = demoStages.findLastIndex((entry) => elapsed >= entry.at);
   const clamp = (value) => Math.max(0, Math.min(1, value));
   const approachProgress = clamp(
@@ -270,10 +276,10 @@ export function deliveryDemoFrame(elapsed, now) {
       (demoPlan.deliveredAt - demoPlan.departureAt),
   );
   const onDeliveryLeg = elapsed >= demoPlan.pickedUpAt;
-  const route = onDeliveryLeg ? demoRoute : demoPickupRoute;
+  const route = onDeliveryLeg ? doorstepRoute : pickupRoute;
   const progress = onDeliveryLeg ? deliveryProgress : approachProgress;
   const point = positionOnRoute(route, progress).point;
-  const pickupRemaining = demoPlan.pickupRouteSeconds * (1 - approachProgress);
+  const pickupRemaining = pickupSeconds * (1 - approachProgress);
   const preparationRemaining = Math.max(
     0,
     (demoPlan.foodReadyAt - elapsed) * demoPlan.speed,
@@ -287,11 +293,10 @@ export function deliveryDemoFrame(elapsed, now) {
         ) +
         demoPlan.collectionSeconds +
         demoPlan.speed +
-        demoPlan.deliveryRouteSeconds
+        deliverySeconds
       : elapsed < demoPlan.departureAt
-        ? (demoPlan.departureAt - elapsed) * demoPlan.speed +
-          demoPlan.deliveryRouteSeconds
-        : demoPlan.deliveryRouteSeconds * (1 - deliveryProgress);
+        ? (demoPlan.departureAt - elapsed) * demoPlan.speed + deliverySeconds
+        : deliverySeconds * (1 - deliveryProgress);
   return {
     stage,
     progress,
@@ -317,13 +322,13 @@ export function deliveryDemoFrame(elapsed, now) {
       status: demoStages[stage].orderStatus || demoStages[stage].status,
       restaurant_detail: {
         name: "RuchiGo demo kitchen",
-        latitude: demoRoute[0][0],
-        longitude: demoRoute[0][1],
+        latitude: doorstepRoute[0][0],
+        longitude: doorstepRoute[0][1],
       },
       delivery_address_detail: {
         label: "Demo doorstep",
-        latitude: demoRoute.at(-1)[0],
-        longitude: demoRoute.at(-1)[1],
+        latitude: doorstepRoute.at(-1)[0],
+        longitude: doorstepRoute.at(-1)[1],
       },
       delivery:
         elapsed >= demoPlan.assignmentAt

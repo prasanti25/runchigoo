@@ -13,7 +13,6 @@ export default function AddressMap({ point, config, onChange }) {
   const [expanded, setExpanded] = useState(false);
   const [tileError, setTileError] = useState(false);
   const [moving, setMoving] = useState(false);
-  const pinId = useId();
   useEffect(() => {
     change.current = onChange;
   }, [onChange]);
@@ -108,60 +107,7 @@ export default function AddressMap({ point, config, onChange }) {
         role="region"
         aria-label="Choose your delivery pin on the map"
       />
-      <div
-        className={`address-map-center-pin${moving ? " is-moving" : ""}`}
-        aria-hidden="true"
-      >
-        <span className="address-pin-label">
-          <i />
-          {moving ? "Place at your entrance" : "Deliver here"}
-        </span>
-        <span className="address-pin-ground" />
-        <span className="address-pin-shadow" />
-        <svg
-          className="address-pin-artwork"
-          width="48"
-          height="64"
-          viewBox="0 0 48 64"
-          fill="none"
-        >
-          <defs>
-            <linearGradient
-              id={`${pinId}-fill`}
-              x1="10"
-              y1="4"
-              x2="36"
-              y2="59"
-              gradientUnits="userSpaceOnUse"
-            >
-              <stop stopColor="#FF884F" />
-              <stop offset="1" stopColor="#E94B1B" />
-            </linearGradient>
-          </defs>
-          <path
-            d="M24 61C21.6 57.6 4 38.8 4 24.5a20 20 0 0 1 40 0C44 38.8 26.4 57.6 24 61Z"
-            fill={`url(#${pinId}-fill)`}
-            stroke="white"
-            strokeWidth="2.5"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M10 23a14 14 0 0 1 12-13"
-            stroke="white"
-            strokeOpacity=".32"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <circle cx="24" cy="25" r="11.5" fill="white" />
-          <path
-            d="m17.5 24.5 6.5-5 6.5 5M19.5 23.5v7h9v-7M22.5 30.5v-4h3v4"
-            stroke="#E95A27"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
+      <AddressPin moving={moving} />
       <button
         type="button"
         className="address-map-expand"
@@ -178,6 +124,66 @@ export default function AddressMap({ point, config, onChange }) {
       <div className="address-map-hint">
         Move the map or tap to place the pin at your entrance.
       </div>
+    </div>
+  );
+}
+
+export function AddressPin({ moving }) {
+  const pinId = useId();
+  return (
+    <div
+      className={`address-map-center-pin${moving ? " is-moving" : ""}`}
+      aria-hidden="true"
+    >
+      <span className="address-pin-label">
+        <i />
+        {moving ? "Place at your entrance" : "Deliver here"}
+      </span>
+      <span className="address-pin-ground" />
+      <span className="address-pin-shadow" />
+      <svg
+        className="address-pin-artwork"
+        width="48"
+        height="64"
+        viewBox="0 0 48 64"
+        fill="none"
+      >
+        <defs>
+          <linearGradient
+            id={`${pinId}-fill`}
+            x1="10"
+            y1="4"
+            x2="36"
+            y2="59"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stopColor="#FF884F" />
+            <stop offset="1" stopColor="#E94B1B" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M24 61C21.6 57.6 4 38.8 4 24.5a20 20 0 0 1 40 0C44 38.8 26.4 57.6 24 61Z"
+          fill={`url(#${pinId}-fill)`}
+          stroke="white"
+          strokeWidth="2.5"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M10 23a14 14 0 0 1 12-13"
+          stroke="white"
+          strokeOpacity=".32"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <circle cx="24" cy="25" r="11.5" fill="white" />
+        <path
+          d="m17.5 24.5 6.5-5 6.5 5M19.5 23.5v7h9v-7M22.5 30.5v-4h3v4"
+          stroke="#E95A27"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     </div>
   );
 }

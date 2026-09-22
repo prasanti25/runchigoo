@@ -18,6 +18,7 @@ import { useRemote } from "../../lib/product.js";
 import LoadingScreen from "../common/LoadingScreen.jsx";
 import { ErrorNotice, Modal } from "./UI.jsx";
 import AddressMap from "./AddressMap.jsx";
+import GoogleAddressMap from "./GoogleAddressMap.jsx";
 import "./AddressLocationPicker.css";
 
 export default function AddressLocationPicker({
@@ -39,7 +40,11 @@ export default function AddressLocationPicker({
     gpsRequest = useRef(null),
     mounted = useRef(true),
     gpsVersion = useRef({ value: 0 });
-  const mapConfig = useRemote(point ? "/location/map-config/" : null);
+  const mapConfig = useRemote(
+    point ? "/location/map-config/?purpose=address" : null,
+  );
+  const MapComponent =
+    mapConfig.data?.engine === "google" ? GoogleAddressMap : AddressMap;
   const lookup = useCallback(async (next) => {
     request.current?.abort();
     const controller = new AbortController();
@@ -140,6 +145,12 @@ export default function AddressLocationPicker({
     };
   }, [permissionDenied, receiveGPS]);
   const address = result?.key === pointKey(point) ? result.address : null;
+  const areaOnly = Boolean(
+    address &&
+    (!address.line1?.trim() ||
+      address.line1.trim().toLowerCase() ===
+        address.locality?.trim().toLowerCase()),
+  );
   const missingAddressFields = address
     ? [
         ["line1", "street or locality"],
@@ -151,24 +162,34 @@ export default function AddressLocationPicker({
         .map(([, label]) => label)
     : [];
   const pendingPin = point && !address && !resolving;
-  const confirm = () => {
-    if (!point || resolving || locating) return;
-    onConfirm({
-      ...(address || {
-        label: "Selected map location",
-        city: "",
-        line1: "",
-        line2: "",
-        state: "",
-        postal_code: "",
-        formatted_address: "",
-      }),
+  const selectedLocation = () => {
+    if (!point) return null;
+    // Reopening an existing pin without a new lookup must keep its details.
+    // Never attach an old address to a moved pin or a fresh GPS attempt.
+    const knownAddress =
+      address ||
+      (!autoLocate && pointKey(point) === pointKey(locationPoint(initial))
+        ? initial
+        : null);
+    return {
+      label: "Selected map location",
+      city: "",
+      line1: "",
+      line2: "",
+      state: "",
+      postal_code: "",
+      formatted_address: "",
+      ...knownAddress,
       latitude: Number(point.latitude).toFixed(6),
       longitude: Number(point.longitude).toFixed(6),
       accuracy_meters: point.accuracy || null,
       source: point.source || "map",
       confirmed: true,
-    });
+    };
+  };
+  const confirm = () => {
+    if (!point || resolving || locating) return;
+    onConfirm(selectedLocation());
   };
   return (
     <Modal
@@ -203,7 +224,7 @@ export default function AddressLocationPicker({
               onRetry={mapConfig.reload}
             />
           ) : (
-            <AddressMap
+            <MapComponent
               point={point}
               config={mapConfig.data}
               onChange={(next) => {
@@ -234,7 +255,9 @@ export default function AddressLocationPicker({
           </button>
         </div>
         <div className="address-picker-details">
-          <p className="eyebrow">DELIVERING TO</p>
+          <p className="eyebrow">
+            {areaOnly ? "AREA LOCATED" : "SELECTED LOCATION"}
+          </p>
           <div className="address-detected" aria-live="polite">
             <MapPin size={22} />
             <div>
@@ -281,8 +304,9 @@ export default function AddressLocationPicker({
           <div className="address-picker-note">
             <ShieldCheck size={17} />
             <p>
-              GPS finds the area, not your flat or floor. Check the pin and add
-              any delivery details before saving.
+              {areaOnly
+                ? "Only the area was found. Add your street and house number next — your selected pin will be kept."
+                : "Check the pin and add your house, flat or floor before saving."}
             </p>
           </div>
           <button
@@ -297,7 +321,7 @@ export default function AddressLocationPicker({
           <button
             type="button"
             className="address-manual-button"
-            onClick={onManual}
+            onClick={() => onManual(selectedLocation())}
           >
             <Pencil size={14} />
             {manualLabel}
@@ -309,16 +333,6 @@ export default function AddressLocationPicker({
               Location privacy
             </Link>
           </p>
-          {address?.attribution && (
-            <a
-              className="address-lookup-attribution"
-              href="https://locationiq.com/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              {address.attribution}
-            </a>
-          )}
         </div>
       </div>
     </Modal>

@@ -42,16 +42,18 @@ class LocationViewSet(AdminScopeMixin, viewsets.ViewSet):
 
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
-        if self.action == "reverse":
+        if self.action in {"reverse", "demo_route"}:
             response["Cache-Control"] = "private, no-store"
         return response
 
     @action(detail=False, methods=["post"], throttle_classes=[LocationThrottle])
     def reverse(self, request):
         from .geocoding import ReverseLocationInput, reverse_address
+        from .google_geocoding import google_address_enabled, google_reverse_address
         payload = ReverseLocationInput(data=request.data)
         payload.is_valid(raise_exception=True)
-        fields, result = reverse_address(payload.validated_data["latitude"], payload.validated_data["longitude"])
+        lookup = google_reverse_address if google_address_enabled() else reverse_address
+        fields, result = lookup(payload.validated_data["latitude"], payload.validated_data["longitude"])
         if fields:
             response = Response({"address": fields, "status": "ready"})
         else:
@@ -63,6 +65,11 @@ class LocationViewSet(AdminScopeMixin, viewsets.ViewSet):
 
     @action(detail=False, methods=["get"], url_path="map-config")
     def map_config(self, request):
+        from .google_geocoding import google_address_enabled
+        if request.query_params.get("purpose") in {"address", "delivery"} and google_address_enabled():
+            response = Response({"engine": "google", "provider": "Google Maps", "browser_key": settings.GOOGLE_MAPS_BROWSER_API_KEY})
+            response["Cache-Control"] = "private, no-store"
+            return response
         # Only a PUBLIC, origin-restricted browser tile URL may be configured.
         # Never reuse server-side IPinfo/Gemini credentials here.
         tile_url = getattr(settings, "MAP_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
@@ -75,6 +82,12 @@ class LocationViewSet(AdminScopeMixin, viewsets.ViewSet):
             "attribution_url": attribution_url,
             "provider": getattr(settings, "MAP_PROVIDER", "OpenStreetMap"),
         })
+
+    @action(detail=False, methods=["get"], url_path="demo-route", throttle_classes=[LocationThrottle])
+    def demo_route(self, request):
+        from .google_routing import demo_routes
+        result = demo_routes()
+        return Response(result or {"detail": "The preview route couldn’t load. Please try again shortly."}, status=200 if result else 503)
 
     @action(detail=False, methods=["get"], throttle_classes=[LocationThrottle])
     def approximate(self, request):

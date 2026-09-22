@@ -422,9 +422,9 @@ export default function Navbar() {
           <AddressLocationPicker
             initial={location}
             onClose={() => setPickerOpen(false)}
-            onManual={() => {
+            onManual={(next) => {
               setPickerOpen(false);
-              setAddressDraft({});
+              setAddressDraft(next || {});
             }}
             onConfirm={(next) => {
               setPickerOpen(false);

@@ -2,17 +2,21 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
 
-// Real LocationIQ via the application backend, never a mocked HTTP response.
+// The configured real geocoder via the backend, never a mocked HTTP response.
 // Device GPS is controlled at a PUBLIC landmark, not a person's location.
 // Production mode is public-only and cannot create users, addresses or orders.
 const base = (
   process.env.RUCHIGO_LOCATION_BASE_URL || "http://127.0.0.1:5173"
 ).replace(/\/$/, "");
 assert.ok(
-  ["http://127.0.0.1:5173", "https://runchigoo.vercel.app"].includes(base),
+  [
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "https://runchigoo.vercel.app",
+  ].includes(base),
   "Unrecognized test target",
 );
-const local = base.startsWith("http://127.0.0.1:");
+const local = ["localhost", "127.0.0.1"].includes(new URL(base).hostname);
 const point = { latitude: 28.6315, longitude: 77.2167, accuracy: 15 };
 const marker = randomUUID().slice(0, 8);
 const email = `address-live-${marker}@example.test`,
@@ -84,9 +88,18 @@ try {
   const page = await context.newPage();
   page.setDefaultTimeout(20000);
   page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    const match = message
+      .text()
+      .match(/Google Maps JavaScript API error:\s*([A-Za-z]+)/);
+    if (match) errors.push(`Google Maps: ${match[1]}`);
+  });
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (url.hostname.endsWith("locationiq.com"))
+    if (
+      url.hostname.endsWith("locationiq.com") ||
+      url.pathname.includes("/maps/api/geocode")
+    )
       browserProviderCalls.push(url.hostname);
   });
   await page.goto(local ? `${base}/addresses` : base);
@@ -108,15 +121,16 @@ try {
   assert.equal(response.headers()["cache-control"], "private, no-store");
   const payload = await response.json();
   const address = payload.address;
+  const google = address.provider === "google";
   assert.equal(payload.status, "ready");
-  assert.equal(address.locality, "Connaught Place");
+  if (!google) assert.equal(address.locality, "Connaught Place");
   assert.equal(address.city, "Delhi");
   assert.equal(address.state, "Delhi");
   assert.equal(address.postal_code, "110001");
   assert.ok(address.line1, "Provider must return a street");
   assert.equal(address.partial, false);
   assert.ok(
-    !/pk\.[a-zA-Z0-9]{20,}/.test(JSON.stringify(payload)),
+    !/pk\.[a-zA-Z0-9]{20,}|AIza[\w-]{30,}/.test(JSON.stringify(payload)),
     "Provider credentials must not enter browser responses",
   );
   assert.deepEqual(response.request().postDataJSON(), {
@@ -133,8 +147,34 @@ try {
   await expect(picker.locator(".address-detected")).toContainText(
     address.line1,
   );
-  await expect(picker.locator(".leaflet-tile-loaded").first()).toBeVisible();
+  if (google) {
+    await expect(picker.locator(".google-address-map")).toHaveAttribute(
+      "data-map-state",
+      "ready",
+      { timeout: 25000 },
+    );
+    await expect(picker.locator(".google-address-map .gm-style")).toBeVisible();
+    await expect(picker.locator(".leaflet-container")).toHaveCount(0);
+    await expect(picker.locator(".address-map-load-error")).toHaveCount(0);
+    await picker.getByRole("button", { name: "Zoom in", exact: true }).click();
+    await picker.getByRole("button", { name: "Expand address map" }).click();
+    await expect(picker.locator(".address-map-stage")).toHaveClass(
+      /is-expanded/,
+    );
+    await picker.getByRole("button", { name: "Collapse address map" }).click();
+    await expect(
+      picker.getByRole("heading", { name: address.label, exact: true }),
+    ).toBeVisible();
+  } else {
+    await expect(picker.locator(".leaflet-tile-loaded").first()).toBeVisible();
+    await expect(
+      picker
+        .locator(".leaflet-control-attribution")
+        .filter({ hasText: "OpenStreetMap" }),
+    ).toBeVisible();
+  }
   await expect(picker.locator(".address-pin-artwork")).toBeVisible();
+  await expect(picker).not.toContainText("LocationIQ");
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
     assert.ok(
@@ -146,14 +186,17 @@ try {
     });
   }
   await picker
-    .getByRole("button", { name: "Add delivery details", exact: true })
+    .getByRole("button", { name: "Enter address manually", exact: true })
     .click();
   if (local) {
     const form = page.getByRole("dialog", {
       name: "Where should we bring your food?",
     });
     await expect(form.getByLabel("Street / area")).toHaveValue(address.line1);
-    await expect(form.getByLabel("House / flat / building")).toHaveValue("");
+    await expect(form.getByLabel("House / flat / building")).toHaveValue(
+      address.house_number || "",
+    );
+    await form.getByLabel("House / flat / building").fill("");
     await form
       .getByRole("button", { name: "Save delivery address", exact: true })
       .click();
@@ -198,7 +241,10 @@ try {
       name: "Where should we bring your food?",
     });
     await expect(form.getByLabel("Street / area")).toHaveValue(address.line1);
-    await expect(form.getByLabel("House / flat / building")).toHaveValue("");
+    await expect(form.getByLabel("House / flat / building")).toHaveValue(
+      address.house_number || "",
+    );
+    await form.getByLabel("House / flat / building").fill("");
     await form
       .getByRole("button", { name: "Use this address", exact: true })
       .click();
@@ -226,7 +272,7 @@ try {
   console.log(
     JSON.stringify({
       target: local ? "local" : "production-public-only",
-      geocoding: "Real LocationIQ",
+      geocoding: google ? "Real Google Geocoding" : "Real LocationIQ",
       gps: "Controlled public-landmark coordinates",
       address: {
         street: address.line1,

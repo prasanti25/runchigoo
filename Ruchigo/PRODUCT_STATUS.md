@@ -12,7 +12,40 @@ historical checkpoints, not evidence of the current Vercel alias.
 
 RuchiGo now has a consistent customer experience and operational workspaces connected to its Django API: discovery → menu → cart/coupon → checkout → kitchen states → delivery confirmation → review/support. The implementation is a working product foundation, **not a completed 300-feature commercial platform**.
 
+### Google rider map and public demo — release candidate
+
+The address and delivery maps now share the Google renderer configuration. Live
+orders retain their fast, owned GPS channel; Google Routes supplies a separate
+road path to the restaurant before pickup and the snapshotted doorstep after
+pickup. Fresh GPS is matched to that road only within 25m; off-route points are
+not forced onto it. Stale GPS dims the marker, stops animation and suppresses
+route ETA. Driving-road estimates exclude live traffic and are not exact arrival
+guarantees or two-wheeler routing. No new schema or business-data migration.
+
+`/demo/delivery` is now an explicitly labelled public, read-only 50-second preview.
+It requests two Google road legs between fixed public sample pins and never calls
+real order endpoints. No routes are cached or saved to the database. Actual
+Google demo acceptance passes locally, including centre-on-polyline checks,
+desktop/mobile zoom/expand and reduced-motion/error handling. The separate live
+rider test passes through real courier GPS writes and customer reads (one observed
+update took 1,298ms), Google route/nearby lookup, stale state and completion.
+334 isolated SQLite backend tests pass. Production acceptance is pending deployment.
+
 ### Delivery-location increment — production public lookup verified
+
+Local follow-up: manual entry now retains the matched lookup and pin. An optional
+Google Geocoding adapter and Google address-map renderer are implemented. The
+server credential was verified with a public-landmark lookup. A separate
+Maps JavaScript browser key is now configured locally and activates Google.
+After the website allowlist was corrected to include `/*`, live browser acceptance
+passes at `/addresses` on both `http://localhost:5173` and
+`http://127.0.0.1:5173`: actual Google tiles and reverse lookup, desktop/mobile
+layout, zoom/expand, delivery-detail autofill, local account save/reload and
+preserved GPS coordinates. Only device GPS was controlled at a public landmark;
+the user's personal address coverage was not tested. No Google deployment has
+been made at that checkpoint. The rider map is upgraded in the release candidate above. Google house-number
+suggestions are editable and never imply reliable flat/floor detection. No Places
+autocomplete or production Google acceptance is claimed.
 
 The desktop-first header/address flow now supports opt-in GPS, an adjustable map
 pin, zoom/expand, street/locality autofill through an optional server-side

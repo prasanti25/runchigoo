@@ -75,6 +75,20 @@ async function contextFor(auth, extra = {}) {
         }),
       );
     }, auth);
+  // This suite controls LocationIQ-shaped responses; keep its renderer paired
+  // with those fixtures even when the local app is configured for Google.
+  await context.route(
+    "**/api/v1/location/map-config/?purpose=address",
+    (route) =>
+      route.fulfill({
+        json: {
+          provider: "OpenStreetMap",
+          tile_url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+          attribution: "© OpenStreetMap contributors",
+          attribution_url: "https://www.openstreetmap.org/copyright",
+        },
+      }),
+  );
   await context.route("**/api/v1/location/reverse/", async (route) => {
     const body = route.request().postDataJSON();
     requests.push(body);
@@ -227,6 +241,15 @@ try {
     picker.getByRole("heading", { name: "Connaught Place" }),
   ).toBeVisible();
   await expect(picker.locator(".leaflet-tile-loaded").first()).toBeVisible();
+  await expect(picker).not.toContainText("LocationIQ");
+  await expect(
+    picker.getByRole("link", { name: "Location privacy" }),
+  ).toHaveAttribute("href", "/privacy#location");
+  await expect(
+    picker
+      .locator(".leaflet-control-attribution")
+      .filter({ hasText: "OpenStreetMap" }),
+  ).toBeVisible();
   assert.equal(requests[0].latitude, "28.631500");
   assert.equal(
     (await api("/addresses/", { token })).count,
@@ -362,7 +385,7 @@ try {
     picker.getByRole("heading", { name: "Connaught Place" }),
   ).toBeVisible();
   await picker
-    .getByRole("button", { name: "Add delivery details", exact: true })
+    .getByRole("button", { name: "Enter address manually", exact: true })
     .click();
   form = page.getByRole("dialog", { name: "Where should we bring your food?" });
   await expect(form.getByLabel("House / flat number and street")).toHaveValue(
@@ -434,7 +457,12 @@ try {
   ).toBeVisible();
   releaseStale();
   await expect(picker).not.toContainText("Stale address must not appear");
-  await picker.getByRole("button", { name: "Close dialog" }).click();
+  // Moving the pin invalidates its old address, including the manual shortcut.
+  await picker.getByRole("region").click({ position: { x: 155, y: 165 } });
+  await picker.getByRole("button", { name: "Enter address manually" }).click();
+  await expect(form.getByLabel("Street / area")).toHaveValue("");
+  await expect(form.getByLabel("City", { exact: true })).toHaveValue("");
+  await form.getByRole("button", { name: "Close dialog" }).click();
   responseMode = "failed";
   await openPicker(page);
   await expect(picker.getByRole("alert")).toContainText(
@@ -451,7 +479,15 @@ try {
   await expect(picker).toContainText(
     "Add your postal code with your delivery details",
   );
-  await picker.getByRole("button", { name: "Close dialog" }).click();
+  await picker.getByRole("button", { name: "Enter address manually" }).click();
+  await expect(form.getByLabel("Street / area")).toHaveValue(
+    "Parliament Street",
+  );
+  await expect(form.getByLabel("City", { exact: true })).toHaveValue("Delhi");
+  await expect(form.getByLabel("State", { exact: true })).toHaveValue("Delhi");
+  await expect(form.getByLabel("Postal code")).toHaveValue("");
+  await expect(form.getByLabel("House / flat / building")).toHaveValue("");
+  await form.getByRole("button", { name: "Close dialog" }).click();
   addresses = await api("/addresses/", { token });
   assert.equal(addresses.count, 2);
   assert.equal((await api("/orders/", { token })).count, 0);
@@ -532,11 +568,22 @@ try {
       name: "Where should we bring your food?",
     });
     await expect(manual).toBeVisible();
+    await expect(manual.getByLabel("Street / area")).toHaveValue(
+      "Parliament Street",
+    );
+    await expect(
+      manual.getByLabel("Landmark or additional details"),
+    ).toHaveValue("Connaught Place");
+    await expect(manual.getByLabel("City", { exact: true })).toHaveValue(
+      "Delhi",
+    );
+    await expect(manual.getByLabel("State", { exact: true })).toHaveValue(
+      "Delhi",
+    );
+    await expect(manual.getByLabel("Postal code")).toHaveValue("110001");
+    await expect(manual.getByLabel("House / flat / building")).toHaveValue("");
     await manual.getByLabel("House / flat / building").fill("Manual fixture");
     await manual.getByLabel("Street / area").fill("Outer Circle");
-    await manual.getByLabel("City", { exact: true }).fill("Delhi");
-    await manual.getByLabel("State", { exact: true }).fill("Delhi");
-    await manual.getByLabel("Postal code").fill("110001");
     await manual.getByRole("button", { name: "Use this address" }).click();
     await expect(testPage.locator(".location-trigger")).toContainText(
       "Manual fixture, Outer Circle",
@@ -545,6 +592,11 @@ try {
     await expect(testPage.locator(".location-trigger")).toContainText(
       "Manual fixture, Outer Circle",
     );
+    const manualSaved = await testPage.evaluate(() =>
+      JSON.parse(localStorage.getItem("ruchigo-delivery-location")),
+    );
+    assert.equal(Number(manualSaved.latitude), point.latitude);
+    assert.equal(Number(manualSaved.longitude), point.longitude);
     await denied.close();
   }
   // Locality-only lookup is usable, but every guest still gets delivery details.
@@ -558,11 +610,16 @@ try {
     guestPicker.getByRole("heading", { name: "Connaught Place" }),
   ).toBeVisible();
   await expect(guestPicker.locator(".address-accuracy-warning")).toHaveCount(0);
+  await expect(guestPicker.locator(".eyebrow")).toHaveText("AREA LOCATED");
+  await expect(guestPicker.locator(".address-picker-note")).toContainText(
+    "Add your street and house number next",
+  );
+  await expect(guestPicker).not.toContainText("LocationIQ");
   await expect(guestPicker).not.toContainText(
     "Some address details are missing",
   );
   await guestPicker
-    .getByRole("button", { name: "Add delivery details", exact: true })
+    .getByRole("button", { name: "Enter address manually", exact: true })
     .click();
   const guestForm = guestPage.getByRole("dialog", {
     name: "Where should we bring your food?",
@@ -570,6 +627,13 @@ try {
   await expect(guestForm.getByLabel("Street / area")).toHaveValue(
     "Connaught Place",
   );
+  await expect(guestForm.getByLabel("City", { exact: true })).toHaveValue(
+    "Delhi",
+  );
+  await expect(guestForm.getByLabel("State", { exact: true })).toHaveValue(
+    "Delhi",
+  );
+  await expect(guestForm.getByLabel("Postal code")).toHaveValue("110001");
   await guestForm
     .getByRole("button", { name: "Use this address", exact: true })
     .click();
@@ -581,10 +645,45 @@ try {
     null,
   );
   await guestForm.getByLabel("House / flat / building").fill("QA unit 4");
+  await guestForm
+    .getByLabel("Street / area")
+    .fill("Test Street 8, Connaught Place");
   await guestForm.getByLabel("Floor (optional)").fill("Ground");
   await guestForm
     .getByLabel("Landmark or additional details")
     .fill("Public test landmark");
+  // Returning from an unchanged pin without another lookup must keep autofill
+  // and typed details. A fresh lookup must not overwrite user edits either.
+  const beforeReopen = requests.length;
+  await guestForm.getByRole("button", { name: "Update location pin" }).click();
+  await guestPicker
+    .getByRole("button", { name: "Enter address manually" })
+    .click();
+  assert.equal(requests.length, beforeReopen);
+  await expect(guestForm.getByLabel("City", { exact: true })).toHaveValue(
+    "Delhi",
+  );
+  await expect(guestForm.getByLabel("Postal code")).toHaveValue("110001");
+  await guestForm.getByRole("button", { name: "Update location pin" }).click();
+  await guestPicker
+    .getByRole("button", { name: "Use current location", exact: true })
+    .click();
+  await expect(
+    guestPicker.getByRole("heading", { name: "Connaught Place" }),
+  ).toBeVisible();
+  await guestPicker
+    .getByRole("button", { name: "Enter address manually" })
+    .click();
+  await expect(guestForm.getByLabel("House / flat / building")).toHaveValue(
+    "QA unit 4",
+  );
+  await expect(guestForm.getByLabel("Street / area")).toHaveValue(
+    "Test Street 8, Connaught Place",
+  );
+  await expect(guestForm.getByLabel("Floor (optional)")).toHaveValue("Ground");
+  await expect(
+    guestForm.getByLabel("Landmark or additional details"),
+  ).toHaveValue("Public test landmark");
   await guestForm
     .getByRole("button", { name: "Use this address", exact: true })
     .click();
@@ -600,8 +699,14 @@ try {
   );
   assert.equal(Number(savedGuest.latitude), point.latitude);
   assert.equal(Number(savedGuest.longitude), point.longitude);
-  assert.equal(savedGuest.line1, "QA unit 4, Connaught Place");
+  assert.equal(savedGuest.line1, "QA unit 4, Test Street 8, Connaught Place");
   assert.equal(savedGuest.line2, "Floor: Ground, Public test landmark");
+  await guestPage.goto(`${base}/privacy#location`);
+  await expect(
+    guestPage
+      .locator("#location")
+      .getByRole("link", { name: "Search by LocationIQ" }),
+  ).toHaveAttribute("href", "https://locationiq.com/");
   await guest.close();
   responseMode = "ready";
   // Nearby discovery must use the same bounded location acquisition.
@@ -643,7 +748,17 @@ try {
   await silentPicker
     .getByRole("button", { name: "Try again", exact: true })
     .click();
-  await silentPicker.getByRole("button", { name: "Close dialog" }).click();
+  await silentPicker
+    .getByRole("button", { name: "Enter address manually" })
+    .click();
+  const emptyManual = silentPage.getByRole("dialog", {
+    name: "Where should we bring your food?",
+  });
+  await expect(emptyManual.getByLabel("Street / area")).toHaveValue("");
+  await expect(emptyManual.getByLabel("City", { exact: true })).toHaveValue("");
+  await expect(
+    emptyManual.getByRole("button", { name: "Use my current location" }),
+  ).toBeVisible();
   assert.equal(await silentPage.evaluate(() => window.locationWatchClears), 2);
   await silent.close();
   responseMode = "ready";

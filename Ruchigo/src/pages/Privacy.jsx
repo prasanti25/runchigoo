@@ -195,14 +195,40 @@ const sections = [
         </p>
         <p>
           Choosing Use my current location opens the address map and sends the
-          detected pin through RuchiGo to LocationIQ, when configured, to look
-          up a street address. After moving the pin, choose Find address for
-          this pin to request a new lookup. The provider receives coordinates,
-          not your account, order or typed flat details. Lookup results may be
-          cached for up to 24 hours using a hashed coordinate key. Confirm the
-          address before saving; GPS cannot reliably identify a flat, floor or
-          exact entrance. You can keep a pin and fill in missing details if
-          lookup is unavailable.
+          detected pin through RuchiGo to the configured address provider
+          (Google Maps or LocationIQ) to look up a street address. After moving
+          the pin, choose Find address for this pin to request a new lookup. The
+          provider receives coordinates, not your account, order or typed flat
+          details. LocationIQ lookup results may be cached for up to 24 hours
+          using a hashed coordinate key. Google address suggestions are not
+          cached by the lookup endpoint. Confirm the address before saving; GPS
+          cannot reliably identify a flat, floor or exact entrance. You can keep
+          a pin and fill in missing details if lookup is unavailable.
+        </p>
+        <p>
+          When Google address lookup is enabled, the address selector uses a
+          Google map. Google receives connection information and the map area
+          you view. Its map controls, branding and attribution remain visible. A
+          suggested house number may identify a nearby building, not your flat;
+          review and correct all filled-in details before saving. User-confirmed
+          delivery details are saved only when you choose to save the address.
+          The live rider map also uses Google when configured. See{" "}
+          <a
+            href="https://policies.google.com/privacy"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Google’s Privacy Policy
+          </a>{" "}
+          and{" "}
+          <a
+            href="https://maps.google.com/help/terms_maps/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Google Maps terms
+          </a>
+          .
         </p>
         <p>
           The delivery selector does not use IP/network-based city guesses.
@@ -215,16 +241,27 @@ const sections = [
           connection and browser permission. Stopping sharing stops new updates;
           it does not delete a coordinate already recorded with the delivery.
           Opening the live map can send the partner’s recently shared pin
-          through RuchiGo to LocationIQ to identify the nearby road/locality.
-          This separate lookup does not generate or predict GPS positions. Road
-          labels refresh less frequently than GPS and disappear when too old or
-          too far from the current pin. Updates are not guaranteed while a
-          device is offline or the delivery page is closed.
+          through RuchiGo to Google or LocationIQ to identify the nearby
+          road/locality. This separate lookup does not generate or predict GPS
+          positions. Road labels refresh less frequently than GPS and disappear
+          when too old or too far from the current pin. Updates are not
+          guaranteed while a device is offline or the delivery page is closed.
+        </p>
+        <p>
+          When Google routing is enabled, opening live tracking also sends the
+          partner’s shared coordinates and the current leg’s destination pin
+          (restaurant before pickup, delivery address after pickup) to Google
+          through RuchiGo. Names, phone numbers, order contents and typed flat
+          details are not included. Road routes and travel estimates are not
+          stored in RuchiGo’s database or application cache. Estimates exclude
+          live traffic and can change with GPS accuracy, stops and road access.
+          The labelled delivery demo uses public example pins, not your address,
+          and never places or changes an order.
         </p>
         <p>
           The in-app map loads after you choose Show live map or explicitly open
-          the delivery-address map. Map tiles are supplied by OpenStreetMap by
-          default, or the operator’s configured tile provider. The provider
+          the delivery-address map. Maps use Google when configured, otherwise
+          OpenStreetMap or the operator’s configured tile provider. The provider
           receives your IP address, site origin and requested map area. Location
           markers are drawn in your browser; exact order records are not sent to
           the tile provider. Tiles can still reveal the approximate area being
@@ -232,6 +269,13 @@ const sections = [
           follow order status without opening it. External Google Maps
           directions separately share the destination query with Google. Browser
           settings let you revoke location permission.
+        </p>
+        <p>
+          Address lookup credit:{" "}
+          <a href="https://locationiq.com/" target="_blank" rel="noreferrer">
+            Search by LocationIQ
+          </a>
+          . Map data credits remain visible on each map.
         </p>
       </>
     ),

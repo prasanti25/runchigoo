@@ -1,5 +1,28 @@
 # Tracking and desktop experience — 22 September 2026
 
+## 23 September update — Google delivery map
+
+Current address and rider maps use the configured Google Maps JavaScript key.
+The separate server key handles Geocoding and Routes API; only the restricted
+browser key is public. Owned live GPS reads run independently every second;
+fresh owned road routes refresh every 30 seconds, targeting the kitchen before
+pickup and the saved order-address snapshot after pickup. Routes use DRIVE
+without live traffic, so travel estimates are not exact arrival guarantees.
+The original scooter is drawn with Google OverlayView at a centre anchor and
+rotated to road bearing. Close GPS points may match the road within 25m; large,
+off-route, stale or missing updates are not fabricated. Stale age is now 15s.
+
+The labelled, read-only `/demo/delivery` is intentionally available in production
+at the user's request. Two freshly requested Google road legs between public
+example pins drive its accelerated 50-second replay. It never calls real order
+endpoints or requests device GPS. Google map branding remains visible; fullscreen
+keeps its ETA, recenter and native zoom/pinch controls. The app does not store
+Google route responses in its database/cache or provide historical rider traces.
+See README and VERIFICATION_REPORT for current configuration and test evidence.
+
+The remainder of this file records the **22 September OSM implementation** and
+its then-current release state; it is not a description of the Google upgrade.
+
 The supplied Zomato screenshots are interaction references, not assets to copy or a request to turn the desktop website into a phone layout. RuchiGo retains its supplied brand logo. Food photography is drawn from the existing menu catalog; no invented prices, reviews, offers or route positions are added.
 
 ## Research used

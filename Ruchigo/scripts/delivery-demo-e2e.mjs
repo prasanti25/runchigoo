@@ -26,7 +26,13 @@ for (const stage of demoStages)
   );
 assert.equal(deliveryDemoFrame(6, Date.now()).order.delivery, null);
 const acceptance = deliveryDemoFrame(demoPlan.assignmentAt, Date.now());
-assert.deepEqual([acceptance.order.delivery.current_latitude, acceptance.order.delivery.current_longitude], demoPickupRoute[0]);
+assert.deepEqual(
+  [
+    acceptance.order.delivery.current_latitude,
+    acceptance.order.delivery.current_longitude,
+  ],
+  demoPickupRoute[0],
+);
 assert.notDeepEqual(demoPickupRoute[0], demoRoute[0]);
 assert.deepEqual(demoPickupRoute.at(-1), demoRoute[0]);
 assert.equal(deliveryDemoFrame(demoPlan.pickedUpAt, Date.now()).progress, 0);
@@ -34,7 +40,10 @@ assert.equal(deliveryDemoFrame(demoPlan.deliveredAt, Date.now()).etaMinutes, 0);
 let previousEta = Infinity;
 for (let elapsed = 0; elapsed <= demoPlan.deliveredAt; elapsed++) {
   const value = deliveryDemoFrame(elapsed, Date.now());
-  assert.ok(value.remainingSeconds <= previousEta, "ETA counts down from route/prep/pickup durations");
+  assert.ok(
+    value.remainingSeconds <= previousEta,
+    "ETA counts down from route/prep/pickup durations",
+  );
   previousEta = value.remainingSeconds;
 }
 assert.match(deliveryStageMessage("pending")[0], /kitchen/);
@@ -54,6 +63,37 @@ function monitor(page) {
 }
 monitor(page);
 const base = "http://127.0.0.1:5173";
+// Keep the prior renderer's regression independent of live Google keys.
+// Real Google maps/routes are tested by test:delivery-google.
+async function osmFixture(page) {
+  await page.route("**/location/map-config/?purpose=delivery", (route) =>
+    route.fulfill({
+      json: {
+        tile_url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attribution: "© OpenStreetMap contributors",
+        attribution_url: "https://www.openstreetmap.org/copyright",
+        provider: "OpenStreetMap",
+      },
+    }),
+  );
+  await page.route("**/location/demo-route/", (route) =>
+    route.fulfill({
+      json: {
+        simulated: true,
+        pickup: {
+          points: demoPickupRoute,
+          duration_seconds: demoPlan.pickupRouteSeconds,
+          distance_metres: 1801.4,
+        },
+        delivery: {
+          points: demoRoute,
+          duration_seconds: demoPlan.deliveryRouteSeconds,
+          distance_metres: 1560,
+        },
+      },
+    }),
+  );
+}
 async function fits(page) {
   assert.ok(
     await page.evaluate(
@@ -63,6 +103,7 @@ async function fits(page) {
   );
 }
 try {
+  await osmFixture(page);
   await page.goto(base + "/demo/delivery", { waitUntil: "networkidle" });
   await expect(
     page.getByRole("button", { name: "Watch delivery" }),
@@ -88,11 +129,26 @@ try {
     console.log(`Automatic stage: ${status}`);
   }
   const rider = page.locator(".ruchigo-rider-marker");
-  assert.ok(Math.abs(Number(await rider.getAttribute("data-latitude")) - demoRoute[0][0]) > .003, "Rider accepts away from the kitchen, not at it");
+  assert.ok(
+    Math.abs(
+      Number(await rider.getAttribute("data-latitude")) - demoRoute[0][0],
+    ) > 0.003,
+    "Rider accepts away from the kitchen, not at it",
+  );
   await expect.poll(() => rider.getAttribute("class")).toMatch(/is-moving/);
-  await page.screenshot({ path: "/private/tmp/ruchigo-rider-to-kitchen.png", fullPage: false });
-  for (const status of ["ready", "at_restaurant", "picked_up", "out_for_delivery"]) {
-    await expect(layout).toHaveAttribute("data-demo-status", status, { timeout: 15000 });
+  await page.screenshot({
+    path: "/private/tmp/ruchigo-rider-to-kitchen.png",
+    fullPage: false,
+  });
+  for (const status of [
+    "ready",
+    "at_restaurant",
+    "picked_up",
+    "out_for_delivery",
+  ]) {
+    await expect(layout).toHaveAttribute("data-demo-status", status, {
+      timeout: 15000,
+    });
     console.log(`Automatic stage: ${status}`);
   }
   await expect(rider).toBeVisible();
@@ -134,9 +190,7 @@ try {
   await expect(dialog).toBeVisible();
   await expect(page.locator(".delivery-map-pin.home")).toBeInViewport();
   await expect(rider).toBeInViewport();
-  await expect(
-    dialog.getByText("Local demo · simulated delivery"),
-  ).toBeVisible();
+  await expect(dialog.getByText("Demo · simulated delivery")).toBeVisible();
   const box = await map.boundingBox();
   assert.ok(box.width >= 1439 && box.height >= 1049, "Map fills viewport");
   const initialZoom = Number(await map.getAttribute("data-zoom"));
@@ -188,6 +242,7 @@ try {
     reducedMotion: "reduce",
   });
   monitor(mobile);
+  await osmFixture(mobile);
   await mobile.goto(base + "/demo/delivery", { waitUntil: "networkidle" });
   await mobile.clock.install();
   await mobile.getByRole("button", { name: "Watch delivery" }).click();
@@ -253,18 +308,62 @@ try {
   // Render the production map with an unpinned pending-order fixture. No
   // authenticated requests or changes to the user's real pending order.
   await page.evaluate(async () => {
-    const { default: React } = await import("/node_modules/.vite/deps/react.js");
-    const { default: ReactDOM } = await import("/node_modules/.vite/deps/react-dom_client.js");
-    const { default: LiveDeliveryMap } = await import("/src/components/product/LiveDeliveryMap.jsx");
+    const { default: React } =
+      await import("/node_modules/.vite/deps/react.js");
+    const { default: ReactDOM } =
+      await import("/node_modules/.vite/deps/react-dom_client.js");
+    const { default: LiveDeliveryMap } =
+      await import("/src/components/product/LiveDeliveryMap.jsx");
+    // Reuse Vite's exact versioned router module; an unversioned direct import
+    // creates a second router context and is not representative of the app.
+    const authModule = await (
+      await fetch("/src/context/AuthContext.jsx")
+    ).text();
+    const routerModule = authModule.match(
+      /["']([^"']*\/react-router-dom\.js(?:\?[^"']*)?)["']/,
+    )[1];
+    const { BrowserRouter } = await import(routerModule);
+    const { AuthProvider } = await import("/src/context/AuthContext.jsx");
+    const { NotificationProvider } =
+      await import("/src/context/NotificationContext.jsx");
     const container = document.createElement("div");
     container.id = "pending-map-fixture";
     document.body.prepend(container);
-    ReactDOM.createRoot(container).render(React.createElement(LiveDeliveryMap, { order: { id: "fixture-no-write", status: "pending", restaurant_detail: {}, delivery_address_detail: {} } }));
+    ReactDOM.createRoot(container).render(
+      React.createElement(
+        BrowserRouter,
+        null,
+        React.createElement(
+          NotificationProvider,
+          null,
+          React.createElement(
+            AuthProvider,
+            null,
+            React.createElement(LiveDeliveryMap, {
+              order: {
+                id: "fixture-no-write",
+                status: "pending",
+                restaurant_detail: {},
+                delivery_address_detail: {},
+              },
+            }),
+          ),
+        ),
+      ),
+    );
   });
-  await expect(page.locator("#pending-map-fixture .delivery-stage-empty")).toContainText("Waiting for the kitchen");
-  await expect(page.locator("#pending-map-fixture .delivery-leaflet-map")).toHaveCount(0);
-  await expect(page.locator("#pending-map-fixture")).not.toContainText("Waiting for a location");
-  passed.push("Real tracking component: pending unpinned order gets kitchen status, not a blank map or fabricated GPS");
+  await expect(
+    page.locator("#pending-map-fixture .delivery-stage-empty"),
+  ).toContainText("Waiting for the kitchen");
+  await expect(
+    page.locator("#pending-map-fixture .delivery-leaflet-map"),
+  ).toHaveCount(0);
+  await expect(page.locator("#pending-map-fixture")).not.toContainText(
+    "Waiting for a location",
+  );
+  passed.push(
+    "Real tracking component: pending unpinned order gets kitchen status, not a blank map or fabricated GPS",
+  );
   assert.deepEqual(writes, [], "The demo makes no server writes");
   assert.deepEqual(errors, [], "No browser errors");
   console.log(

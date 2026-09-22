@@ -26,6 +26,7 @@ export default function AddressForm({
 }) {
   const { token } = useAuth();
   const selectedLocation = useDeliveryLocation();
+  const suggestedLocation = prefill || selectedLocation;
   const [form, setForm] = useState(
     () => initial || addressDraft(prefill || selectedLocation),
   );
@@ -33,8 +34,15 @@ export default function AddressForm({
   const [error, setError] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pinUpdated, setPinUpdated] = useState(false);
-  const [house, setHouse] = useState("");
+  const [house, setHouse] = useState(() =>
+    !initial && suggestedLocation.confirmed
+      ? suggestedLocation.house_number || ""
+      : "",
+  );
   const [floor, setFloor] = useState("");
+  const [addressProvider, setAddressProvider] = useState(() =>
+    suggestedLocation.confirmed ? suggestedLocation.provider || "" : "",
+  );
   // Existing free-form addresses remain editable without guessing how to split
   // a user's previously saved house/street/floor text.
   const separateDetails = !initial;
@@ -43,6 +51,25 @@ export default function AddressForm({
   const change = (key, value) => {
     editedFields.current.add(key);
     setForm((current) => ({ ...current, [key]: value }));
+  };
+  const receiveLocation = (location) => {
+    if (location) {
+      const detected = addressDraft(location);
+      setForm((current) => ({
+        ...current,
+        ...Object.fromEntries(
+          Object.entries(detected).filter(
+            ([key]) => key !== "label" && !editedFields.current.has(key),
+          ),
+        ),
+      }));
+      setPinUpdated(true);
+      if (!initial && !editedFields.current.has("house_number"))
+        setHouse(location.house_number || "");
+      setAddressProvider(location.provider || "");
+      setError("");
+    }
+    setPickerOpen(false);
   };
   const save = async (event) => {
     event.preventDefault();
@@ -84,23 +111,11 @@ export default function AddressForm({
         }
       >
         <AddressLocationPicker
-          initial={form}
+          initial={{ ...form, house_number: house, provider: addressProvider }}
           autoLocate={!locationPoint(form)}
           onClose={() => setPickerOpen(false)}
-          onConfirm={(location) => {
-            const detected = addressDraft(location);
-            setForm((current) => ({
-              ...current,
-              ...Object.fromEntries(
-                Object.entries(detected).filter(
-                  ([key]) => key !== "label" && !editedFields.current.has(key),
-                ),
-              ),
-            }));
-            setPinUpdated(true);
-            setError("");
-            setPickerOpen(false);
-          }}
+          onConfirm={receiveLocation}
+          onManual={receiveLocation}
         />
       </Suspense>
     );
@@ -153,10 +168,14 @@ export default function AddressForm({
                 value={house}
                 maxLength={90}
                 placeholder="e.g. Flat 204, Rose Apartments"
-                onChange={(event) => setHouse(event.target.value)}
+                onChange={(event) => {
+                  editedFields.current.add("house_number");
+                  setHouse(event.target.value);
+                }}
               />
               <small className="form-help">
-                Required for delivery. This cannot be detected from the map.
+                Required for delivery. Check any filled-in number and add your
+                flat or building details.
               </small>
             </label>
             <label className="field">
@@ -208,6 +227,11 @@ export default function AddressForm({
           ))}
         </div>
         <ErrorNotice error={error} />
+        {addressProvider === "google" && (
+          <p className="form-help" translate="no">
+            Google Maps
+          </p>
+        )}
         <button className="btn primary" disabled={saving}>
           {saving
             ? "Saving address…"

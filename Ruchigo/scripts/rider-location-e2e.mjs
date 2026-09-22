@@ -5,8 +5,13 @@ import { chromium, expect } from "@playwright/test";
 import { locationFreshness, nearbyRiderPlace } from "../src/lib/tracking.js";
 
 // Explicit local fixture only. Real browser GPS-write API, owned GPS-read API
-// and LocationIQ; device fixes are controlled at a public landmark.
+// and configured real map/geocoder; device fixes are controlled at a public landmark.
 const base = "http://127.0.0.1:5173";
+const mapConfig = await (
+  await fetch(`${base}/api/v1/location/map-config/?purpose=delivery`)
+).json();
+const google = mapConfig.engine === "google";
+const receivedLatitude = google ? "data-received-latitude" : "data-latitude";
 const marker = `rider-live-${randomUUID()}`;
 const password = `Local-rider-${randomUUID()}`;
 const env = {
@@ -148,24 +153,50 @@ try {
     .click();
   assert.equal((await sent).status(), 200);
   const gpsReads = [];
+  const roadReads = [];
   customer.page.on("response", (response) => {
     if (
       response.url().endsWith(`/orders/${fixture.order}/live-location/`) &&
       response.ok()
     )
       gpsReads.push(Date.now());
+    if (
+      response.url().includes(`/orders/${fixture.order}/road-route/`) &&
+      response.ok()
+    )
+      response.json().then((data) => roadReads.push(data));
   });
   await customer.page.goto(`${base}/tracking/${fixture.order}`);
   await customer.page
     .getByRole("button", { name: "Show live map", exact: true })
     .click();
   const markerNode = customer.page.locator(".ruchigo-rider-marker");
-  await expect(markerNode).toHaveAttribute("data-latitude", "28.6315");
+  await expect(markerNode).toHaveAttribute(receivedLatitude, "28.6315", {
+    timeout: 25000,
+  });
   await expect(customer.page.locator(".rider-place-status")).toContainText(
-    "Connaught Place",
+    /Near .+/,
     { timeout: 20000 },
   );
   await expect.poll(() => gpsReads.length).toBeGreaterThan(2);
+  if (google) {
+    await expect(
+      customer.page.locator(".google-delivery-map-wrap"),
+    ).toHaveAttribute("data-map-state", "ready");
+    await expect
+      .poll(() =>
+        roadReads.some(
+          (data) =>
+            data.status === "ready" &&
+            data.leg === "pickup" &&
+            data.route?.provider === "google",
+        ),
+      )
+      .toBe(true);
+    await expect(
+      customer.page.locator(".delivery-status-arrival"),
+    ).toContainText("Kitchen in about");
+  }
   const started = Date.now();
   const changed = rider.page.waitForResponse(
     (response) =>
@@ -174,7 +205,7 @@ try {
   );
   await rider.page.evaluate(() => window.emitRiderGPS(28.63165, 77.21685));
   assert.equal((await changed).status(), 200);
-  await expect(markerNode).toHaveAttribute("data-latitude", "28.63165", {
+  await expect(markerNode).toHaveAttribute(receivedLatitude, "28.63165", {
     timeout: 5000,
   });
   const observedDelayMs = Date.now() - started;
@@ -208,7 +239,9 @@ try {
   await customer.page
     .getByRole("button", { name: "Show live map", exact: true })
     .click();
-  await expect(markerNode).toHaveAttribute("data-latitude", "28.63165");
+  await expect(markerNode).toHaveAttribute(receivedLatitude, "28.63165", {
+    timeout: 25000,
+  });
   await expect(customer.page.locator(".rider-place-status")).toContainText(
     "Live GPS connected",
   );
@@ -222,6 +255,12 @@ try {
   await expect(customer.page.locator(".rider-place-status")).toContainText(
     "Waiting for your partner’s GPS",
   );
+  if (google) {
+    await expect(customer.page.locator(".delivery-status-arrival")).toHaveCount(
+      0,
+    );
+    await expect(markerNode).toHaveCSS("opacity", "0.55");
+  }
   // Mark only this controlled fixture complete; no real order is modified.
   db(
     `from api.models import Order; count=Order.objects.filter(pk=payload['order'],customer_id=payload['customer'],restaurant_id=payload['restaurant']).update(status='delivered'); print(json.dumps({'updated':count}))`,
@@ -235,7 +274,9 @@ try {
         "House/floor visible to rider; both directions use saved coordinates",
         "Real opt-in rider browser writes",
         "Owned lightweight GPS channel",
-        "Real LocationIQ road label",
+        google
+          ? "Real Google map, road route, ETA and nearby label"
+          : "Real LocationIQ road label",
         "Movement reaches map in under five seconds",
         "Provider failure does not stop GPS",
         "Stale sharing state",

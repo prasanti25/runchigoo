@@ -13,12 +13,14 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useRemote } from "../../lib/product.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import GoogleDeliveryMap from "./GoogleDeliveryMap.jsx";
 import {
   coordinates,
   deliveryStageMessage,
   locationFreshness,
   nearbyRiderPlace,
   positionOnRoute,
+  projectOnRoute,
   travelBearing,
 } from "../../lib/tracking.js";
 import riderArtwork from "../../../public/tracking/ruchigo-rider-map.svg?raw";
@@ -48,7 +50,7 @@ export default function LiveDeliveryMap({
   initiallyEnabled = false,
   route = null,
   mapLabel = "Delivery map",
-  arrival = null,
+  arrival: suppliedArrival = null,
   statusTitle = null,
   onStatusChange,
 }) {
@@ -93,7 +95,8 @@ export default function LiveDeliveryMap({
       : live.data.delivery
     : order.delivery;
   const rider =
-    ["assigned", "out_for_delivery"].includes(status) && !live.data?.paused
+    ["assigned", "out_for_delivery"].includes(status) &&
+    !(live.data?.paused ?? order.fulfillment_paused_at)
       ? coordinates(delivery?.current_latitude, delivery?.current_longitude)
       : null;
   const kitchen = coordinates(
@@ -115,8 +118,44 @@ export default function LiveDeliveryMap({
   const nearby = nearbyRiderPlace(places.data?.place, rider, now);
   const hasPoints = rider || kitchen || home;
   const config = useRemote(
-    enabled && hasPoints ? "/location/map-config/" : null,
+    enabled && hasPoints ? "/location/map-config/?purpose=delivery" : null,
   );
+  const roads = useRemote(
+    streaming && rider && freshness.fresh && config.data?.engine === "google"
+      ? `/orders/${order.id}/road-route/?stage=${status}`
+      : null,
+    token,
+    30000,
+  );
+  const road =
+    roads.data?.order_status === status &&
+    roads.data?.delivery_id === delivery?.id &&
+    now - Date.parse(roads.data?.route?.generated_at) < 45000 &&
+    freshness.fresh
+      ? roads.data?.route
+      : null;
+  const matched = road && projectOnRoute(road.points, rider);
+  const minutes = matched
+    ? Math.max(
+        1,
+        Math.ceil((road.duration_seconds * (1 - matched.progress)) / 60),
+      )
+    : null;
+  const arrival =
+    suppliedArrival ||
+    (minutes
+      ? {
+          headline:
+            status === "assigned"
+              ? `Kitchen in about ${minutes} min`
+              : `Arriving in about ${minutes} min`,
+          caption:
+            status === "assigned"
+              ? "Road estimate to restaurant · pickup follows"
+              : "Road estimate · traffic and stops may change arrival",
+        }
+      : null);
+  const displayedRoute = route || (road ? { points: road.points } : null);
   const [stageTitle, stageDescription] = deliveryStageMessage(status);
   return (
     <section
@@ -194,6 +233,18 @@ export default function LiveDeliveryMap({
         <div className="delivery-map-unavailable" role="status">
           Opening your map…
         </div>
+      ) : config.data.engine === "google" ? (
+        <GoogleDeliveryMap
+          key={order.id}
+          config={config.data}
+          kitchen={kitchen}
+          home={home}
+          rider={rider}
+          timestamp={delivery?.location_updated_at}
+          route={displayedRoute}
+          mapLabel={mapLabel}
+          arrival={arrival}
+        />
       ) : hasPoints ? (
         <MapCanvas
           key={order.id}
@@ -242,28 +293,35 @@ export default function LiveDeliveryMap({
                   {nearby
                     ? `${freshness.fresh ? "Near" : "Last shared near"} ${nearby}`
                     : freshness.fresh
-                      ? "Live GPS connected"
+                      ? route
+                        ? "Demo route playback"
+                        : "Live GPS connected"
                       : "Waiting for your partner’s GPS"}
                 </strong>
                 <small>
                   {live.error
                     ? "Connection interrupted. Showing the last received position."
                     : freshness.fresh
-                      ? "Position updates automatically while this map is open."
+                      ? route
+                        ? "Simulated rider · no real delivery is being tracked."
+                        : "Position updates automatically while this map is open."
                       : "The marker stays at the last shared position."}
                 </small>
               </div>
-              {nearby && (
-                <a
-                  href="https://locationiq.com/"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Search by LocationIQ
-                </a>
-              )}
             </div>
           )}
+          {enabled &&
+            !route &&
+            rider &&
+            freshness.fresh &&
+            config.data?.engine === "google" &&
+            !road && (
+              <small role="status">
+                {roads.loading
+                  ? "Finding the road route…"
+                  : "Road estimate unavailable. Showing your partner’s shared GPS."}
+              </small>
+            )}
           {enabled && !home && (
             <small>
               Your saved address has no map pin. Address details are shown

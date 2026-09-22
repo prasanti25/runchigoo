@@ -88,6 +88,34 @@ Saved selection is shared between the header and checkout; signing out clears
 precise address details from browser selection. Editing addresses does not alter
 past order snapshots. IPinfo is only a city hint, not a street-address lookup.
 
+### Optional Google address lookup
+
+The Google address renderer and server-side Geocoding adapter are implemented,
+but require **two different keys** in the backend environment:
+
+- `GOOGLE_MAPS_SERVER_API_KEY`: restrict to Geocoding API and Routes API; never expose it to
+  browser code. Apply server/network restrictions appropriate to your hosting.
+- `GOOGLE_MAPS_BROWSER_API_KEY`: restrict to Maps JavaScript API and your website
+  referrers (`http://localhost:5173/*`, `http://127.0.0.1:5173/*`, and your deployed
+  HTTPS origin). This public browser key is intentionally returned to the client.
+
+Enable billing and set quotas in the Google Cloud project. Budget alerts alone
+do not cap spending. Restart Django after updating local environment variables.
+Both keys must be present and different before the address map/lookup switches
+to Google. Without that pair, the existing LocationIQ/OpenStreetMap flow remains.
+The rider map also switches to Google. Owned-order road routing uses Routes API
+with the server key. Google results are never drawn on the fallback OSM map.
+The reverse endpoint does not cache Google suggestions. Suggested house numbers
+require a non-partial rooftop-level result and remain editable; interpolated
+numbers, missing flats and floors are not invented. Google map branding and the
+manual form's attribution are retained. No Places autocomplete is implemented
+by this increment, even if Places API is enabled in your project.
+
+`npm run test:address-google` uses mocked Google interfaces/results for UI and
+error handling. `npm run test:address-location:live` exercises the configured
+real provider and renderer at a public landmark. A real Google browser-key test
+is still required before claiming the Google map works on your deployed origin.
+
 For reverse geocoding, provision **server-side** `LOCATIONIQ_API_KEY` and optional
 `LOCATIONIQ_REGION=us1` (`eu1` is also supported). On Vercel, add the credential to
 Production environment settings and redeploy; locally set it in ignored
@@ -242,29 +270,36 @@ Other optimized photos derive from the existing local preview assets. Review all
 
 ## Production
 
-### Local delivery preview
+### Delivery preview and Google rider tracking
 
-Open **http://localhost:5173/demo/delivery** and select **Watch delivery**. The
+Open **/demo/delivery** locally or on the deployed site and select **Watch delivery**. The
 50-second replay automatically accepts, prepares, assigns, picks up and delivers
 a sample meal. No login or manual role switching is needed. It never creates or
 changes an order, payment, rating or delivery assignment. Real orders remain
 dependent on real kitchen/courier activity.
 
-The preview rider accepts from a separate starting location, follows a 1.80 km
-road leg to the kitchen while the meal is being prepared, waits for pickup,
-then follows a separate 1.56 km leg to the doorstep. Arrival estimates derive
-from the two recorded route durations, remaining preparation and pickup time;
-they are labelled accelerated simulation, not live traffic or exact promises.
-The top-down scooter has direction/tyre motion, a blue route, fullscreen controls
-and touch pinch zoom. Example road geometry is bundled from OSRM/OpenStreetMap;
-third-party tiles load only after starting. It does not request device GPS.
-The route/module is excluded from production builds. Run
-`npm run test:delivery-demo` for the automated desktop/mobile replay checks.
+The preview fetches two real Google road legs between fixed public example pins:
+partner acceptance location → kitchen, then kitchen → sample doorstep. No real
+order or device location is involved. Route geometry, distances and travel
+durations are fetched for each page session, not hardcoded. The 50-second timeline
+is intentionally accelerated; its displayed estimates exclude live traffic.
+If routing fails, the preview shows retry rather than inventing a road path.
 
-This is **OpenStreetMap, not Google Maps**. A Google Maps renderer and a properly
-restricted Maps JavaScript API key/billing setup are still needed for that
-provider. Do not reuse the server-side Gemini key or copy undocumented Google
-tile endpoints. See [tracking notes](TRACKING_DESIGN_NOTES.md).
+Actual orders use `/orders/:id/live-location/` for one-second GPS reads and a
+separate owned `/orders/:id/road-route/` request every 30 seconds while GPS is
+fresh. Pickup routing targets the restaurant; delivery routing uses the order's
+address snapshot. No route is requested for stale, inactive or paused deliveries.
+The scooter interpolates only received fresh GPS samples, matching to the shown
+road within 25 metres; off-route GPS is not pulled across buildings. GPS accuracy
+is device-dependent. Estimates are driving-road estimates without live traffic,
+not two-wheeler optimization, exact arrival promises, or recorded travel history.
+Google route results are not stored in the application cache/database. Native
+map attribution, expand/recenter, zoom and reduced-motion support are retained.
+
+Run `npm run test:delivery-google` for actual Google desktop/mobile demo acceptance
+and `npm run test:rider-location` for local opt-in courier writes, owned GPS reads,
+route estimates, stale state and completion. `test:delivery-demo` retains the OSM
+fallback checks with explicit fixtures. See [tracking notes](TRACKING_DESIGN_NOTES.md).
 
 Release `8220e3e` (People, logo loading and non-veg conversation) followed `28a191e` on `prasanti25/runchigoo` main and was manually deployed at https://runchigoo.vercel.app. Its actual-provider production chat test passed. Vercel's Git link remains connected to a different repository; align it before relying on automatic deployments. Production migrations through 0022 were applied after an isolated backup/restore rehearsal, preserving existing users/orders and other pre-existing application rows.
 

@@ -13,7 +13,7 @@ from .geocoding import address_fields, reverse_address
 from .models import User
 
 
-@override_settings(LOCATIONIQ_API_KEY="location-fixture-secret", LOCATIONIQ_REGION="us1")
+@override_settings(LOCATIONIQ_API_KEY="location-fixture-secret", LOCATIONIQ_REGION="us1", GOOGLE_MAPS_SERVER_API_KEY="", GOOGLE_MAPS_BROWSER_API_KEY="")
 class GeocodingTests(APITestCase):
     path = "/api/v1/location/reverse/"
     point = {"latitude": "28.631500", "longitude": "77.216700", "consent": True}

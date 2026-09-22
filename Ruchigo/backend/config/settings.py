@@ -107,6 +107,10 @@ IPINFO_TOKEN = os.getenv("IPINFO_TOKEN", "")
 # Gemini/IPinfo or VITE_* keys.
 LOCATIONIQ_API_KEY = os.getenv("LOCATIONIQ_API_KEY", "")
 LOCATIONIQ_REGION = os.getenv("LOCATIONIQ_REGION", "us1")
+GOOGLE_MAPS_SERVER_API_KEY = os.getenv("GOOGLE_MAPS_SERVER_API_KEY", "")
+# A DIFFERENT, website-restricted Maps JavaScript key; only this key is public.
+# Address and rider renderers switch to Google when both distinct keys are present.
+GOOGLE_MAPS_BROWSER_API_KEY = os.getenv("GOOGLE_MAPS_BROWSER_API_KEY", "")
 # Only set to the network ranges of a reverse proxy you operate/trust.
 IPINFO_TRUSTED_PROXY_CIDRS = [value.strip() for value in os.getenv("IPINFO_TRUSTED_PROXY_CIDRS", "").split(",") if value.strip()]
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")

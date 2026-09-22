@@ -35,12 +35,14 @@ def live_location(order):
 
 
 def rider_place(order):
+    from .google_geocoding import google_address_enabled, google_reverse_address
     live = live_location(order)
     if live["status"] != "live":
         return {"status": live["status"], "place": None}
     delivery = order.delivery
-    key = f"rider-place:v1:{delivery.pk}"
-    cached = cache.get(key)
+    google = google_address_enabled()
+    key = f"rider-place:v1:{delivery.pk}" + (":google" if google else "")
+    cached = None if google else cache.get(key)
     if cached:
         return cached
     # Prevent duplicate lookups from concurrent viewers in this cache worker.
@@ -50,7 +52,8 @@ def rider_place(order):
     if not cache.add(lock, True, 10):
         return {"status": "pending", "place": None}
     try:
-        fields, status = reverse_address(delivery.current_latitude, delivery.current_longitude)
+        lookup = google_reverse_address if google else reverse_address
+        fields, status = lookup(delivery.current_latitude, delivery.current_longitude)
         if fields and (fields.get("line1") or fields.get("locality")):
             parts = list(dict.fromkeys(value for value in [fields.get("line1"), fields.get("locality")] if value))
             result = {"status": "ready", "place": {"label": ", ".join(parts), "city": fields.get("city", ""),
@@ -58,7 +61,8 @@ def rider_place(order):
                       "looked_up_at": timezone.now().isoformat(), "attribution": fields["attribution"]}}
         else:
             result = {"status": status if status != "ready" else "unavailable", "place": None}
-        cache.set(key, result, 30)
+        if not google:
+            cache.set(key, result, 30)
         return result
     finally:
         cache.delete(lock)
