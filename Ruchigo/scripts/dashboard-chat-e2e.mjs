@@ -27,7 +27,8 @@ async function api(path, { token, method = "GET", body, expected } = {}) {
   assert.equal(
     response.status,
     expected ||
-      (method === "POST" && ["/cart/checkout/", "/cart/items/", "/users/"].includes(path)
+      (method === "POST" &&
+      ["/cart/checkout/", "/cart/items/", "/users/"].includes(path)
         ? 201
         : 200),
     `${path}: ${JSON.stringify(data)}`,
@@ -125,6 +126,7 @@ try {
   await expect(page.locator(".people-table")).toContainText(
     "Dashboard QA edited",
   );
+  await page.getByRole("button", { name: /More actions for/ }).click();
   await page.getByRole("button", { name: "Block access", exact: true }).click();
   await page
     .getByRole("dialog")
@@ -134,6 +136,7 @@ try {
     .getByRole("button", { name: "Confirm block", exact: true })
     .click();
   await expect(page.locator(".people-table")).toContainText("Inactive");
+  await page.getByRole("button", { name: /More actions for/ }).click();
   await page
     .getByRole("button", { name: "Restore access", exact: true })
     .click();
@@ -309,8 +312,15 @@ try {
 } finally {
   if (cartItemId && customer?.token) {
     const cart = await api("/cart/", { token: customer.token });
-    if (cart.items.length === 1 && cart.items[0].id === cartItemId && cart.items[0].quantity === 1) {
-      await api(`/cart/items/${cartItemId}/`, { token: customer.token, method: "DELETE" });
+    if (
+      cart.items.length === 1 &&
+      cart.items[0].id === cartItemId &&
+      cart.items[0].quantity === 1
+    ) {
+      await api(`/cart/items/${cartItemId}/`, {
+        token: customer.token,
+        method: "DELETE",
+      });
     }
   }
   if (createdUser?.id && createdUser.email === `${marker}@example.test`) {

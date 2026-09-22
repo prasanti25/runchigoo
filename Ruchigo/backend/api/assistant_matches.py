@@ -1,4 +1,5 @@
 """Explain an empty shortlist using catalog facts, never invented availability."""
+import re
 from django.db.models import Q
 
 from .menu_options import minimum_item_price
@@ -8,12 +9,20 @@ from .recommendations import craving_terms
 
 def match_craving(items, query):
     included, excluded = craving_terms(query)
+    # "chicken pizza" means pizza containing chicken, not pizza OR any chicken
+    # dish. Explicit "chicken or paneer" remains an alternatives request.
+    ingredients = [term for term in included if term in ("chicken", "paneer")]
+    dishes = [term for term in included if term not in ingredients]
+    if ingredients and dishes and not re.search(r"\b(?:chicken|paneer)\s+or\s|\bor\s+(?:chicken|paneer)\b", query, re.I):
+        for ingredient in ingredients:
+            items = items.filter(Q(name__icontains=ingredient) | Q(description__icontains=ingredient))
+        included = dishes
     for terms, exclude in [(included, False), (excluded, True)]:
         if not terms:
             continue
         condition = Q()
         for term in terms:
-            condition |= Q(name__icontains=term) | Q(description__icontains=term) | Q(category__name__icontains=term)
+            condition |= Q(name__icontains=term) | Q(category__name__icontains=term)
         items = items.exclude(condition) if exclude else items.filter(condition)
     return items
 
@@ -48,6 +57,8 @@ def empty_shortlist(filters):
             return {"reply": f"The available {food} options{where} start at ₹{min(prices):g} per dish, before extras and delivery. Your current budget is ₹{filters['budget']:g}. Try a higher budget or a different dish.", "actions": [], "links": [{"label": "Review saved preferences", "to": "/for-you?tab=taste"}], "no_match_reason": "budget"}
 
     restrictions = list(filters.get("dietary_tags", []))
+    if filters.get("non_vegetarian"):
+        restrictions.append("non-vegetarian")
     if filters.get("vegetarian") and not restrictions:
         restrictions.append("vegetarian")
     qualifier = f" with your {' / '.join(restrictions)} preference" if restrictions else ""

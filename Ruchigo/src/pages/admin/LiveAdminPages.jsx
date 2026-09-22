@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import LoadingScreen from "../../components/common/LoadingScreen.jsx";
 import BusinessInsights from "../../components/product/BusinessInsights.jsx";
 import OrderOperations from "../../components/product/OrderOperations.jsx";
 import RefundStatus from "../../components/product/RefundStatus.jsx";
@@ -40,9 +41,7 @@ function AdminFrame({ title, subtitle, children }) {
 function Notice({ loading, error, empty }) {
   if (loading)
     return (
-      <p className="rounded-2xl bg-white p-6 text-gray-500">
-        Loading live data…
-      </p>
+      <LoadingScreen inline message="Loading your workspace…" />
     );
   if (error)
     return <p className="rounded-2xl bg-red-50 p-6 text-red-700">{error}</p>;

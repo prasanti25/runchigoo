@@ -1,4 +1,5 @@
 import { useState } from "react";
+import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import { Eye, EyeOff, Search, Star } from "lucide-react";
 import toast from "react-hot-toast";
 import { WorkspaceFrame } from "../components/product/Workspace.jsx";
@@ -97,9 +98,7 @@ export default function OperationsWorkspace({ reviews = false }) {
       </form>
       <ErrorNotice error={remote.error} onRetry={remote.reload} />
       {remote.loading && (
-        <p className="muted" role="status">
-          Loading records…
-        </p>
+        <LoadingScreen inline message="Loading records…" />
       )}
       {reviews ? (
         <div className="kitchen-grid">

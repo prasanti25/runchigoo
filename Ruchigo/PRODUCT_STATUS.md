@@ -1,9 +1,9 @@
 # RuchiGo product comparison and handoff
 
-Updated 22 September 2026. This compares the supplied Swiggy/Zomato-style feature list with the active code; it is not a claim of parity with either live service.
+Updated 23 September 2026. This compares the supplied Swiggy/Zomato-style feature list with the active code; it is not a claim of parity with either live service.
 
 Release storage/rollout notes are in [DATA_STORAGE.md](DATA_STORAGE.md). The
-260-test backend regression suite now passes on isolated PostgreSQL, including
+273-test backend regression suite now passes on isolated PostgreSQL, including
 restored-database migration rehearsal; production load/concurrency certification
 remains outstanding. Earlier local-only deployment references below are
 historical checkpoints, not evidence of the current Vercel alias.
@@ -16,7 +16,14 @@ The original code already contained JWT/password/email-OTP authentication, role 
 
 ## Comparison against the supplied scope
 
-See [FEATURE_MATRIX.md](FEATURE_MATRIX.md) for all 300 numbered entries, including duplicates: **145 implemented within the recorded scope, 76 partial, 5 provider-gated, 74 missing**. “Implemented” is not a commercial-readiness certification. The additions below are local development changes, not part of the previously deployed `2a8ebb8` release.
+See [FEATURE_MATRIX.md](FEATURE_MATRIX.md) for all 300 numbered entries, including duplicates: **145 implemented within the recorded scope, 76 partial, 5 provider-gated, 74 missing**. “Implemented” is not a commercial-readiness certification. Dashboard/support/tracking release `28a191e` is deployed; the historical checkpoints below are not a claim of completing the remaining backlog.
+
+## People, branded loading and food-conversation correction
+
+- People has server-backed summary cards, role tabs, access/search filters, avatars, compact actions, confirmed/audited access changes and responsive account cards. No sample statistics were added.
+- Route/auth loading and shared data-loading states use the original RuchiGo logo with rotating rings. The logo stays stationary; reduced-motion is respected. No artificial delay/progress is introduced, and conversation typing remains distinct.
+- Strict non-veg filtering fixes the reported pizza conversation. Bounded follow-ups retain the last dish/diet/budget; named foods and ingredient combinations are constrained before provider ranking. A saved vegetarian-profile conflict is explained, never silently overwritten. No-match responses explain real availability and budget rather than inserting unrelated dishes.
+- Actual local Gemini/browser checks returned only a non-vegetarian pizza for both reported messages, and no items under ₹200. Model IDs/debug status remain outside the customer UI. Provider failures still use explicitly menu-based fallback/clarification; this is not a provider-uptime guarantee.
 
 ## Dashboard and delivery-conversation increment
 
@@ -25,7 +32,7 @@ See [FEATURE_MATRIX.md](FEATURE_MATRIX.md) for all 300 numbered entries, includi
 - Restaurant/admin reports use SQL aggregation without the former 10,000-row truncation. Up to 90 selected days, previous-period comparison, order-growth figures, gross-value chart, exact daily table and CSV export are available. All-time platform totals are separately labelled. Gross order value is not a payout, tax statement or net revenue.
 - Superuser-only Team access assigns 11 operational scopes. New admins created/promoted through the API start without workspace permissions. Existing admins retain their legacy full access until reviewed. Permissions are checked on subsequent API requests, including support/finance separation and historical notifications after revocation; sidebar controls are not the security boundary. Catalog and promotion access are separate; merchant selection uses a minimal searchable lookup.
 - Customers and assigned couriers have private, persisted delivery conversations with retry-safe messages, read receipts, history and notification deep links. A replacement courier cannot read the previous courier's messages. Conversations are read-only after delivery/cancellation; no fake presence, automatic reply or background-delivery guarantee is shown.
-- Local schema is now through **0022** (delivery messages, admin grants and reporting indexes). No production migration, policy activation, provider refund or deployment occurred. See [DASHBOARD_RUNBOOK.md](DASHBOARD_RUNBOOK.md) for operation and tests.
+- Local and production schemas are through **0022** (delivery messages, admin grants and reporting indexes). Production was migrated for `28a191e` with pre-existing rows preserved. No financial policy activation or provider refund occurred. See [DASHBOARD_RUNBOOK.md](DASHBOARD_RUNBOOK.md) for operation and tests.
 
 ## Checkout, ratings and support increment
 
@@ -86,7 +93,7 @@ See [CHECKOUT_SUPPORT_RUNBOOK.md](CHECKOUT_SUPPORT_RUNBOOK.md) for configuration
 - Privacy and Terms now have readable sections, anchor navigation and print styles, but are explicitly **drafts**. Legal entity/address, designated grievance contact, retention and approved commercial policies remain unconfirmed. See `LEGAL_RELEASE_CHECKLIST.md`. A privacy support ticket does not automatically delete or export data. Registration acceptance is not yet recorded as a server-side policy-version receipt.
 - Customer profile has grouped account navigation, inline editing, photo-based recent orders, reorder and saved-address preview. Restaurant profile includes a listing preview; courier/admin account pages expose real account details and relevant controls. The original RuchiGo logo is unchanged.
 - Partner order-contact payloads omit customer email and account-status fields. The new Leaflet map loads tiles only after a customer chooses to show it. Its custom RuchiGo scooter interpolates only real received GPS points, with dedicated server timestamps and stale/missing states. Google directions remain external links. See `TRACKING_DESIGN_NOTES.md` for official references and public map-provider configuration.
-- The prior release (`2a8ebb8`) was pushed/deployed with migrations through 0011. Subsequent local migrations 0012–0022 are applied only to the isolated preview database. Nothing from this pass has been pushed or deployed.
+- Release `28a191e` superseded `2a8ebb8` on the live alias, with migrations through 0022. A Git push alone is not a deployment because the Vercel Git integration currently points at a different repository; see `DATA_STORAGE.md`.
 - Optional tracked stock deducts at checkout, including awaiting-payment orders. Failed gateway-order creation rolls back. Fifteen-minute unpaid expiry restores stock/coupon use exactly once; delayed capture opens reconciliation rather than reviving the order. Schedule the expiry command in production. Supported pre-preparation cancellation restores stock; cooking food is not restocked. SQLite tests do not prove PostgreSQL/MySQL contention behavior.
 
 ## Intelligence and retention increment
@@ -108,7 +115,7 @@ Use the commands in README. Backend tests cover existing API behavior and new ch
 
 `scripts/product-e2e.mjs` exercises real local customer login, discovery, COD checkout/coupon, kitchen transitions, courier delivery, review, support, saved dishes, address editing, notification reads and responsive customer/partner routes. It creates local preview records and must not run against a shared production dataset. `scripts/product-preview.mjs` produces desktop/mobile screenshots. Chrome is required.
 
-Latest consolidated backend verification: **257 tests pass**, including reporting with 10,001 orders, account safety/audit, granular administrator delegation, filtered queues and private delivery conversations. Dashboard/chat, permission editor, read-only queue, cancellation, support-conversation and full product browser suites passed. Desktop and 320/390px checks passed; the full product suite also checks 360px. User order **16** remains cancelled with only pending → cancelled events and no assignment; no test reopened or advanced it. Local migrations through 0022, lint/build and database integrity checks pass. These checks do not certify live provider settlement, native background tracking/chat, production SQL contention or completion of all 300 entries. See `VERIFICATION_REPORT.md` for scope and retained local fixtures.
+Latest consolidated backend verification: **273 tests pass on isolated PostgreSQL**, including reporting with 10,001 orders, account safety/audit, granular administrator delegation, filtered queues, private delivery conversations, deployment storage gates and strict food constraints. The final forecast-fixture adjustment also passed a 20-test intelligence rerun on SQLite. Dashboard/chat, permission editor, read-only queue, cancellation, support-conversation and full product browser suites passed at their recorded checkpoints; this increment reran People/loading and actual-provider food conversation checks. Desktop and 320/390px checks passed; the People suite also checks 768/1024px. User order **16** remains cancelled with only pending → cancelled events and no assignment; no test reopened or advanced it. Migrations through 0022 and lint/build checks pass. These checks do not certify live provider settlement, native background tracking/chat, production SQL contention or completion of all 300 entries. See `VERIFICATION_REPORT.md` for scope and retained local fixtures.
 
 ## Recommended next release order
 

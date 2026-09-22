@@ -1,4 +1,5 @@
 import { useState } from "react";
+import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -201,7 +202,7 @@ export function ProfilePage() {
               }}
             />
             {orders.loading && (
-              <p className="muted mt-5">Loading your orders…</p>
+              <LoadingScreen inline message="Loading your orders…" />
             )}
             {orders.data?.results.slice(0, 3).map((order) => (
               <Link
@@ -331,7 +332,7 @@ export function AddressesPage() {
     >
       <ErrorNotice error={remote.error} onRetry={remote.reload} />
       {remote.loading ? (
-        <p className="muted">Loading your addresses…</p>
+        <LoadingScreen inline message="Loading your addresses…" />
       ) : remote.data?.count ? (
         <>
           <div className="address-grid">
@@ -517,7 +518,7 @@ export function NotificationsPage() {
         }}
       />
       {remote.loading ? (
-        <p className="muted">Loading updates…</p>
+        <LoadingScreen inline message="Loading updates…" />
       ) : remote.data?.count ? (
         <>
           <div className="notification-list">

@@ -29,6 +29,25 @@ FOODS = {
 STOP_WORDS = {"a", "an", "the", "i", "want", "something", "some", "please", "under", "below", "within", "for", "and", "or", "with", "food", "meal", "me", "to", "eat", "budget", "veg", "vegetarian", "only", "rs", "inr"}
 
 
+def diet_constraint(query):
+    """Tri-state food choice; 'not veg' and 'not non-veg' are opposites."""
+    text = query.lower().replace("non vegetarian", "non-vegetarian")
+    mentions = list(re.finditer(r"\b(?:non[ -]?(?:veg|vegetarian)|vegetarian|veg)\b", text))
+    if len(mentions) > 1 and re.search(r"\b(?:either|both)\b|veg\s+or\s+non[ -]?veg", text):
+        return "any"
+    choice = None
+    for match in mentions:
+        nonveg = match.group().startswith("non")
+        negated = bool(re.search(r"\b(?:no|not|without|avoid|exclude|don['’]?t want|do not want)\s+$", text[:match.start()]))
+        choice = "non_vegetarian" if nonveg != negated else "vegetarian"
+    return choice
+
+
+def explicit_budget(query):
+    matches = list(re.finditer(r"\b(?:under|below|within|up to|upto|budget(?: of)?)\s*(?:₹|rs\.?|inr)?\s*(\d{1,6}(?:\.\d{1,2})?)\b", query.lower()))
+    return Decimal(matches[-1][1]) if matches and Decimal(matches[-1][1]) >= 1 else None
+
+
 def normalize_preferences(filters):
     """Conservative explicit constraints; structured controls remain authoritative."""
     filters = dict(filters)
@@ -40,11 +59,12 @@ def normalize_preferences(filters):
     if tags:
         filters["dietary_tags"] = sorted(tags)
         filters["vegetarian"] = True
-    if re.search(r"\b(?:veg|vegetarian)\b", query) and not re.search(r"\b(?:non[ -]?veg|not vegetarian)\b", query):
-        filters["vegetarian"] = True
-    match = re.search(r"\b(?:under|below|within|up to|upto|budget(?: of)?)\s*(?:₹|rs\.?|inr)?\s*(\d{1,6}(?:\.\d{1,2})?)\b", query)
-    if match and Decimal(match[1]) >= 1:
-        filters["budget"] = min(Decimal(match[1]), filters.get("budget", Decimal(match[1])))
+    diet = diet_constraint(query)
+    if diet in ("vegetarian", "non_vegetarian"):
+        filters[diet] = True
+    budget = explicit_budget(query)
+    if budget:
+        filters["budget"] = min(budget, filters.get("budget", budget))
     return filters
 
 
@@ -83,6 +103,8 @@ def match_reasons(item, preferences, history):
         reasons.append(f"Matches your {matched} craving")
     if preferences.get("vegetarian") in (True, "True", "true") and item.is_vegetarian:
         reasons.append("Vegetarian")
+    if preferences.get("non_vegetarian") in (True, "True", "true") and not item.is_vegetarian:
+        reasons.append("Non-vegetarian")
     for tag in preferences.get("dietary_tags", []):
         if tag in (item.tags or []):
             reasons.append(f"Restaurant-labelled {tag}")
@@ -118,7 +140,7 @@ def rank_items(items, preferences, history):
     if not re.fullmatch(r"[a-zA-Z0-9.\-]+", model):
         return safe_fallback("invalid_configuration")
     catalog = [{"id": i.id, "name": i.name, "description": i.description, "category": i.category.name if i.category_id else "", "price": str(minimum_item_price(i)), "vegetarian": i.is_vegetarian, "tags": i.tags, "preparation_minutes": i.preparation_minutes, "city": i.restaurant.city, "ordered_before": i.id in history} for i in items]
-    data = {"preferences": preferences, "catalog": catalog, "model": model, "version": 3}
+    data = {"preferences": preferences, "catalog": catalog, "model": model, "version": 4}
     cache_key = "recommendations:" + hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
     cached = cache.get(cache_key)
     if cached:
@@ -130,7 +152,7 @@ def rank_items(items, preferences, history):
     }
     try:
         request = Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", data=json.dumps(payload).encode(), headers={"Content-Type": "application/json", "x-goog-api-key": key}, method="POST")
-        with urlopen(request, timeout=8) as response:
+        with urlopen(request, timeout=20) as response:
             result = json.load(response)
         generated = json.loads(result["candidates"][0]["content"]["parts"][0]["text"])
         intent = generated.get("intent")

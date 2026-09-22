@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import {
   ArrowRight,
   Check,
@@ -514,7 +515,7 @@ export function CheckoutPage() {
                     onRetry={addresses.reload}
                   />
                   {addresses.loading && (
-                    <p className="muted mt-4">Loading your addresses…</p>
+                    <LoadingScreen inline message="Loading your addresses…" />
                   )}
                   {list.map((address) => (
                     <div key={address.id}>

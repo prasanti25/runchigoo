@@ -41,6 +41,7 @@ function Conversation({ token, city, support, orderId, feed }) {
   const [error, setError] = useState("");
   const [searchCity, setSearchCity] = useState(city || "");
   const request = useRef(null);
+  const conversationQuery = useRef("");
   const end = useRef(null);
   useEffect(() => () => request.current?.abort(), []);
   useEffect(() => {
@@ -55,7 +56,7 @@ function Conversation({ token, city, support, orderId, feed }) {
     const timeout = window.setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, 25000);
+    }, 45000);
     request.current = controller;
     setBusy(true);
     setError("");
@@ -81,10 +82,20 @@ function Conversation({ token, city, support, orderId, feed }) {
             .filter((item) => item.role === "user")
             .slice(-6)
             .map((item) => item.text),
-          preferences: { city: chosenCity },
+          preferences: {
+            city: chosenCity,
+            ...(!support && conversationQuery.current
+              ? { q: conversationQuery.current }
+              : {}),
+          },
         },
       });
       if (controller.signal.aborted) return;
+      if (
+        typeof response.query === "string" &&
+        response.status !== "needs_clarification"
+      )
+        conversationQuery.current = response.query;
       setMessages((current) =>
         [
           ...current,
@@ -141,6 +152,7 @@ function Conversation({ token, city, support, orderId, feed }) {
             disabled={busy}
             onClick={() => {
               setMessages([]);
+              conversationQuery.current = "";
               setResult(null);
               setInput("");
               setError("");
@@ -174,6 +186,7 @@ function Conversation({ token, city, support, orderId, feed }) {
               onClick={() => {
                 setSearchCity(city || "");
                 setMessages([]);
+                conversationQuery.current = "";
                 setResult(null);
                 setInput("");
                 setError("");

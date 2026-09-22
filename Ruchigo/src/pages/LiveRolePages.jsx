@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import BusinessInsights from "../components/product/BusinessInsights.jsx";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -27,9 +28,7 @@ function RoleFrame({ type, title, subtitle, children }) {
 function Notice({ loading, error, empty }) {
   if (loading)
     return (
-      <p className="rounded-2xl bg-white p-6 text-gray-500">
-        Loading live data…
-      </p>
+      <LoadingScreen inline message="Loading your workspace…" />
     );
   if (error)
     return <p className="rounded-2xl bg-red-50 p-6 text-red-700">{error}</p>;

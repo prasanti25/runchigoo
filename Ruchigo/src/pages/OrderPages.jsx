@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from "react";
+import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -312,9 +313,10 @@ export function TrackingPage() {
                     !order.fulfillment_paused_at && (
                       <Suspense
                         fallback={
-                          <section className="panel" role="status">
-                            Loading delivery map…
-                          </section>
+                          <LoadingScreen
+                            inline
+                            message="Loading delivery map…"
+                          />
                         }
                       >
                         <LiveDeliveryMap key={order.id} order={order} />

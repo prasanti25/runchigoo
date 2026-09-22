@@ -91,7 +91,7 @@ export default function Home() {
                 />
               ) : loading ? (
                 <div className="hero-meal-skeleton" role="status">
-                  Finding something delicious…
+                  <Skeleton message="Finding something delicious…" />
                 </div>
               ) : (
                 <Link to="/search" className="hero-meal-empty">

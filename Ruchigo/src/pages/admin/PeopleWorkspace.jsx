@@ -1,20 +1,39 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Search, ShieldCheck, UserRound } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Ban,
+  Bike,
+  Check,
+  ChevronDown,
+  LockKeyhole,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  RotateCw,
+  Search,
+  ShieldCheck,
+  Store,
+  UserCheck,
+  Users,
+  X,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { apiRequest } from "../../lib/api.js";
 import { useRemote } from "../../lib/product.js";
-import {
-  WorkspaceFrame,
-  Metrics,
-} from "../../components/product/Workspace.jsx";
+import { WorkspaceFrame } from "../../components/product/Workspace.jsx";
+import UserAvatar from "../../components/common/UserAvatar.jsx";
+import LoadingScreen from "../../components/common/LoadingScreen.jsx";
+import { canOpenAdminRoute } from "../../lib/adminAccess.js";
 import {
   EmptyState,
   ErrorNotice,
   Modal,
 } from "../../components/product/UI.jsx";
 import "../../components/product/Operations.css";
+import "./PeopleWorkspace.css";
 
 const roles = ["customer", "restaurant", "delivery", "admin"];
 const roleLabel = (role) =>
@@ -33,6 +52,78 @@ const blank = {
   password: "",
   reason: "",
 };
+const roleIcons = {
+  customer: Users,
+  restaurant: Store,
+  delivery: Bike,
+  admin: ShieldCheck,
+};
+const shortRole = {
+  customer: "Customer",
+  restaurant: "Restaurant",
+  delivery: "Delivery",
+  admin: "Admin",
+};
+const personName = (person) =>
+  `${person.first_name || ""} ${person.last_name || ""}`.trim() || person.email;
+
+function AccessActions({ person, disabled, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef(null);
+  const trigger = useRef(null);
+  const id = useId();
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event) => {
+      if (!root.current?.contains(event.target)) setOpen(false);
+    };
+    const escape = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        trigger.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
+  return (
+    <div className="people-access-actions" ref={root}>
+      <button
+        ref={trigger}
+        type="button"
+        className="people-icon-button"
+        aria-label={`More actions for ${person.email}`}
+        aria-expanded={open}
+        aria-controls={id}
+        disabled={disabled}
+        onClick={() => setOpen(!open)}
+      >
+        <MoreHorizontal size={19} />
+      </button>
+      {open && (
+        <div id={id} className="people-action-popover">
+          <small>ACCOUNT ACCESS</small>
+          <button
+            type="button"
+            className={person.is_active ? "is-destructive" : ""}
+            onClick={() => {
+              setOpen(false);
+              onSelect();
+            }}
+          >
+            {person.is_active ? <Ban size={16} /> : <UserCheck size={16} />}
+            {person.is_active ? "Block access" : "Restore access"}
+          </button>
+          <p>Changes require a reason and confirmation.</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PeopleWorkspace({ partnersOnly = false }) {
   const { token, user } = useAuth();
@@ -57,6 +148,19 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
   summaryParams.delete("page");
   const summary = useRemote(`/users/summary/?${summaryParams}`, token);
   const canManageAdmins = summary.data?.can_manage_admins;
+  const hasFilters = Boolean(
+    filters.search || filters.role || filters.is_active,
+  );
+  const availableRoles = roles.filter(
+    (role) => !partnersOnly || ["restaurant", "delivery"].includes(role),
+  );
+  const partnerCount = summary.data?.by_role
+    .filter((row) => ["restaurant", "delivery"].includes(row.role))
+    .reduce((total, row) => total + row.count, 0);
+  function clearFilters() {
+    setSearch("");
+    setFilters({ search: "", role: "", is_active: "", page: 1 });
+  }
   const setFilter = (key, value) =>
     setFilters((current) => ({ ...current, [key]: value, page: 1 }));
   function refresh() {
@@ -127,7 +231,11 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
     <WorkspaceFrame
       type="admin"
       title={partnersOnly ? "Partner account access" : "People"}
-      description="Find accounts, review access and manage your marketplace."
+      description={
+        partnersOnly
+          ? "Review restaurant and delivery partner sign-in access."
+          : "Customers, partners and your team. All in one place."
+      }
       action={
         !partnersOnly && (
           <button className="btn primary" onClick={() => edit(null)}>
@@ -136,15 +244,103 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
         )
       }
     >
-      <Metrics
-        entries={[
-          ["Matching accounts", summary.data?.total ?? "—"],
-          ["Active", summary.data?.active ?? "—"],
-          ["Inactive / awaiting approval", summary.data?.inactive ?? "—"],
-          ["Account roles", summary.data?.by_role.length ?? "—"],
-        ]}
-      />
-      <section className="panel people-workspace">
+      <div className="people-stat-grid" aria-label="Account summary">
+        {[
+          [
+            "Matching accounts",
+            summary.data?.total,
+            "In your current view",
+            Users,
+            "all",
+          ],
+          [
+            "Active access",
+            summary.data?.active,
+            "Accounts that can sign in",
+            UserCheck,
+            "active",
+          ],
+          [
+            "Inactive access",
+            summary.data?.inactive,
+            "Paused or awaiting approval",
+            LockKeyhole,
+            "inactive",
+          ],
+          [
+            "Partner accounts",
+            partnerCount,
+            "Restaurants & delivery",
+            Store,
+            "partners",
+          ],
+        ].map(([label, value, detail, Icon, tone]) => (
+          <article className={`people-stat ${tone}`} key={label}>
+            <div>
+              <span className="people-stat-icon">
+                <Icon size={19} />
+              </span>
+              <p>{label}</p>
+            </div>
+            <strong>
+              {value == null ? "—" : value.toLocaleString("en-IN")}
+            </strong>
+            <small>{detail}</small>
+          </article>
+        ))}
+      </div>
+      <section
+        className="panel people-workspace people-directory"
+        aria-label="Account directory"
+      >
+        <header className="people-directory-heading">
+          <div>
+            <h2>
+              Account directory <span>{people.data?.count ?? "—"}</span>
+            </h2>
+            <p>Review details and keep the right people connected.</p>
+          </div>
+          <button
+            type="button"
+            className="people-icon-button"
+            aria-label="Refresh accounts"
+            disabled={people.loading || summary.loading}
+            onClick={refresh}
+          >
+            <RotateCw size={17} />
+          </button>
+        </header>
+        <div
+          className="people-role-tabs"
+          role="group"
+          aria-label="Account role shortcuts"
+        >
+          <button
+            type="button"
+            aria-pressed={!filters.role}
+            onClick={() => setFilter("role", "")}
+          >
+            All accounts
+          </button>
+          {availableRoles.map((role) => {
+            const Icon = roleIcons[role];
+            return (
+              <button
+                key={role}
+                type="button"
+                aria-pressed={filters.role === role}
+                onClick={() => setFilter("role", role)}
+              >
+                <Icon size={15} />
+                {role === "customer"
+                  ? "Customers"
+                  : role === "admin"
+                    ? "Admins"
+                    : `${shortRole[role]} partners`}
+              </button>
+            );
+          })}
+        </div>
         <div className="people-toolbar">
           <form
             className="people-search"
@@ -161,9 +357,24 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
               maxLength={150}
               onChange={(event) => setSearch(event.target.value)}
             />
-            <button className="btn secondary">Search</button>
+            {search && (
+              <button
+                type="button"
+                className="people-search-clear"
+                aria-label="Clear search"
+                onClick={() => {
+                  setSearch("");
+                  setFilter("search", "");
+                }}
+              >
+                <X size={16} />
+              </button>
+            )}
+            <button className="people-search-submit">
+              Search <ArrowRight size={14} />
+            </button>
           </form>
-          <label>
+          <label className="people-mobile-role">
             Role
             <select
               aria-label="Filter account role"
@@ -183,25 +394,44 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
                 ))}
             </select>
           </label>
-          <label>
-            Access
-            <select
-              aria-label="Filter account access"
-              value={filters.is_active}
-              onChange={(event) => setFilter("is_active", event.target.value)}
-            >
-              <option value="">All accounts</option>
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </select>
+          <label className="people-access-filter">
+            <span>Account access</span>
+            <div>
+              <select
+                aria-label="Filter account access"
+                value={filters.is_active}
+                onChange={(event) => setFilter("is_active", event.target.value)}
+              >
+                <option value="">Any access</option>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+              </select>
+              <ChevronDown size={15} aria-hidden="true" />
+            </div>
           </label>
         </div>
+        {hasFilters && (
+          <div className="people-filter-summary">
+            <span>
+              Filtered view{filters.search ? ` · “${filters.search}”` : ""}
+              {filters.role ? ` · ${roleLabel(filters.role)}` : ""}
+              {filters.is_active
+                ? ` · ${filters.is_active === "true" ? "Active" : "Inactive"}`
+                : ""}
+            </span>
+            <button type="button" onClick={clearFilters}>
+              <X size={13} />
+              Clear filters
+            </button>
+          </div>
+        )}
         <ErrorNotice error={people.error || summary.error} onRetry={refresh} />
-        {people.loading && <p role="status">Loading accounts…</p>}
+        {people.loading && <LoadingScreen inline message="Loading accounts…" />}
         {!people.loading && !people.error && !people.data?.results.length && (
           <EmptyState
             title="No accounts match"
             description="Try another name, role or access filter."
+            onRetry={hasFilters ? clearFilters : undefined}
           />
         )}
         <div className="people-table-wrap">
@@ -212,11 +442,13 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
               </caption>
               <thead>
                 <tr>
-                  <th>Account</th>
+                  <th>Person</th>
                   <th>Role</th>
-                  <th>Access</th>
+                  <th>Account access</th>
                   <th>Joined</th>
-                  <th>Manage</th>
+                  <th>
+                    <span className="sr-only">Manage</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -225,52 +457,71 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
                     person.role === "admin" && !canManageAdmins;
                   return (
                     <tr key={person.id}>
-                      <td>
+                      <td className="people-person-cell">
                         <div className="people-identity">
-                          <span className="people-avatar">
-                            <UserRound size={20} />
-                          </span>
+                          <UserAvatar
+                            user={person}
+                            className={`people-avatar role-${person.role}`}
+                          />
                           <div>
-                            <strong>
-                              {`${person.first_name} ${person.last_name}`.trim() ||
-                                "Unnamed account"}
+                            <strong title={personName(person)}>
+                              {personName(person)}
+                              {person.id === user.id && (
+                                <span className="people-you">You</span>
+                              )}
                             </strong>
-                            <small>{person.email}</small>
-                            <small>
-                              {person.phone || `Account #${person.id}`}
-                            </small>
+                            <small title={person.email}>{person.email}</small>
+                            {person.phone && (
+                              <small className="people-phone">
+                                {person.phone}
+                              </small>
+                            )}
                           </div>
                         </div>
                       </td>
-                      <td>{roleLabel(person.role)}</td>
-                      <td>
+                      <td className="people-role-cell">
                         <span
-                          className={`status-pill ${person.is_active ? "delivered" : "cancelled"}`}
+                          className={`people-role-badge role-${person.role}`}
                         >
+                          {(() => {
+                            const Icon = roleIcons[person.role] || Users;
+                            return <Icon size={14} />;
+                          })()}
+                          {shortRole[person.role] || person.role}
+                        </span>
+                      </td>
+                      <td className="people-status-cell">
+                        <span
+                          className={`people-access-badge ${person.is_active ? "is-active" : "is-inactive"}`}
+                        >
+                          <i aria-hidden="true" />
                           {person.is_active ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td>
+                      <td className="people-joined-cell" data-label="Joined">
                         {new Date(person.created_at).toLocaleDateString(
                           "en-IN",
                           { day: "numeric", month: "short", year: "numeric" },
                         )}
                       </td>
-                      <td>
+                      <td className="people-manage-cell">
                         <div className="people-actions">
-                          <button
-                            type="button"
-                            className="btn secondary"
-                            disabled={protectedAccount || partnersOnly}
-                            onClick={() => edit(person)}
-                          >
-                            Edit details
-                          </button>
-                          <button
-                            type="button"
-                            className="text-link"
+                          {!partnersOnly && (
+                            <button
+                              type="button"
+                              className="people-edit-button"
+                              aria-label="Edit details"
+                              disabled={protectedAccount}
+                              onClick={() => edit(person)}
+                            >
+                              <Pencil size={14} />
+                              Edit
+                            </button>
+                          )}
+                          <AccessActions
+                            person={person}
                             disabled={protectedAccount || person.id === user.id}
-                            onClick={() => {
+                            onSelect={() => {
                               setDecision({
                                 person,
                                 action: person.is_active ? "block" : "unblock",
@@ -278,11 +529,7 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
                               setDraft(blank);
                               setError("");
                             }}
-                          >
-                            {person.is_active
-                              ? "Block access"
-                              : "Restore access"}
-                          </button>
+                          />
                         </div>
                       </td>
                     </tr>
@@ -294,34 +541,70 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
         </div>
         <div className="people-pagination">
           <button
-            className="btn secondary"
+            className="people-page-button"
+            aria-label="Previous accounts"
             disabled={filters.page === 1 || people.loading}
             onClick={() => setFilters({ ...filters, page: filters.page - 1 })}
           >
-            Previous accounts
+            <ArrowLeft size={15} />
+            <span>Previous</span>
           </button>
-          <span>Page {filters.page}</span>
+          <span>
+            Page <strong>{filters.page}</strong>
+            {people.data && (
+              <> · {people.data.count.toLocaleString("en-IN")} accounts</>
+            )}
+          </span>
           <button
-            className="btn secondary"
+            className="people-page-button"
+            aria-label="Next accounts"
             disabled={!people.data?.next || people.loading}
             onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
           >
-            Next accounts
+            <span>Next</span>
+            <ArrowRight size={15} />
           </button>
         </div>
       </section>
-      <p className="people-audit-note">
-        <ShieldCheck size={17} /> Access changes are recorded in the{" "}
-        <Link to="/admin-activity">activity log</Link>. Inactive does not
-        establish KYC verification. Review new partners in their respective
-        workspace.
-      </p>
+      <aside className="people-access-note">
+        <ShieldCheck size={20} />
+        <div>
+          <strong>Account access, handled with care.</strong>
+          <p>
+            Changes are logged. Account access is separate from identity
+            verification and restaurant approval.
+          </p>
+        </div>
+        {canOpenAdminRoute(user, "/admin-activity") && (
+          <Link to="/admin-activity">
+            View activity
+            <ArrowRight size={14} />
+          </Link>
+        )}
+      </aside>
       {editing && (
         <Modal
           title={editing.id ? "Edit account" : "Add account"}
           onClose={() => !busy && setEditing(null)}
         >
-          <form className="people-form" onSubmit={save}>
+          <form className="people-form people-edit-form" onSubmit={save}>
+            <div className="people-form-intro">
+              <span>
+                <Users size={20} />
+              </span>
+              <div>
+                <strong>
+                  {editing.id
+                    ? personName(editing)
+                    : "A new member of your marketplace"}
+                </strong>
+                <p>
+                  {editing.id
+                    ? `Account #${editing.id} · Update contact details or account role.`
+                    : "Add their details and choose the right account role."}
+                </p>
+              </div>
+            </div>
             <div className="people-form-grid">
               {[
                 ["first_name", "First name", "text"],
@@ -399,9 +682,19 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
               role. Administrator access requires a superuser.
             </p>
             <ErrorNotice error={error} />
-            <button className="btn primary" disabled={busy}>
-              {busy ? "Saving…" : "Save account"}
-            </button>
+            <div className="people-form-footer">
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={busy}
+                onClick={() => setEditing(null)}
+              >
+                Cancel
+              </button>
+              <button className="btn primary" disabled={busy}>
+                {busy ? "Saving…" : "Save account"}
+              </button>
+            </div>
           </form>
         </Modal>
       )}
@@ -414,8 +707,25 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
           }
           onClose={() => !busy && setDecision(null)}
         >
-          <form className="people-form" onSubmit={changeAccess}>
-            <p>{decision.person.email}</p>
+          <form
+            className="people-form people-edit-form"
+            onSubmit={changeAccess}
+          >
+            <div
+              className={`people-form-intro ${decision.action === "block" ? "is-warning" : ""}`}
+            >
+              <span>
+                {decision.action === "block" ? (
+                  <Ban size={20} />
+                ) : (
+                  <Check size={20} />
+                )}
+              </span>
+              <div>
+                <strong>{personName(decision.person)}</strong>
+                <p>{decision.person.email}</p>
+              </div>
+            </div>
             <p className="muted">
               {decision.action === "block"
                 ? "This account will lose access. Active orders must be resolved first; their status will not be changed by this action."

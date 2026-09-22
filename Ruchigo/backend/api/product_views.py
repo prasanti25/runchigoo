@@ -31,6 +31,7 @@ class DiscoveryQuery(serializers.Serializer):
     q = serializers.CharField(required=False, allow_blank=True, max_length=200)
     category = serializers.CharField(required=False, allow_blank=True, max_length=100)
     vegetarian = serializers.BooleanField(required=False)
+    non_vegetarian = serializers.BooleanField(required=False)
     dietary_tags = serializers.ListField(child=serializers.ChoiceField(choices=["vegan", "jain"]), max_length=2, required=False)
     budget = serializers.DecimalField(required=False, max_digits=8, decimal_places=2, min_value=Decimal("1"))
     min_rating = serializers.DecimalField(required=False, max_digits=2, decimal_places=1, min_value=Decimal("0"), max_value=Decimal("5"))
@@ -65,6 +66,8 @@ def eligible_items(filters):
         items = items.filter(restaurant__city__iexact=filters["city"])
     if filters.get("vegetarian"):
         items = items.filter(is_vegetarian=True)
+    if filters.get("non_vegetarian"):
+        items = items.filter(is_vegetarian=False)
     for tag in filters.get("dietary_tags", []):
         # JSON string boundaries prevent "non-vegan" matching "vegan".
         items = items.filter(is_vegetarian=True, tags__icontains=f'"{tag}"')
@@ -135,16 +138,8 @@ class DiscoveryViewSet(AdminScopeMixin, viewsets.ViewSet):
         query.is_valid(raise_exception=True)
         filters = normalize_preferences(query.validated_data)
         eligible = eligible_items(filters)
-        included, excluded = craving_terms(filters.get("q", ""))
-        def food_match(terms):
-            matches = Q()
-            for term in terms:
-                matches |= Q(name__icontains=term) | Q(description__icontains=term) | Q(category__name__icontains=term)
-            return matches
-        if included:
-            eligible = eligible.filter(food_match(included))
-        if excluded:
-            eligible = eligible.exclude(food_match(excluded))
+        from .assistant_matches import match_craving
+        eligible = match_craving(eligible, filters.get("q", ""))
         items = list(eligible.order_by("-is_bestseller", "id")[:40])
         history = set()
         if request.user.is_authenticated and request.user.role == User.Role.CUSTOMER:

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import LoadingScreen from "../../components/common/LoadingScreen.jsx";
 import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
 import toast from "react-hot-toast";
@@ -194,7 +195,7 @@ export default function OrderQueue() {
           </div>
         </div>
         <ErrorNotice error={orders.error || stats.error} onRetry={refresh} />
-        {orders.loading && <p role="status">Loading orders…</p>}
+        {orders.loading && <LoadingScreen inline message="Loading orders…" />}
         {!orders.loading && !orders.error && !orders.data?.results.length && (
           <EmptyState
             title="No matching orders"

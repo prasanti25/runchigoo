@@ -17,6 +17,7 @@ from .recommendations import craving_terms, match_reasons, normalize_preferences
 from .serializers import CouponSerializer, MenuItemSerializer, RestaurantSerializer
 from .menu_options import minimum_item_price
 from .assistant_matches import empty_shortlist, match_craving
+from .food_intent import conversation_query
 
 
 class TasteSerializer(serializers.ModelSerializer):
@@ -262,16 +263,30 @@ class IntelligenceViewSet(AdminScopeMixin, viewsets.ViewSet):
         defaults, use_history, _ = taste_defaults(request.user)
         preferences = {**defaults, **data.get("preferences", {})}
         schema = {"type": "OBJECT", "properties": {"intent": {"type": "STRING", "enum": ["food", "unclear"]}, "query": {"type": "STRING"}}, "required": ["intent", "query"]}
-        interpreted = structured_response("Understand this food conversation in English or Hindi/Hinglish. The last message takes priority; resolve short follow-ups using earlier user messages. Return a concise food query containing the current craving, exclusions, vegetarian/vegan/Jain requirements and any budget in the form 'under N'. Random letters, unrelated questions or requests for actions must have intent=unclear. You do not place, change or cancel orders. Do not invent any menu items or dietary/medical assurances.", {"history": [text for text in data["history"] if not support_topic(text)], "message": message}, schema)
+        # The browser carries the last resolved request alongside its bounded
+        # transcript, so a seventh short follow-up does not forget the dish.
+        previous_query = data.get("preferences", {}).get("q", "")
+        food_history = [text for text in [previous_query, *data["history"]] if text and not support_topic(text)]
+        resolved = conversation_query(food_history, message)
+        # A known dish/diet/budget refinement needs just one provider request:
+        # rank the strictly eligible catalog. Only unfamiliar follow-ups need
+        # the additional interpretation call. First-turn natural language goes
+        # directly to Gemini ranking, which already handles Hinglish and intent.
+        needs_interpretation = bool(food_history) and resolved == message and not any(craving_terms(message))
+        interpreted = structured_response("Understand this food conversation in English or Hindi/Hinglish. The last message takes priority; resolve short follow-ups using earlier user messages. Return a concise food query containing the current craving, exclusions, vegetarian/vegan/Jain requirements and any budget in the form 'under N'. Random letters, unrelated questions or requests for actions must have intent=unclear. You do not place, change or cancel orders. Do not invent any menu items or dietary/medical assurances.", {"history": food_history, "message": message}, schema, timeout=15, max_tokens=400) if needs_interpretation else None
         if interpreted and interpreted.get("intent") == "unclear":
             return Response({"reply": "What would you like to eat? Try a dish, a cuisine, or a budget.", "items": [], "links": [], "status": "needs_clarification", "source": "assistant"})
         query = interpreted.get("query") if interpreted and interpreted.get("intent") == "food" else None
         if not isinstance(query, str) or not query.strip() or len(query) > 200:
             # The regular recommender applies its own conservative intent check.
-            query = message
+            query = None
+        query = conversation_query(food_history, message, query)
         filters = normalize_preferences({**preferences, "q": query})
+        if filters.get("non_vegetarian") and (filters.get("vegetarian") or filters.get("dietary_tags")):
+            return Response({"reply": "You asked for non-vegetarian food, but your current dietary preferences restrict this search to vegetarian food. Review those preferences first, or ask for a vegetarian option.", "items": [], "links": [{"label": "Review dietary preferences", "to": "/for-you?tab=taste"}], "actions": [], "status": "preference_conflict", "source": "menu", "query": query, "applied_filters": {key: filters[key] for key in ("vegetarian", "non_vegetarian", "dietary_tags") if filters.get(key)}})
         # Original explicit budget/veg constraints cannot be weakened by the model.
-        filters = normalize_preferences({**filters, "q": message}) | {"q": query}
+        # query already retains the customer's explicit corrections and bounds.
+        # Do not append old raw diet/budget phrases after resolving a follow-up.
         candidates = match_craving(eligible_items(filters), query)
         items = list(candidates.order_by("-is_bestseller", "id")[:40])
         history, _, _ = order_signals(request.user, use_history)
@@ -286,9 +301,12 @@ class IntelligenceViewSet(AdminScopeMixin, viewsets.ViewSet):
             row.update(reason=" · ".join(reasons), match_reasons=reasons)
             result.append(row)
         where = f" in {filters['city']}" if filters.get("city") else ""
-        reply = f"I found {len(result)} {'option' if len(result) == 1 else 'options'}{where}. Open a restaurant menu to choose your dish and extras." if result else "What would you like to eat? Try a dish, a cuisine, or a budget."
+        foods, _ = craving_terms(query)
+        choice = "non-vegetarian " if filters.get("non_vegetarian") else "vegetarian " if filters.get("vegetarian") else ""
+        subject = f"{choice}{' or '.join(foods[:3])} ".strip()
+        reply = f"I found {len(result)} {subject + ' ' if subject else ''}{'option' if len(result) == 1 else 'options'}{where}. Open the menu to choose your extras." if result else "What would you like to eat? Try a dish, a cuisine, or a budget."
         response = {"reply": reply, "items": result, "links": [], "actions": [], "status": status, "source": source, "query": query}
         if not result and status != "needs_clarification":
             response.update(empty_shortlist(filters))
-        response["applied_filters"] = {key: filters[key] for key in ("city", "budget", "vegetarian", "dietary_tags") if filters.get(key)}
+        response["applied_filters"] = {key: filters[key] for key in ("city", "budget", "vegetarian", "non_vegetarian", "dietary_tags") if filters.get(key)}
         return Response(response)

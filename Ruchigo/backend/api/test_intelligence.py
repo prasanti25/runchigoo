@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -32,9 +32,9 @@ class IntelligenceTests(APITestCase):
     def order(self, **kwargs):
         return Order.objects.create(customer=kwargs.pop("customer", self.customer), restaurant=kwargs.pop("restaurant", self.restaurant), delivery_address=self.address, subtotal=120, total=120, **kwargs)
 
-    def past_order(self, days=3, **kwargs):
+    def past_order(self, days=3, created_at=None, **kwargs):
         order = self.order(status="delivered", **kwargs)
-        created = timezone.now()-timedelta(days=days, minutes=45)
+        created = created_at or timezone.now()-timedelta(days=days, minutes=45)
         Order.objects.filter(pk=order.pk).update(created_at=created)
         order.refresh_from_db()
         OrderItem.objects.create(order=order, menu_item=self.item, name=self.item.name, unit_price=120, quantity=1, total_price=120)
@@ -119,7 +119,9 @@ class IntelligenceTests(APITestCase):
         response = self.client.post("/api/v1/intelligence/assistant/", {"message": "under 100 instead", "history": ["Coffee please"], "preferences": {"city": "Delhi"}}, format="json")
         self.assertEqual(response.status_code, 200)
         self.assertEqual([item["id"] for item in response.data["items"]], [self.coffee.pk])
-        self.assertEqual(provider.call_args.args[1]["history"], ["Coffee please"])
+        # Known refinements retain context locally; no extra interpretation
+        # request is needed before the separately tested Gemini ranking call.
+        provider.assert_not_called()
         self.assertEqual(Order.objects.count(), 0)
         self.assertNotIn("model", response.data)
 
@@ -163,10 +165,16 @@ class IntelligenceTests(APITestCase):
         self.assertEqual(self.client.get("/api/v1/insights/").data["summary"]["delivered"], 0)
 
     def test_forecast_requires_real_history_and_uses_completed_orders_only(self):
+        today = timezone.localdate()
+        midnight = timezone.make_aware(datetime.combine(today, time.min))
         for day in range(1, 29):
-            self.past_order(days=day)
+            # The helper subtracts delivery duration as well as days. During
+            # the first 45 minutes after local midnight that places its order
+            # on the previous calendar date. This fixture promises one order
+            # on each complete reporting day, independent of the test time.
+            self.past_order(created_at=midnight-timedelta(days=day)+timedelta(hours=12))
         self.order(status="cancelled")
-        report = operational_report(Order.objects.all(), timezone.localdate())
+        report = operational_report(Order.objects.all(), today)
         self.assertEqual(report["forecast"]["status"], "baseline")
         self.assertEqual(len(report["forecast"]["days"]), 7)
         self.assertTrue(all(day["orders"] == 1 for day in report["forecast"]["days"]))

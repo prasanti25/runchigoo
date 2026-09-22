@@ -1,4 +1,5 @@
 import { useState } from "react";
+import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -185,9 +186,7 @@ export default function CustomerProfile() {
                   </Link>
                 </div>
                 {orders.loading && (
-                  <p className="muted p-6" role="status">
-                    Loading your orders…
-                  </p>
+                  <LoadingScreen inline message="Loading your orders…" />
                 )}
                 {orders.data?.results.slice(0, 2).map((order) => (
                   <article className="profile-order" key={order.id}>

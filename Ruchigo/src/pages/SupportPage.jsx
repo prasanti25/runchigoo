@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, LifeBuoy, Plus } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
@@ -245,7 +246,7 @@ function SupportWorkspace() {
                 onRetry={tickets.error ? tickets.reload : undefined}
               />
               {tickets.loading && (
-                <p className="muted">Loading your support conversations…</p>
+                <LoadingScreen inline message="Loading your conversations…" />
               )}
               {list.length || linkedTicket.data ? (
                 <div className="support-layout">

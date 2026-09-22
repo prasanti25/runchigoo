@@ -1,4 +1,5 @@
 import { useState } from "react";
+import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { hasAdminScope } from "../lib/adminAccess.js";
@@ -123,11 +124,7 @@ export default function LedgerWorkspace() {
             stats.reload();
           }}
         />
-        {ledger.loading && (
-          <p role="status" className="mt-5">
-            Loading payments…
-          </p>
-        )}
+        {ledger.loading && <LoadingScreen inline message="Loading payments…" />}
         {!ledger.loading && !ledger.error && !ledger.data?.results.length && (
           <EmptyState
             title="No matching payments"
@@ -249,7 +246,9 @@ function RefundQueue() {
         that money has returned.
       </p>
       <ErrorNotice error={remote.error} onRetry={remote.reload} />
-      {remote.loading && <p role="status">Loading refund requests…</p>}
+      {remote.loading && (
+        <LoadingScreen inline message="Loading refund requests…" />
+      )}
       {remote.data?.results.map((refund) => (
         <details key={refund.id} className="refund-queue-item">
           <summary>

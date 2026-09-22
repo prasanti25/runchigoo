@@ -1,4 +1,34 @@
-# Product verification — 22 September 2026
+# Product verification — 23 September 2026
+
+## People, branded loading and non-veg conversation increment
+
+- `test:people-loading` passed, including server search/filter counts, create,
+  edit, block/restore, persisted edits, keyboard action dismissal and
+  1440/1024/768/390/320px layouts. Its exact temporary account was deleted;
+  audit entries remain. Local user order 16's events/status were unchanged.
+- Original-logo loaders were inspected on actual held API/chunk requests,
+  disappear on completion and respect reduced-motion. No forced minimum delay,
+  fabricated percentage or rotating/distorted brand image was introduced.
+- Local `test:food-constraints:live` used real Gemini (no mocked provider).
+  Both `i would like to have a non veg pizza` and the corrective follow-up
+  returned only Smoky Chicken Pizza, non-vegetarian. `under 200 instead` returned
+  no matches with a budget explanation, preserving pizza/non-veg context.
+  Desktop/mobile passed with zero browser errors and zero business writes.
+- Forty targeted backend tests passed on isolated PostgreSQL; a preceding
+  272-test SQLite run passed before the final bounded-context test was added.
+  `npm run check`, migration-drift checks and read-only dashboard queues passed.
+- The first 273-test PostgreSQL run exposed a clock-dependent forecast fixture
+  just after midnight IST: subtracting 45 delivery minutes moved the expected
+  daily order into the preceding date. The fixture now explicitly places one
+  consistent order/delivery at midday on each reporting date. No production
+  forecast calculation or assertion was weakened.
+- The **273-test full PostgreSQL rerun passed**. The final consistent
+  order/delivery fixture adjustment also passed all 20 intelligence tests on
+  SQLite. Configured-secret scanning covered 388 source files and 148 built
+  assets with no matches; one known local example-key placeholder was excluded.
+  No preview-account credentials or delivery-demo route appeared in the bundle.
+- This increment has no schema migration. Production UI/provider verification
+  must follow deployment; local Gemini results alone do not prove the live alias.
 
 ## Release verification
 

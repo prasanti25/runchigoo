@@ -1,4 +1,5 @@
 import { useState } from "react";
+import LoadingScreen from "../../components/common/LoadingScreen.jsx";
 import toast from "react-hot-toast";
 import { ShieldCheck } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -56,7 +57,9 @@ export default function TeamAccess() {
         </p>
       </section>
       <ErrorNotice error={remote.error} onRetry={remote.reload} />
-      {remote.loading && <p role="status">Loading administrators…</p>}
+      {remote.loading && (
+        <LoadingScreen inline message="Loading administrators…" />
+      )}
       <div className="access-grid">
         {remote.data?.administrators.map((person) => (
           <section className="panel" key={person.id}>

@@ -16,6 +16,7 @@ import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useCart } from "../../context/CartContext.jsx";
 import { money } from "../../lib/product.js";
+import LoadingScreen from "../common/LoadingScreen.jsx";
 import {
   getFoodFallback,
   getRestaurantFallback,
@@ -123,18 +124,8 @@ export function EmptyState({
     </div>
   );
 }
-export function Skeleton({ count = 4 }) {
-  return (
-    <div className="food-grid" aria-label="Loading food" aria-busy="true">
-      {Array.from({ length: count }, (_, i) => (
-        <div className="skeleton-card" key={i}>
-          <div />
-          <span />
-          <span />
-        </div>
-      ))}
-    </div>
-  );
+export function Skeleton({ message = "Getting things ready…" }) {
+  return <LoadingScreen inline message={message} />;
 }
 export function ErrorNotice({ error, onRetry }) {
   return error ? (

@@ -2,15 +2,15 @@
 
 React 19 + Vite frontend, Django REST backend. Modern customer discovery/ordering and restaurant, delivery and admin workspaces. Recommendations use server-side Gemini Flash-Lite when configured, with a catalog fallback.
 
-Read [PRODUCT_STATUS.md](PRODUCT_STATUS.md) for the feature comparison, launch limitations and next-release priorities. This is a tested local product foundation, not a finished 300-feature platform.
+Read [PRODUCT_STATUS.md](PRODUCT_STATUS.md) for the feature comparison, launch limitations and next-release priorities. This is a tested product foundation, not a finished 300-feature platform.
 
 See [DATA_STORAGE.md](DATA_STORAGE.md) for the live Neon PostgreSQL data model,
 sample-catalog disclosure, deployment migrations and production upload limits.
 
 See [DASHBOARD_RUNBOOK.md](DASHBOARD_RUNBOOK.md) for granular administrator access,
 paginated People/orders/payment queues, date-filtered analytics/CSV, finance
-refund review and private customer–courier conversations. Local migrations are
-through 0022; production deployment/provider certification are separate work.
+refund review and private customer–courier conversations. Local and production
+migrations are through 0022; live financial-provider certification remains open.
 
 ## Setup
 
@@ -183,15 +183,17 @@ restricted Maps JavaScript API key/billing setup are still needed for that
 provider. Do not reuse the server-side Gemini key or copy undocumented Google
 tile endpoints. See [tracking notes](TRACKING_DESIGN_NOTES.md).
 
-Release `2a8ebb8` was pushed to `prasanti25/runchigoo` main and manually promoted at https://runchigoo.vercel.app. Vercel's Git link remains connected to a different repository; align it before relying on automatic deployments. Production migrations through 0011 were applied while preserving existing users/orders.
+Release `28a191e` was pushed to `prasanti25/runchigoo` main and manually deployed at https://runchigoo.vercel.app. Vercel's Git link remains connected to a different repository; align it before relying on automatic deployments. Production migrations through 0022 were applied after an isolated backup/restore rehearsal, preserving existing users/orders and other pre-existing application rows.
 
-The subsequent intelligence/retention/menu-operations/tracking changes and migrations 0012–0014 are **local, not yet deployed**. Run migrations against your intended environment before starting this version. Never point local fixture scripts at production. Before a public paid launch, complete the blockers in [PRODUCT_STATUS.md](PRODUCT_STATUS.md), configure durable media, shared cache, transactional email and production payment/refund/reconciliation operations, then verify backups and concurrency/load/security behavior.
+The People-directory, original-logo loader and strict food-conversation fixes require no new migration. Never point local fixture scripts at production. Before a public paid launch, complete the blockers in [PRODUCT_STATUS.md](PRODUCT_STATUS.md), configure durable media, shared cache, transactional email and production payment/refund/reconciliation operations, then verify backups and concurrency/load/security behavior.
 
 ## Intelligence and personalisation
 
 All 300 requested entries, including partial/missing/provider-dependent work, are tracked in [FEATURE_MATRIX.md](FEATURE_MATRIX.md). Do not count unused legacy mock dashboards as implemented features.
 
 - `/for-you?tab=chat`: follow-up food assistant, grounded support guidance and explicit restaurant-menu handoff.
+- Non-vegetarian requests and follow-up corrections retain the dish, diet and budget; unavailable food is not replaced by unrelated items. Known constraints are enforced before Gemini ranks eligible menu IDs. `npm run test:food-constraints:live` exercises the actual provider without business writes; set `RUCHIGO_SMOKE_URL=https://runchigoo.vercel.app` only for the explicitly allowlisted anonymous production smoke.
+- `npm run test:people-loading` verifies local account-directory actions, 320–1440px layouts, original-logo loading on genuinely pending requests/chunks and reduced-motion support. It is local-only and removes its exact temporary account; audit entries remain.
 - Empty assistant shortlists explain city/price/menu limitations. Browsing another city's menu requires an explicit action and never changes the delivery address. Named dishes such as butter chicken are not substituted with unrelated chicken dishes. `npm run test:assistant-recovery` replays the reported Delhi/pizza scenario on desktop/mobile against the actual catalog/provider.
 - `/for-you`: desktop photo-led feed with a side-by-side conversational composer; `/for-you?tab=quick` keeps detailed recommendation filters.
 - Home: real-menu auto-sliding hero, small navigation dots (no playback toolbar), reduced-motion support and a dismissible delivered-meal review reminder.

@@ -1,9 +1,33 @@
-export default function LoadingScreen({ message = "Loading..." }) {
+import BrandLogo from "./BrandLogo.jsx";
+import "./LoadingScreen.css";
+
+export default function LoadingScreen({
+  message = "Getting things ready…",
+  inline = false,
+}) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#fffaf7] text-gray-700">
-      <div className="flex items-center gap-3 rounded-2xl border border-orange-200 bg-white/80 px-5 py-4 shadow-lg backdrop-blur">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
-        <span className="font-medium">{message}</span>
+    <div
+      className={`ruchigo-loader ${inline ? "is-inline" : "is-page"}`}
+      role="status"
+      aria-live="polite"
+      aria-label={message}
+    >
+      <div className="ruchigo-loader-mark" aria-hidden="true">
+        <span className="ruchigo-loader-halo" />
+        <span className="ruchigo-loader-track" />
+        <span className="ruchigo-loader-orbit" />
+        <span className="ruchigo-loader-orbit secondary" />
+        <div className="ruchigo-loader-logo">
+          <BrandLogo />
+        </div>
+      </div>
+      <div className="ruchigo-loader-caption" aria-hidden="true">
+        <p>{message}</p>
+        <span className="ruchigo-loader-dots">
+          <i />
+          <i />
+          <i />
+        </span>
       </div>
     </div>
   );
