@@ -1,5 +1,35 @@
 # Product verification — 23 September 2026
 
+## Google address + rider rollout — production verified
+
+- Runtime commit `3543609` is pushed to `prasanti25/runchigoo` main. Vercel
+  deployment `dpl_CJo8CNs2MWFjQsv2tCctK3T3wRE6` is READY and aliased to
+  https://runchigoo.vercel.app. Deployment URL:
+  https://runchigoo-o8ujh19lh-shxvaayys-projects.vercel.app.
+- `RUCHIGO_DELIVERY_BASE_URL=https://runchigoo.vercel.app npm run test:delivery-google`
+  passes with actual Google maps and road geometry on both legs, scooter alignment
+  to the displayed polyline, desktop/mobile/fullscreen ETA, real two-finger pinch,
+  reduced motion, completion and map/route outage recovery. No real-order requests
+  or production business writes; no browser errors. Only failure/reduced-motion
+  subcases use explicit controlled responses; primary route/map acceptance is live.
+- `RUCHIGO_LOCATION_BASE_URL=https://runchigoo.vercel.app npm run test:address-location:live`
+  passes using real Google Geocoding, desktop/mobile map, guest address details,
+  header persistence and browser-only save/reload at controlled public-landmark
+  GPS. No production account, address or order records were created.
+- Public address/delivery map configurations both return Google with private,
+  no-store caching. Anonymous owned-order road-route requests return HTTP 401.
+- Final local checks pass: lint/build, 334 backend tests, 18 device/address tests,
+  Google-address fixtures, existing address regression, real rider-location test,
+  actual Google demo and OSM fallback demo regression. The fallback harness now
+  reuses Vite's exact router module/provider context for its isolated component
+  test; earlier full-run interruptions during development reloads are not passes.
+- A 462-file source/build scan found none of five configured server secrets.
+  Google browser key is intentionally public and website-restricted. Shared
+  server credentials still require rotation before a paid/public launch.
+- No database schema migration, production fixtures, payment changes or order
+  mutations were part of this rollout. GPS is browser/device/network-dependent;
+  current road estimates exclude live traffic and are not a guaranteed ETA.
+
 ## Google delivery map and read-only public demo — pre-deployment verification
 
 - Real Google Routes API and Maps JavaScript browser acceptance passed locally.

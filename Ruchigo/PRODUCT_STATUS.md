@@ -12,7 +12,7 @@ historical checkpoints, not evidence of the current Vercel alias.
 
 RuchiGo now has a consistent customer experience and operational workspaces connected to its Django API: discovery → menu → cart/coupon → checkout → kitchen states → delivery confirmation → review/support. The implementation is a working product foundation, **not a completed 300-feature commercial platform**.
 
-### Google rider map and public demo — release candidate
+### Google rider map and public demo — deployed and verified
 
 The address and delivery maps now share the Google renderer configuration. Live
 orders retain their fast, owned GPS channel; Google Routes supplies a separate
@@ -29,7 +29,12 @@ Google demo acceptance passes locally, including centre-on-polyline checks,
 desktop/mobile zoom/expand and reduced-motion/error handling. The separate live
 rider test passes through real courier GPS writes and customer reads (one observed
 update took 1,298ms), Google route/nearby lookup, stale state and completion.
-334 isolated SQLite backend tests pass. Production acceptance is pending deployment.
+334 isolated SQLite backend tests pass. Runtime `3543609` is pushed to main and
+deployed at https://runchigoo.vercel.app, deployment
+`dpl_CJo8CNs2MWFjQsv2tCctK3T3wRE6`. Public-only production Google address and
+delivery-demo acceptance both pass, including actual maps/routes, two-finger
+touch zoom, fullscreen ETA and no business-data writes. The OSM fallback browser
+regression also passes with explicit fixtures. Demo: https://runchigoo.vercel.app/demo/delivery.
 
 ### Delivery-location increment — production public lookup verified
 
