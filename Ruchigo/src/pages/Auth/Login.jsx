@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail } from "lucide-react";
-import { motion } from "framer-motion";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 import AuthLayout from "../../components/auth/AuthLayout";
@@ -20,7 +19,6 @@ const Login = () => {
     email: "",
     password: "",
     role: "customer",
-    remember: false,
   });
   const [errors, setErrors] = useState({});
 
@@ -67,7 +65,10 @@ const Login = () => {
   };
 
   return (
-    <AuthLayout title="Welcome Back!" subtitle="Login to order your favourite food.">
+    <AuthLayout
+      title="Welcome back."
+      subtitle="Your favourites are one sign-in away."
+    >
       <AuthTabs
         activeTab={activeTab}
         onChange={(tab) => {
@@ -77,7 +78,11 @@ const Login = () => {
       />
 
       <form onSubmit={handleLogin} className="space-y-5">
-        <RoleSelector selectedRole={formData.role} onSelectRole={handleRole} allowAdmin />
+        <RoleSelector
+          selectedRole={formData.role}
+          onSelectRole={handleRole}
+          allowAdmin
+        />
 
         <AuthInput
           label="Email Address"
@@ -88,6 +93,7 @@ const Login = () => {
           onChange={handleChange}
           icon={Mail}
           error={errors.email}
+          autoComplete="email"
           required
         />
 
@@ -102,12 +108,12 @@ const Login = () => {
         />
 
         <div className="mb-6 flex items-center justify-between gap-3">
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
-            <input type="checkbox" name="remember" checked={formData.remember} onChange={handleChange} className="h-4 w-4 accent-orange-500" />
-            Remember Me
-          </label>
+          <span className="muted text-xs">Sign in with your email</span>
 
-          <Link to="/forgot-password" className="text-sm font-semibold text-orange-500 transition hover:text-red-500">
+          <Link
+            to="/forgot-password"
+            className="text-sm font-semibold text-orange-500 transition hover:text-red-500"
+          >
             Forgot Password?
           </Link>
         </div>
@@ -119,17 +125,15 @@ const Login = () => {
 
       <div className="mt-8 text-center">
         <p className="text-sm text-gray-600">
-          Don’t have an account? {" "}
-          <Link to="/register" className="font-semibold text-orange-500 transition hover:text-red-500">
+          Don’t have an account?{" "}
+          <Link
+            to="/register"
+            className="font-semibold text-orange-500 transition hover:text-red-500"
+          >
             Create Account
           </Link>
         </p>
       </div>
-
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="mt-6 rounded-2xl border border-orange-100 bg-orange-50 p-4">
-        <h3 className="text-sm font-semibold text-orange-600">🔒 Secure Login</h3>
-        <p className="mt-2 text-sm leading-6 text-gray-600">Your account is protected using secure authentication and encrypted communication. We never share your personal information with third parties.</p>
-      </motion.div>
 
       <AuthFooter />
     </AuthLayout>

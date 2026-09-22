@@ -36,11 +36,17 @@ const ForgotPassword = () => {
     if (!validate()) return;
 
     setLoading(true);
-    apiRequest("/auth/forgot_password/", { method: "POST", body: { email: email.trim().toLowerCase() } })
+    apiRequest("/auth/forgot_password/", {
+      method: "POST",
+      body: { email: email.trim().toLowerCase() },
+    })
       .then(() => {
         toast.success("If that account exists, a reset code has been sent.");
         navigate("/verify-otp", {
-          state: { email: email.trim().toLowerCase(), purpose: "reset-password" },
+          state: {
+            email: email.trim().toLowerCase(),
+            purpose: "reset-password",
+          },
         });
       })
       .catch((requestError) => setError(requestError.message))
@@ -48,7 +54,10 @@ const ForgotPassword = () => {
   };
 
   return (
-    <AuthLayout title="Forgot your password?" subtitle="We'll help you get back to ordering delicious food.">
+    <AuthLayout
+      title="Forgot your password?"
+      subtitle="We'll help you get back to ordering delicious food."
+    >
       <form onSubmit={handleSubmit} className="space-y-5">
         <AuthInput
           label="Email Address"
@@ -68,14 +77,20 @@ const ForgotPassword = () => {
       </form>
 
       <div className="mt-6 text-center">
-        <Link to="/login" className="font-semibold text-orange-500 transition hover:text-red-500">
+        <Link
+          to="/login"
+          className="font-semibold text-orange-500 transition hover:text-red-500"
+        >
           ← Back to Login
         </Link>
       </div>
 
       <div className="mt-6 rounded-2xl border border-orange-100 bg-orange-50 p-4">
-        <h3 className="font-semibold text-orange-600">💡 Tip</h3>
-        <p className="mt-2 text-sm leading-6 text-gray-600">We'll send a One-Time Password (OTP) to your registered email. Use it to securely reset your password.</p>
+        <h3 className="font-semibold text-orange-600">Check your email</h3>
+        <p className="mt-2 text-sm leading-6 text-gray-600">
+          We'll send a One-Time Password (OTP) to your registered email. Use it
+          to securely reset your password.
+        </p>
       </div>
 
       <AuthFooter />

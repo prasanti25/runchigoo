@@ -1,324 +1,399 @@
-import { useEffect, useMemo, useState } from "react";
-import { Search, Star, Clock3, ShoppingCart, SlidersHorizontal, X, UtensilsCrossed } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useCart } from "../context/CartContext.jsx";
-import { useAuth } from "../context/AuthContext.jsx";
-import { apiRequest } from "../lib/api.js";
-import { applyImageFallback, getFoodFallback, resolveFoodImage } from "../lib/images.js";
-import toast from "react-hot-toast";
-
-const filterChips = [
-  "Veg",
-  "Non Veg",
-  "Biryani",
-  "Pizza",
-  "Burgers",
-  "Chinese",
-  "South Indian",
-  "Desserts",
-  "Drinks",
-];
-
-const recentSearches = ["Biryani", "Paneer", "Pizza", "Fries", "Coffee"];
-const popularSearches = ["Chicken Biryani", "Butter Chicken", "Burger", "Momos", "Ice Cream"];
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import {
+  Search,
+  SlidersHorizontal,
+  X,
+  Leaf,
+  MapPin,
+  Timer,
+  Star,
+  Tag,
+  Flame,
+} from "lucide-react";
+import Navbar from "../components/Navbar.jsx";
+import {
+  EmptyState,
+  ErrorNotice,
+  FoodCard,
+  RestaurantCard,
+  Skeleton,
+} from "../components/product/UI.jsx";
+import {
+  discoveryPath,
+  saveDeliveryLocation,
+  useDeliveryLocation,
+  useRemote,
+} from "../lib/product.js";
 
 export default function SearchPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { addToCart } = useCart();
-  const { isAuthenticated } = useAuth();
-  const [query, setQuery] = useState(() => location.state?.query || "");
-  const [selectedFilter, setSelectedFilter] = useState("All");
-  const [foods, setFoods] = useState([]);
-  const [recent, setRecent] = useState(() => {
-    if (typeof window === "undefined") {
-      return recentSearches;
-    }
-
-    try {
-      const stored = window.localStorage.getItem("ruchigo-recent-searches");
-      const parsed = stored ? JSON.parse(stored) : recentSearches;
-      return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string").slice(0, 5) : recentSearches;
-    } catch {
-      return recentSearches;
-    }
-  });
-
+  const [params, setParams] = useSearchParams();
+  const location = useDeliveryLocation();
+  const input = params.get("q") || "";
+  const [query, setQuery] = useState(input);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState("");
+  const nearby =
+    Boolean(params.get("radius_km")) || params.get("sort") === "distance";
+  const hasCoordinates =
+    Number.isFinite(Number(location.latitude)) &&
+    Number.isFinite(Number(location.longitude)) &&
+    location.latitude != null &&
+    location.longitude != null;
+  const setInput = (value) =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        value ? next.set("q", value) : next.delete("q");
+        next.delete("page");
+        return next;
+      },
+      { replace: true },
+    );
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    try {
-      window.localStorage.setItem("ruchigo-recent-searches", JSON.stringify(recent));
-    } catch {
-      // Ignore storage write issues in restricted environments.
-    }
-  }, [recent]);
-
-  useEffect(() => {
-    apiRequest("/menu-items/").then((data) => {
-      const results = data.results || data;
-      setFoods(results.map((item) => ({
-        id: item.id,
-        restaurantId: item.restaurant,
-        restaurant: item.restaurant_detail?.name || "Restaurant",
-        category: item.category_name || "Menu",
-        name: item.name,
-        description: item.description,
-        price: Number(item.price),
-        rating: item.restaurant_detail?.average_rating || "New",
-        isVeg: item.is_vegetarian,
-        deliveryTime: `${item.preparation_minutes} min`,
-        image: resolveFoodImage(item.image, item.id),
-        imageAlt: item.name,
-      })));
-    }).catch(() => toast.error("Unable to load the menu right now."));
-  }, []);
-
-  const suggestions = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return [];
-
-    return foods
-      .filter((item) => item.name.toLowerCase().includes(normalizedQuery) || item.restaurant.toLowerCase().includes(normalizedQuery))
-      .slice(0, 5)
-      .map((item) => item.name);
-  }, [foods, query]);
-
-  const results = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return foods.filter((item) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        item.name.toLowerCase().includes(normalizedQuery) ||
-        item.restaurant.toLowerCase().includes(normalizedQuery) ||
-        item.category.toLowerCase().includes(normalizedQuery) ||
-        item.description.toLowerCase().includes(normalizedQuery);
-
-      const matchesFilter =
-        selectedFilter === "All" ||
-        item.category.toLowerCase() === selectedFilter.toLowerCase() ||
-        item.name.toLowerCase().includes(selectedFilter.toLowerCase()) ||
-        item.restaurant.toLowerCase().includes(selectedFilter.toLowerCase()) ||
-        (selectedFilter === "Burgers" && item.category.toLowerCase() === "burger") ||
-        (selectedFilter === "Non Veg" && !item.isVeg) ||
-        (selectedFilter === "Veg" && item.isVeg);
-
-      return matchesQuery && matchesFilter;
+    const timer = setTimeout(() => setQuery(input), 300);
+    return () => clearTimeout(timer);
+  }, [input]);
+  const filters = {
+    city: nearby ? undefined : location.city,
+    q: query,
+    category: params.get("category"),
+    vegetarian: params.get("vegetarian"),
+    budget: params.get("budget"),
+    min_rating: params.get("min_rating"),
+    max_prep: params.get("max_prep"),
+    offers: params.get("offers"),
+    bestseller: params.get("bestseller"),
+    ...(nearby && hasCoordinates
+      ? {
+          latitude: Number(location.latitude).toFixed(3),
+          longitude: Number(location.longitude).toFixed(3),
+          radius_km: params.get("radius_km") || 5,
+        }
+      : {}),
+    sort: params.get("sort") || "recommended",
+    page: params.get("page") || 1,
+  };
+  const { data, loading, error, reload } = useRemote(
+    nearby && !hasCoordinates ? null : discoveryPath(filters),
+  );
+  const view = params.get("view") || "restaurants";
+  const update = (key, value) =>
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      value ? next.set(key, value) : next.delete(key);
+      if (key !== "page") next.delete("page");
+      return next;
     });
-  }, [foods, query, selectedFilter]);
-
-  const handleSearch = (value) => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-
-    setQuery(trimmed);
-    setRecent((prev) => [trimmed, ...prev.filter((item) => item !== trimmed)].slice(0, 5));
+  const count = view === "dishes" ? data?.item_count : data?.restaurant_count;
+  const toggle = (key, value = "true") =>
+    update(key, params.get(key) === value ? "" : value);
+  const chooseNearby = () => {
+    setLocationError("");
+    const activate = () =>
+      setParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set("radius_km", "5");
+        next.set("sort", "distance");
+        next.delete("page");
+        return next;
+      });
+    if (hasCoordinates) {
+      activate();
+      return;
+    }
+    if (!navigator.geolocation) {
+      setLocationError(
+        "Location isn’t supported here. Choose a city in the header instead.",
+      );
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        saveDeliveryLocation({
+          ...location,
+          latitude: Number(position.coords.latitude.toFixed(3)),
+          longitude: Number(position.coords.longitude.toFixed(3)),
+        });
+        setLocating(false);
+        activate();
+      },
+      () => {
+        setLocating(false);
+        setLocationError(
+          "Location wasn’t shared. Allow it in your browser or browse by city instead.",
+        );
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
+    );
   };
-
-  const clearSearch = () => {
-    setQuery("");
-    setSelectedFilter("All");
-  };
-
+  const clearFilters = () =>
+    setParams((current) => {
+      const next = new URLSearchParams();
+      for (const key of ["q", "view"])
+        if (current.get(key)) next.set(key, current.get(key));
+      return next;
+    });
+  const filterCount = [
+    "vegetarian",
+    "budget",
+    "category",
+    "min_rating",
+    "max_prep",
+    "offers",
+    "bestseller",
+    "radius_km",
+  ].filter((key) => params.get(key)).length;
   return (
-    <main className="min-h-screen bg-[#fff8f5] text-gray-900">
-      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="overflow-hidden rounded-[32px] border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-orange-100 shadow-[0_20px_80px_-40px_rgba(255,107,53,0.7)]">
-          <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[1.2fr_0.8fr] lg:p-8">
-            <div>
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-orange-500">
-                <Search size={18} />
-                Discover food near you
-              </div>
-
-              <div className="rounded-3xl border border-orange-100 bg-white p-3 shadow-sm">
-                <div className="flex items-center gap-3 rounded-2xl bg-[#fffaf7] px-3 py-3">
-                  <Search className="text-orange-500" size={20} />
-                  <input
-                    type="text"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    onKeyDown={(event) => event.key === "Enter" && handleSearch(query)}
-                    placeholder="Search for biryani, pizza, burgers, desserts..."
-                    className="flex-1 border-none bg-transparent text-sm outline-none placeholder:text-gray-400 sm:text-base"
-                  />
-                  {query && (
-                    <button onClick={clearSearch} className="rounded-full bg-orange-100 p-1 text-orange-500">
-                      <X size={16} />
-                    </button>
-                  )}
-                </div>
-
-                {suggestions.length > 0 && (
-                  <div className="mt-3 space-y-2 rounded-2xl bg-orange-50 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-600">Suggestions</p>
-                    {suggestions.map((item) => (
-                      <button
-                        key={item}
-                        onClick={() => handleSearch(item)}
-                        className="block w-full rounded-xl bg-white px-3 py-2 text-left text-sm text-gray-700 shadow-sm transition hover:text-orange-500"
-                      >
-                        {item}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button
-                  onClick={() => setSelectedFilter("All")}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectedFilter === "All" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-orange-50 hover:text-orange-500"}`}
-                >
-                  All
-                </button>
-                {filterChips.map((chip) => (
-                  <button
-                    key={chip}
-                    onClick={() => setSelectedFilter(chip)}
-                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectedFilter === chip ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-orange-50 hover:text-orange-500"}`}
-                  >
-                    {chip}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-[28px] bg-white/90 p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-gray-700">
-                <SlidersHorizontal size={18} className="text-orange-500" />
-                Quick picks
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Popular Searches</p>
-                  <div className="flex flex-wrap gap-2">
-                    {popularSearches.map((term) => (
-                      <button
-                        key={term}
-                        onClick={() => handleSearch(term)}
-                        className="rounded-full border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-600 transition hover:bg-orange-100"
-                      >
-                        {term}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-gray-500">Recent Searches</p>
-                  <div className="flex flex-wrap gap-2">
-                    {recent.map((term) => (
-                      <button
-                        key={term}
-                        onClick={() => handleSearch(term)}
-                        className="rounded-full bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-orange-50 hover:text-orange-500"
-                      >
-                        {term}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+    <>
+      <Navbar />
+      <main className="customer-main">
+        <div className="container search-page">
+          <div className="page-heading">
+            <p className="eyebrow">FOLLOW YOUR CRAVINGS</p>
+            <h1>Find your kind of delicious.</h1>
+            <p className="muted">
+              {location.city
+                ? `Discover kitchens and dishes in ${location.city}.`
+                : "Discover kitchens, favourites and something new."}
+            </p>
           </div>
-        </div>
-
-        <section className="mt-8">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 sm:text-3xl">Top food picks</h2>
-              <p className="text-sm text-gray-500">Fresh, fast and super delicious.</p>
-            </div>
-            <div className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-orange-500 shadow-sm">
-              {results.length} result{results.length === 1 ? "" : "s"}
-            </div>
+          <div className="discovery-search">
+            <Search size={23} />
+            <input
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Search restaurants, dishes or cuisines"
+              aria-label="Search restaurants, dishes or cuisines"
+            />
+            {input && (
+              <button
+                className="icon-button"
+                onClick={() => setInput("")}
+                aria-label="Clear search"
+              >
+                <X size={19} />
+              </button>
+            )}
           </div>
-
-          {results.length > 0 ? (
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {results.map((item) => (
-                <article
-                  key={item.id}
-                  className="group relative overflow-hidden rounded-[28px] border border-orange-100 bg-white shadow-[0_18px_60px_-35px_rgba(255,107,53,0.45)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_70px_-30px_rgba(255,107,53,0.55)]"
-                >
-                  <Link
-                    to={`/food-details/${item.id}`}
-                    aria-label={`View ${item.name}`}
-                    className="absolute inset-0 z-10 rounded-[28px] focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  />
-                  <div className="relative overflow-hidden">
-                    <img
-                      src={item.image}
-                      onError={(event) => applyImageFallback(event, getFoodFallback(item.id))}
-                      alt={item.imageAlt}
-                      className="h-56 w-full object-cover transition duration-500 group-hover:scale-105"
-                    />
-                    <span className={`absolute left-3 top-3 rounded-full px-3 py-1 text-xs font-bold ${item.isVeg ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`}>
-                      {item.isVeg ? "Veg" : "Non Veg"}
-                    </span>
-                  </div>
-
-                  <div className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{item.name}</h3>
-                        <p className="mt-1 text-sm text-gray-500">{item.restaurant}</p>
-                      </div>
-                      <div className="flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-sm font-bold text-green-600">
-                        <Star size={14} fill="currentColor" />
-                        {item.rating}
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <Clock3 size={14} />
-                        {item.deliveryTime}
-                      </span>
-                      <span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-600">{item.category}</span>
-                    </div>
-
-                    <p className="mt-3 text-sm leading-6 text-gray-600">{item.description}</p>
-
-                    <div className="mt-4 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs text-gray-500">Starting at</p>
-                        <p className="text-lg font-bold text-orange-500">₹{item.price}</p>
-                      </div>
-
-                      <button
-                        onClick={async () => {
-                          try {
-                            if (await addToCart(item)) toast.success("Added to cart.");
-                          } catch (error) {
-                            toast.error(error.message);
-                            if (!isAuthenticated) navigate("/login", { state: { from: { pathname: "/search" } } });
-                          }
-                        }}
-                        className="relative z-20 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-red-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:scale-[1.02]"
-                      >
-                        <ShoppingCart size={16} />
-                        Add to cart
-                      </button>
-                    </div>
-                  </div>
-                </article>
+          <div className="filter-bar">
+            <span className="filter-label">
+              <SlidersHorizontal size={17} />
+              Filters{filterCount ? ` (${filterCount})` : ""}
+            </span>
+            <button
+              className={`filter-chip ${nearby ? "selected" : ""}`}
+              aria-pressed={nearby}
+              disabled={locating}
+              onClick={() => {
+                if (!nearby || !hasCoordinates) chooseNearby();
+                else
+                  setParams((current) => {
+                    const next = new URLSearchParams(current);
+                    next.delete("radius_km");
+                    if (next.get("sort") === "distance") next.delete("sort");
+                    next.delete("page");
+                    return next;
+                  });
+              }}
+            >
+              <MapPin size={14} />
+              {locating ? "Locating…" : "Near me"}
+            </button>
+            <button
+              className={`filter-chip ${params.get("max_prep") ? "selected" : ""}`}
+              aria-pressed={Boolean(params.get("max_prep"))}
+              onClick={() => toggle("max_prep", "30")}
+            >
+              <Timer size={14} />
+              Fast prep · ≤30 min
+            </button>
+            <button
+              className={`filter-chip ${params.get("min_rating") ? "selected" : ""}`}
+              aria-pressed={Boolean(params.get("min_rating"))}
+              onClick={() => toggle("min_rating", "4")}
+            >
+              <Star size={14} />
+              Rating 4.0+
+            </button>
+            <button
+              className={`filter-chip ${params.get("offers") === "true" ? "selected" : ""}`}
+              aria-pressed={params.get("offers") === "true"}
+              onClick={() => toggle("offers")}
+            >
+              <Tag size={14} />
+              Restaurant offers
+            </button>
+            <button
+              className={`filter-chip ${params.get("bestseller") === "true" ? "selected" : ""}`}
+              aria-pressed={params.get("bestseller") === "true"}
+              onClick={() => toggle("bestseller")}
+            >
+              <Flame size={14} />
+              Bestsellers
+            </button>
+            <button
+              className={`filter-chip ${params.get("vegetarian") === "true" ? "selected" : ""}`}
+              aria-pressed={params.get("vegetarian") === "true"}
+              onClick={() =>
+                update("vegetarian", params.get("vegetarian") ? "" : "true")
+              }
+            >
+              <Leaf size={14} aria-hidden="true" /> Veg dishes
+            </button>
+            <select
+              aria-label="Budget filter"
+              value={params.get("budget") || ""}
+              onChange={(e) => update("budget", e.target.value)}
+            >
+              <option value="">Any budget</option>
+              <option value="150">Up to ₹150 per dish</option>
+              <option value="250">Up to ₹250 per dish</option>
+              <option value="500">Up to ₹500 per dish</option>
+            </select>
+            <select
+              aria-label="Cuisine filter"
+              value={params.get("category") || ""}
+              onChange={(e) => update("category", e.target.value)}
+            >
+              <option value="">All cuisines</option>
+              {data?.categories.map((category) => (
+                <option key={category.id}>{category.name}</option>
               ))}
+            </select>
+            <select
+              aria-label="Sort results"
+              value={filters.sort}
+              onChange={(e) =>
+                e.target.value === "distance"
+                  ? chooseNearby()
+                  : update("sort", e.target.value)
+              }
+            >
+              <option value="recommended">Recommended</option>
+              <option value="rating">Top rated</option>
+              <option value="price">Price: low to high</option>
+              <option value="fastest">Quick preparation</option>
+              <option value="distance">Nearest first</option>
+            </select>
+            {nearby && (
+              <select
+                aria-label="Nearby radius"
+                value={params.get("radius_km") || "5"}
+                onChange={(e) => update("radius_km", e.target.value)}
+              >
+                <option value="2">Within 2 km</option>
+                <option value="5">Within 5 km</option>
+                <option value="10">Within 10 km</option>
+              </select>
+            )}
+            {filterCount > 0 && (
+              <button className="text-link" onClick={clearFilters}>
+                Clear filters <X size={14} />
+              </button>
+            )}
+          </div>
+          <p className="discovery-filter-note">
+            Combine filters to find your match. Budget is per dish; preparation
+            time excludes delivery.
+            {nearby &&
+              " Distances are approximate straight-line distances; only kitchens with map locations appear."}
+            {params.get("offers") === "true" &&
+              " Restaurant offers have their own terms; discounts are confirmed at checkout."}
+          </p>
+          <ErrorNotice
+            error={
+              locationError ||
+              (nearby && !hasCoordinates
+                ? "Share your location using Near me, or clear filters to browse by city."
+                : "")
+            }
+          />
+          <div className="results-heading">
+            <div className="segmented">
+              <button
+                className={view === "restaurants" ? "active" : ""}
+                aria-pressed={view === "restaurants"}
+                onClick={() => update("view", "restaurants")}
+              >
+                Restaurants
+              </button>
+              <button
+                className={view === "dishes" ? "active" : ""}
+                aria-pressed={view === "dishes"}
+                onClick={() => update("view", "dishes")}
+              >
+                Dishes
+              </button>
             </div>
-          ) : (
-            <div className="rounded-[32px] border border-dashed border-orange-200 bg-white px-6 py-16 text-center shadow-sm">
-              <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-orange-50 text-orange-500">
-                <UtensilsCrossed size={40} />
+            <span className="muted">
+              {!loading && `${count || 0} ${view} to discover`}
+            </span>
+          </div>
+          <ErrorNotice error={error} onRetry={reload} />
+          {loading ? (
+            <Skeleton count={8} />
+          ) : count ? (
+            <>
+              <div
+                className={view === "dishes" ? "food-grid" : "restaurant-grid"}
+              >
+                {view === "dishes"
+                  ? data.items.map((item) => (
+                      <FoodCard key={item.id} item={item} />
+                    ))
+                  : data.restaurants.map((restaurant) => (
+                      <RestaurantCard
+                        key={restaurant.id}
+                        restaurant={restaurant}
+                      />
+                    ))}
               </div>
-              <h3 className="text-2xl font-bold text-gray-900">No Food Found</h3>
-              <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">Try a different keyword, clear the filter, or browse one of the popular searches above.</p>
-            </div>
+              {count > 12 && (
+                <div className="pagination">
+                  <button
+                    className="btn secondary"
+                    disabled={Number(filters.page) === 1}
+                    onClick={() => update("page", Number(filters.page) - 1)}
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {filters.page} of {Math.ceil(count / 12)}
+                  </span>
+                  <button
+                    className="btn secondary"
+                    disabled={Number(filters.page) * 12 >= count}
+                    onClick={() => update("page", Number(filters.page) + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            !error && (
+              <EmptyState
+                title={
+                  nearby
+                    ? "No mapped kitchens match nearby"
+                    : "No bites found this time"
+                }
+                description={
+                  nearby
+                    ? "Try a wider radius or clear filters to browse by city. Kitchens without a map location won’t appear here."
+                    : "Try another dish, city or budget. Your next favourite is out there."
+                }
+                onRetry={() => {
+                  setInput("");
+                  setParams({});
+                }}
+              />
+            )
           )}
-        </section>
-      </section>
-    </main>
+        </div>
+      </main>
+    </>
   );
 }

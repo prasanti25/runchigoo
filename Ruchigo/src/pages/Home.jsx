@@ -1,295 +1,237 @@
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
+  Asterisk,
+  Check,
   Clock3,
-  Flame,
-  MapPin,
   Search,
-  ShoppingBag,
-  Star,
-  TrendingUp,
-  Wallet,
+  Sparkles,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
-
 import Navbar from "../components/Navbar.jsx";
-import { useAuth } from "../context/AuthContext.jsx";
-import { apiRequest } from "../lib/api.js";
+import Recommendations from "../components/product/Recommendations.jsx";
 import {
-  applyImageFallback,
-  getFoodFallback,
-  getRestaurantFallback,
-  resolveFoodImage,
-  resolveRestaurantImage,
-} from "../lib/images.js";
-
-const categoryCards = [
-  { name: "Biryani", tag: "Spicy & aromatic", icon: Flame },
-  { name: "Pizza", tag: "Cheesy comfort", icon: ShoppingBag },
-  { name: "Burgers", tag: "Fast and juicy", icon: ShoppingBag },
-  { name: "Desserts", tag: "Sweet cravings", icon: Star },
-  { name: "Healthy", tag: "Light bites", icon: TrendingUp },
-  { name: "Drinks", tag: "Refresh & relax", icon: Wallet },
-];
+  EmptyState,
+  ErrorNotice,
+  FoodCard,
+  RestaurantCard,
+  SectionTitle,
+  Skeleton,
+} from "../components/product/UI.jsx";
+import {
+  discoveryPath,
+  useDeliveryLocation,
+  useRemote,
+} from "../lib/product.js";
+import { categoryPhoto, getFoodFallback } from "../lib/images.js";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { isAuthenticated, logout, role } = useAuth();
+  const location = useDeliveryLocation();
   const [query, setQuery] = useState("");
-  const [trendingRestaurants, setTrendingRestaurants] = useState([]);
-  const [featuredDishes, setFeaturedDishes] = useState([]);
-  const [activeOffers, setActiveOffers] = useState([]);
-  const [catalogCounts, setCatalogCounts] = useState({ restaurants: 0, dishes: 0, offers: 0 });
-
-  const accountPath = role === "admin"
-    ? "/admin-dashboard"
-    : role === "restaurant"
-      ? "/restaurant-dashboard"
-      : role === "delivery"
-        ? "/delivery-dashboard"
-        : "/profile";
-  const accountLabel = role === "customer" ? "My Profile" : "Open Dashboard";
-
-  useEffect(() => {
-    let active = true;
-    Promise.allSettled([
-      apiRequest("/restaurants/"),
-      apiRequest("/menu-items/"),
-      apiRequest("/offers/"),
-    ]).then(([restaurantResult, menuResult, offerResult]) => {
-      if (!active) return;
-      if (restaurantResult.status === "fulfilled") {
-        const data = restaurantResult.value;
-        setCatalogCounts((current) => ({ ...current, restaurants: data.count ?? data.length ?? 0 }));
-        setTrendingRestaurants((data.results || data).slice(0, 3).map((restaurant) => ({ id: restaurant.id, name: restaurant.name, cuisine: restaurant.description || restaurant.city, rating: restaurant.average_rating || "New", city: restaurant.city, image: resolveRestaurantImage(restaurant.image, restaurant.id) })));
-      }
-      if (menuResult.status === "fulfilled") {
-        const data = menuResult.value;
-        setCatalogCounts((current) => ({ ...current, dishes: data.count ?? data.length ?? 0 }));
-        setFeaturedDishes((data.results || data).slice(0, 4).map((item) => ({ id: item.id, name: item.name, restaurant: item.restaurant_detail?.name || "Restaurant", price: Number(item.price), deliveryTime: `${item.preparation_minutes} min`, image: resolveFoodImage(item.image, item.id) })));
-      }
-      if (offerResult.status === "fulfilled") {
-        const data = offerResult.value;
-        setCatalogCounts((current) => ({ ...current, offers: data.count ?? data.length ?? 0 }));
-        setActiveOffers((data.results || data).slice(0, 3));
-      }
-    });
-    return () => { active = false; };
-  }, []);
-
-  const statCards = [
-    { label: "Open restaurants", value: catalogCounts.restaurants },
-    { label: "Available dishes", value: catalogCounts.dishes },
-    { label: "Active offers", value: catalogCounts.offers },
-  ];
-
-  const handleSearchSubmit = (event) => {
-    event.preventDefault();
-    const trimmedQuery = query.trim();
-    navigate("/search", { state: { query: trimmedQuery } });
-  };
-
+  const { data, loading, error, reload } = useRemote(
+    discoveryPath({ city: location.city }),
+  );
   return (
     <>
       <Navbar />
-
-      <main className="min-h-screen bg-[#fffaf7] text-gray-900">
-        <section className="mx-auto max-w-7xl px-4 pb-6 pt-2 sm:px-6 lg:px-8">
-          <motion.section
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="overflow-hidden rounded-[34px] bg-gradient-to-r from-orange-600 via-orange-500 to-orange-400 px-5 py-8 text-white shadow-[0_24px_90px_-30px_rgba(255,107,53,0.9)] sm:px-8 lg:px-10 lg:py-12"
-          >
-            <div className="grid items-center gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-              <div>
-                <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-sm font-semibold text-orange-50 backdrop-blur">
-                  <Flame size={16} />
-                  Fresh food, delivered fast
-                </p>
-
-                <h1 className="max-w-2xl text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">
-                  Savor every bite with RuchiGo.
-                </h1>
-
-                <p className="mt-4 max-w-2xl text-base text-orange-50 sm:text-lg">
-                  Discover trending restaurants, crave-worthy dishes, and a premium delivery experience designed for everyday comfort.
-                </p>
-
-                <form onSubmit={handleSearchSubmit} className="mt-8 flex flex-col gap-3 rounded-[24px] bg-white/15 p-3 backdrop-blur md:flex-row md:items-center">
-                  <div className="flex flex-1 items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm">
-                    <Search className="text-orange-500" size={20} />
-                    <input
-                      type="text"
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Search restaurants, cuisines or dishes"
-                      className="w-full bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="rounded-2xl bg-white px-6 py-3 text-sm font-bold text-orange-600 transition hover:bg-orange-50"
-                  >
-                    Search Now
-                  </button>
-                </form>
-
-                <div className="mt-6 flex flex-wrap gap-3">
-                  {!isAuthenticated ? (
-                    <>
-                      <Link to="/login" className="rounded-2xl border border-white/40 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">Login</Link>
-                      <Link to="/register" className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-orange-600 transition hover:bg-orange-50">Register</Link>
-                    </>
-                  ) : (
-                    <>
-                      <Link to={accountPath} className="rounded-2xl border border-white/40 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">{accountLabel}</Link>
-                      <button onClick={() => logout()} className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-orange-600 transition hover:bg-orange-50">Logout</button>
-                    </>
-                  )}
-                </div>
+      <main className="customer-main">
+        <div className="container">
+          <section className="home-hero">
+            <div className="hero-copy">
+              <span className="hero-kicker">
+                <span />A LITTLE JOY, DELIVERED.
+              </span>
+              <h1>
+                Your cravings.
+                <br />
+                <em>Our favourite</em>
+                <br />
+                thing to deliver.
+              </h1>
+              <p>
+                From the first bite to the last.
+                <br />
+                Discover food you’ll love, from kitchens around you.
+              </p>
+              <form
+                className="hero-search"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  navigate(`/search?q=${encodeURIComponent(query)}`);
+                }}
+              >
+                <Search size={20} />
+                <input
+                  aria-label="Search food or restaurants"
+                  placeholder="What are you craving today?"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+                <button type="submit" aria-label="Search">
+                  <ArrowRight size={21} />
+                </button>
+              </form>
+              <div className="hero-benefits">
+                <span>
+                  <Check size={14} />
+                  Freshly prepared
+                </span>
+                <span>
+                  <Check size={14} />
+                  Local favourites
+                </span>
+                <span>
+                  <Check size={14} />
+                  Made for you
+                </span>
               </div>
-
-              <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-                {statCards.map((stat) => (
-                  <div key={stat.label} className="rounded-[24px] border border-white/20 bg-white/15 p-5 backdrop-blur-lg">
-                    <p className="text-3xl font-black">{stat.value}</p>
-                    <p className="mt-2 text-sm text-orange-50">{stat.label}</p>
-                  </div>
+            </div>
+            <div className="hero-art">
+              <div className="hero-orbit" />
+              <img
+                className="hero-food"
+                src="/food/protein-bowl.webp"
+                alt="A colourful freshly prepared meal"
+                fetchPriority="high"
+              />
+              <span className="hero-note">
+                <Sparkles size={18} />
+                <span>
+                  YOUR NEXT
+                  <br />
+                  <strong>favourite meal.</strong>
+                </span>
+              </span>
+              <span className="hero-caption">
+                <Clock3 size={18} />
+                <span>
+                  Fresh from the kitchen
+                  <br />
+                  <strong>to your happy place.</strong>
+                </span>
+              </span>
+              <span className="hero-star" aria-hidden="true">
+                <Asterisk size={86} strokeWidth={1.5} />
+              </span>
+              <span className="hero-label">GOOD FOOD. GOOD MOOD.</span>
+            </div>
+          </section>
+          <section className="category-section">
+            <SectionTitle
+              title="What’s on your mind?"
+              to="/search"
+              action="Explore the menu"
+            />
+            <div className="category-rail">
+              {(data?.categories || []).slice(0, 10).map((category) => (
+                <Link
+                  to={`/search?category=${encodeURIComponent(category.name)}`}
+                  className="category-card"
+                  key={category.id}
+                >
+                  <span className="category-photo">
+                    <img
+                      src={categoryPhoto(category.name)}
+                      alt=""
+                      width={320}
+                      height={320}
+                      loading="lazy"
+                      decoding="async"
+                      onError={(event) => {
+                        const fallback = getFoodFallback({
+                          name: category.name,
+                        });
+                        if (!event.currentTarget.src.endsWith(fallback))
+                          event.currentTarget.src = fallback;
+                      }}
+                    />
+                  </span>
+                  <strong>{category.name}</strong>
+                </Link>
+              ))}
+              {loading && <p className="muted">Finding your favourites…</p>}
+            </div>
+          </section>
+          <section className="discovery-section">
+            <SectionTitle
+              eyebrow="YOUR NEIGHBOURHOOD, ON A PLATE"
+              title={
+                location.city
+                  ? `Great food in ${location.city}`
+                  : "Kitchens worth discovering"
+              }
+              to="/search"
+            />
+            <ErrorNotice error={error} onRetry={reload} />
+            {loading ? (
+              <Skeleton />
+            ) : data?.restaurants.length ? (
+              <div className="restaurant-grid">
+                {data.restaurants.slice(0, 4).map((restaurant) => (
+                  <RestaurantCard key={restaurant.id} restaurant={restaurant} />
                 ))}
               </div>
-            </div>
-          </motion.section>
-
-          <section className="py-10">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-orange-500">Offers</p>
-                <h2 className="mt-2 text-2xl font-bold text-gray-900 sm:text-3xl">Hot deals for food lovers</h2>
-              </div>
-              <Link to="/search" className="inline-flex items-center gap-2 text-sm font-semibold text-orange-500">
-                Explore all
-                <ArrowRight size={16} />
+            ) : (
+              !error && (
+                <EmptyState
+                  title="Something delicious is on its way"
+                  description="Choose another city to discover available restaurants."
+                  to="/search"
+                />
+              )
+            )}
+          </section>
+          <section className="editorial-strip">
+            <div>
+              <span className="eyebrow">SMALL BUDGET. BIG CRAVINGS.</span>
+              <h2>
+                A good meal doesn’t
+                <br />
+                have to be a big deal.
+              </h2>
+              <Link to="/search?budget=250" className="btn dark">
+                Explore meals under ₹250
+                <ArrowRight size={17} />
               </Link>
             </div>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
-              {activeOffers.map((offer) => (
-                <div key={offer.id} className="rounded-[24px] border border-orange-100 bg-white p-5 shadow-sm">
-                  <p className="text-sm font-semibold text-orange-600">Special offer</p>
-                  <p className="mt-2 text-lg font-bold text-gray-900">{offer.title}</p>
-                  {offer.description && <p className="mt-2 text-sm text-gray-500">{offer.description}</p>}
-                </div>
-              ))}
-              {!activeOffers.length && <p className="text-sm text-gray-500">No active offers right now.</p>}
-            </div>
+            <span className="editorial-number">
+              ₹250<small>AND UNDER</small>
+            </span>
+            <span className="editorial-squiggle">✳</span>
           </section>
-
-          <section className="py-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-orange-500">Browse</p>
-                <h2 className="mt-2 text-2xl font-bold text-gray-900 sm:text-3xl">What are you craving?</h2>
+          <Recommendations />
+          <section className="discovery-section">
+            <SectionTitle
+              eyebrow="PICK A PLATE, MAKE YOUR DAY"
+              title="A little of everything you love"
+              to="/search?view=dishes"
+            />
+            {loading ? (
+              <Skeleton />
+            ) : (
+              <div className="food-grid">
+                {data?.items.slice(0, 8).map((item) => (
+                  <FoodCard key={item.id} item={item} />
+                ))}
               </div>
-            </div>
-
-            <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-              {categoryCards.map((category) => {
-                const Icon = category.icon;
-
-                return (
-                  <button
-                    key={category.name}
-                    onClick={() => navigate("/search", { state: { query: category.name } })}
-                    className="rounded-[24px] border border-orange-100 bg-white p-5 text-left shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
-                  >
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
-                      <Icon size={22} />
-                    </div>
-                    <p className="mt-4 text-base font-bold text-gray-900">{category.name}</p>
-                    <p className="mt-1 text-sm text-gray-500">{category.tag}</p>
-                  </button>
-                );
-              })}
-            </div>
+            )}
           </section>
-
-          <section className="py-10">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-orange-500">Trending</p>
-                <h2 className="mt-2 text-2xl font-bold text-gray-900 sm:text-3xl">Trending restaurants</h2>
-              </div>
+          <section className="join-banner">
+            <div>
+              <p className="eyebrow">GOOD FOOD BRINGS US TOGETHER</p>
+              <h2>Your kitchen. Our community.</h2>
+              <p>
+                Bring your restaurant to RuchiGo, or deliver smiles around your
+                city.
+              </p>
             </div>
-
-            <div className="mt-5 grid gap-5 md:grid-cols-3">
-              {trendingRestaurants.map((restaurant) => (
-                <Link
-                  key={restaurant.id}
-                  to={`/restaurant/${restaurant.id}`}
-                  className="group overflow-hidden rounded-[28px] border border-orange-100 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl"
-                >
-                  <div className="relative h-60 overflow-hidden">
-                    <img src={restaurant.image} onError={(event) => applyImageFallback(event, getRestaurantFallback(restaurant.id))} alt={restaurant.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
-                  </div>
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{restaurant.name}</h3>
-                        <p className="mt-1 text-sm text-gray-500">{restaurant.cuisine}</p>
-                      </div>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-sm font-bold text-green-700">
-                        <Star size={14} fill="currentColor" />
-                        {restaurant.rating}
-                      </span>
-                    </div>
-                    <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
-                      <Clock3 size={14} />
-                      {restaurant.city}
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
+            <Link to="/register" className="btn secondary">
+              Become a partner
+              <ArrowRight size={17} />
+            </Link>
           </section>
-
-          <section className="py-4 pb-10">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-orange-500">Featured</p>
-                <h2 className="mt-2 text-2xl font-bold text-gray-900 sm:text-3xl">Featured dishes</h2>
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-              {featuredDishes.map((item) => (
-                <Link
-                  key={item.id}
-                  to={`/food-details/${item.id}`}
-                  aria-label={`View ${item.name}`}
-                  className="group block overflow-hidden rounded-[26px] border border-orange-100 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                >
-                  <div className="relative h-48 overflow-hidden">
-                    <img src={item.image} onError={(event) => applyImageFallback(event, getFoodFallback(item.id))} alt={item.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                    <span className="absolute left-4 top-4 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white">Popular</span>
-                  </div>
-                  <div className="p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
-                      <span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-600">₹{item.price}</span>
-                    </div>
-                    <p className="mt-2 text-sm text-gray-500">{item.restaurant}</p>
-                    <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
-                      <MapPin size={14} />
-                      {item.deliveryTime}
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        </section>
+        </div>
       </main>
     </>
   );

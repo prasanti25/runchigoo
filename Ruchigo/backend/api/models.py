@@ -89,6 +89,11 @@ class MenuItem(TimestampedModel):
     is_vegetarian = models.BooleanField(default=False)
     is_available = models.BooleanField(default=True, db_index=True)
     preparation_minutes = models.PositiveIntegerField(default=20)
+    image_url = models.URLField(blank=True, max_length=500)
+    is_bestseller = models.BooleanField(default=False)
+    calories = models.PositiveIntegerField(null=True, blank=True)
+    tags = models.JSONField(default=list, blank=True)
+    add_ons = models.JSONField(default=list, blank=True)
     class Meta:
         indexes = [models.Index(fields=["restaurant", "is_available"]), models.Index(fields=["name"])]
         ordering = ["-created_at"]
@@ -112,8 +117,10 @@ class CartItem(TimestampedModel):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name="items")
     menu_item = models.ForeignKey(MenuItem, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
+    add_ons = models.JSONField(default=list, blank=True)
+    configuration_key = models.CharField(max_length=64, blank=True, default="")
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["cart", "menu_item"], name="unique_cart_menu_item")]
+        constraints = [models.UniqueConstraint(fields=["cart", "menu_item", "configuration_key"], name="unique_cart_item_configuration")]
 
 
 class Wishlist(TimestampedModel):
@@ -124,6 +131,10 @@ class Wishlist(TimestampedModel):
 
 
 class Coupon(TimestampedModel):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, null=True, blank=True, related_name="coupons")
+    first_order_only = models.BooleanField(default=False)
+    per_user_limit = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1)])
+    max_discount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(Decimal("0.01"))])
     code = models.CharField(max_length=40, unique=True)
     description = models.CharField(max_length=255, blank=True)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)])
@@ -141,6 +152,8 @@ class Offer(TimestampedModel):
 
 class Order(TimestampedModel):
     class Status(models.TextChoices):
+        AWAITING_PAYMENT = "awaiting_payment", "Awaiting payment"
+        ASSIGNED = "assigned", "Delivery partner assigned"
         PENDING = "pending", "Pending"; CONFIRMED = "confirmed", "Confirmed"; PREPARING = "preparing", "Preparing"; READY = "ready", "Ready"; OUT = "out_for_delivery", "Out for delivery"; DELIVERED = "delivered", "Delivered"; CANCELLED = "cancelled", "Cancelled"
     number = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="orders")
@@ -151,6 +164,9 @@ class Order(TimestampedModel):
     subtotal = models.DecimalField(max_digits=10, decimal_places=2); delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0); total = models.DecimalField(max_digits=10, decimal_places=2)
     notes = models.TextField(blank=True)
+    checkout_key = models.UUIDField(null=True, blank=True, unique=True)
+    delivery_code = models.CharField(max_length=6, blank=True)
+    address_snapshot = models.JSONField(default=dict, blank=True)
     class Meta:
         indexes = [models.Index(fields=["customer", "status"]), models.Index(fields=["restaurant", "status"])]
         ordering = ["-created_at"]
@@ -160,12 +176,14 @@ class OrderItem(models.Model):
     menu_item = models.ForeignKey(MenuItem, on_delete=models.PROTECT)
     name = models.CharField(max_length=150); unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField(); total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    add_ons = models.JSONField(default=list, blank=True)
 
 class Payment(TimestampedModel):
     class Status(models.TextChoices): PENDING="pending", "Pending"; PAID="paid", "Paid"; FAILED="failed", "Failed"; REFUNDED="refunded", "Refunded"
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="payment")
     method = models.CharField(max_length=30, default="cod"); status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
     transaction_id = models.CharField(max_length=120, blank=True); amount = models.DecimalField(max_digits=10, decimal_places=2)
+    provider_order_id = models.CharField(max_length=120, blank=True, db_index=True)
 
 class DeliveryAssignment(TimestampedModel):
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="delivery")
@@ -177,8 +195,14 @@ class Notification(TimestampedModel):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
     title = models.CharField(max_length=150); message = models.TextField(); kind = models.CharField(max_length=40, default="general")
     is_read = models.BooleanField(default=False); metadata = models.JSONField(default=dict, blank=True)
+    event_key = models.CharField(max_length=160, null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "is_read"], name="notification_user_unread_idx")]
+        constraints = [models.UniqueConstraint(fields=["user", "event_key"], name="notification_user_event_unique")]
 
 class Review(TimestampedModel):
+    is_visible = models.BooleanField(default=True)
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="review")
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews")
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="reviews")
@@ -200,3 +224,39 @@ class AnalyticsEvent(TimestampedModel):
 class AuditLog(TimestampedModel):
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     action = models.CharField(max_length=120); target = models.CharField(max_length=255); metadata = models.JSONField(default=dict, blank=True)
+
+
+class OrderEvent(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="events")
+    status = models.CharField(max_length=20)
+    message = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+
+class SupportTicket(TimestampedModel):
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        IN_PROGRESS = "in_progress", "In progress"
+        RESOLVED = "resolved", "Resolved"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="support_tickets")
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True)
+    category = models.CharField(max_length=30, choices=[(x, x.replace("_", " ").title()) for x in ["missing_item", "wrong_item", "food_quality", "delivery", "payment", "refund", "account", "privacy", "other"]])
+    subject = models.CharField(max_length=150)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+
+class TicketMessage(models.Model):
+    ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="messages")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    body = models.TextField(max_length=3000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]

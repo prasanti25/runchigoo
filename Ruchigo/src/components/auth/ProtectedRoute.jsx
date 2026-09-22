@@ -1,10 +1,7 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 
-export default function ProtectedRoute({
-  children,
-  allowedRoles = [],
-}) {
+export default function ProtectedRoute({ children, allowedRoles = [] }) {
   const location = useLocation();
   const { isAuthenticated, loading, role } = useAuth();
 
@@ -19,23 +16,18 @@ export default function ProtectedRoute({
   }
 
   if (!isAuthenticated) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-        state={{ from: location }}
-      />
-    );
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
-    const roleHome = role === "admin"
-      ? "/admin-dashboard"
-      : role === "restaurant"
-        ? "/restaurant-dashboard"
-        : role === "delivery"
-          ? "/delivery-dashboard"
-          : "/";
+    const roleHome =
+      role === "admin"
+        ? "/admin-dashboard"
+        : role === "restaurant"
+          ? "/restaurant-dashboard"
+          : role === "delivery"
+            ? "/delivery-dashboard"
+            : "/";
     return <Navigate to={roleHome} replace />;
   }
 

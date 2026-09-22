@@ -273,8 +273,9 @@ class ApiFlowTests(APITestCase):
         r=self.client.post(f"/api/v1/orders/{order.id}/accept/", format="json")
         self.assertEqual(r.status_code,status.HTTP_200_OK)
         order.refresh_from_db()
-        self.assertEqual(order.status, Order.Status.OUT)
+        self.assertEqual(order.status, Order.Status.ASSIGNED)
         self.assertIsNotNone(order.delivery)
+        self.assertIsNone(order.delivery.pickup_at)
         self.assertEqual(order.delivery.partner, delivery_user)
 
     def test_restaurant_restricted_status_transitions(self):
@@ -411,3 +412,42 @@ class ApiFlowTests(APITestCase):
         response=self.client.patch(f"/api/v1/addresses/{second.data['id']}/", {"is_default":False}, format="json")
         self.assertEqual(response.status_code,status.HTTP_200_OK)
         self.assertEqual(Address.objects.filter(user=self.customer,is_default=True).count(),1)
+
+    def test_notification_summary_counts_all_pages_and_only_current_account(self):
+        Notification.objects.bulk_create([Notification(user=self.customer, title=f"Update {i}", message="Test") for i in range(25)])
+        Notification.objects.create(user=self.customer, title="Already read", message="Test", is_read=True)
+        Notification.objects.create(user=self.owner, title="Other account", message="Private")
+        self.authenticate(self.customer)
+        response = self.client.get("/api/v1/notifications/summary/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["unread_count"], 25)
+        self.assertEqual(len(response.data["latest"]), 5)
+        self.assertTrue(all(row["user"] == self.customer.pk for row in response.data["latest"]))
+        self.assertEqual(response.data["latest_id"], Notification.objects.filter(user=self.customer).latest("id").pk)
+        self.assertEqual(len(self.client.get("/api/v1/notifications/").data["results"]), 20)
+
+    def test_mark_all_notifications_read_is_owned_idempotent_and_preserves_content(self):
+        own = Notification.objects.create(user=self.customer, title="Order update", message="Original", kind="order")
+        other = Notification.objects.create(user=self.owner, title="Private", message="Other account")
+        self.authenticate(self.customer)
+        response = self.client.patch("/api/v1/notifications/mark-all-read/?user=" + str(self.owner.pk), {"title": "Forged"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {"updated": 1, "unread_count": 0})
+        self.assertEqual(self.client.patch("/api/v1/notifications/mark-all-read/").data["updated"], 0)
+        own.refresh_from_db(); other.refresh_from_db()
+        self.assertTrue(own.is_read)
+        self.assertEqual(own.title, "Order update")
+        self.assertFalse(other.is_read)
+        self.assertEqual(self.client.patch(f"/api/v1/notifications/{other.id}/", {"is_read": True}, format="json").status_code, 404)
+
+    def test_notification_summary_and_mark_all_require_authentication(self):
+        self.assertEqual(self.client.get("/api/v1/notifications/summary/").status_code, 401)
+        self.assertEqual(self.client.patch("/api/v1/notifications/mark-all-read/").status_code, 401)
+
+    def test_each_partner_role_has_an_isolated_notification_inbox(self):
+        for role in ["admin", "restaurant", "delivery"]:
+            user = User.objects.create_user(f"inbox-{role}@example.com", "StrongPass123", role=role)
+            Notification.objects.create(user=user, title="Account update", message="Test")
+            self.authenticate(user)
+            self.assertEqual(self.client.get("/api/v1/notifications/summary/").data["unread_count"], 1)
+            self.assertEqual(self.client.patch("/api/v1/notifications/mark-all-read/").data["updated"], 1)

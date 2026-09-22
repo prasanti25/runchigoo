@@ -1,8 +1,6 @@
 import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
-import { motion } from "framer-motion";
-
-const PasswordInput = ({
+import { Eye, EyeOff, LockKeyhole } from "lucide-react";
+export default function PasswordInput({
   label = "Password",
   name = "password",
   value,
@@ -12,69 +10,43 @@ const PasswordInput = ({
   required = false,
   disabled = false,
   autoComplete = "current-password",
-}) => {
-  const [showPassword, setShowPassword] = useState(false);
-
+}) {
+  const [visible, setVisible] = useState(false);
   return (
-    <div className="mb-5">
-      {/* Label */}
-      <label
-        htmlFor={name}
-        className="block mb-2 text-sm font-semibold text-gray-700"
-      >
+    <div className="auth-field">
+      <label htmlFor={name}>
         {label}
-        {required && <span className="text-red-500 ml-1">*</span>}
+        {required && <span aria-hidden="true"> *</span>}
       </label>
-
-      <motion.div
-        whileFocus={{ scale: 1.01 }}
-        className={`flex items-center rounded-xl border transition-all duration-300 bg-white
-
-        ${
-          error
-            ? "border-red-400"
-            : "border-gray-300 focus-within:border-orange-500"
-        }
-
-        focus-within:ring-4
-        focus-within:ring-orange-100`}
-      >
+      <div className={`auth-input ${error ? "invalid" : ""}`}>
+        <LockKeyhole size={18} aria-hidden="true" />
         <input
           id={name}
           name={name}
-          type={showPassword ? "text" : "password"}
+          type={visible ? "text" : "password"}
           value={value}
           onChange={onChange}
+          placeholder={placeholder}
+          required={required}
           disabled={disabled}
           autoComplete={autoComplete}
-          placeholder={placeholder}
-          className="w-full py-3 px-4 bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${name}-error` : undefined}
         />
-
         <button
           type="button"
-          onClick={() => setShowPassword(!showPassword)}
-          className="px-4 text-gray-500 hover:text-orange-500 transition"
+          aria-label={`${visible ? "Hide" : "Show"} ${label.toLowerCase()}`}
+          aria-pressed={visible}
+          onClick={() => setVisible(!visible)}
         >
-          {showPassword ? (
-            <EyeOff size={20} />
-          ) : (
-            <Eye size={20} />
-          )}
+          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
-      </motion.div>
-
+      </div>
       {error && (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-red-500 text-sm mt-2"
-        >
+        <p className="auth-field-error" id={`${name}-error`} role="alert">
           {error}
-        </motion.p>
+        </p>
       )}
     </div>
   );
-};
-
-export default PasswordInput;
+}

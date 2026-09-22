@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Mail, User, Phone } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -14,6 +14,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 
 const Register = () => {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const { register, loading } = useAuth();
   const [activeTab, setActiveTab] = useState("register");
 
@@ -23,7 +24,9 @@ const Register = () => {
     phone: "",
     password: "",
     confirmPassword: "",
-    role: "customer",
+    role: ["restaurant", "delivery"].includes(params.get("role"))
+      ? params.get("role")
+      : "customer",
     agree: false,
   });
 
@@ -61,8 +64,7 @@ const Register = () => {
     }
 
     if (formData.password.length < 8) {
-      newErrors.password =
-        "Password must contain at least 8 characters.";
+      newErrors.password = "Password must contain at least 8 characters.";
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -112,7 +114,8 @@ const Register = () => {
         <RoleSelector selectedRole={formData.role} onSelectRole={handleRole} />
 
         <p className="text-xs text-gray-500">
-          Restaurant and delivery accounts require admin approval after registration.
+          Restaurant and delivery accounts require admin approval after
+          registration.
         </p>
 
         <AuthInput
@@ -176,6 +179,7 @@ const Register = () => {
             <input
               type="checkbox"
               name="agree"
+              required
               checked={formData.agree}
               onChange={handleChange}
               className="mt-1 accent-orange-500"
@@ -185,6 +189,8 @@ const Register = () => {
               I agree to the{" "}
               <Link
                 to="/terms"
+                target="_blank"
+                rel="noreferrer"
                 className="font-medium text-orange-500 hover:text-red-500"
               >
                 Terms & Conditions
@@ -192,6 +198,8 @@ const Register = () => {
               and{" "}
               <Link
                 to="/privacy"
+                target="_blank"
+                rel="noreferrer"
                 className="font-medium text-orange-500 hover:text-red-500"
               >
                 Privacy Policy
@@ -201,9 +209,7 @@ const Register = () => {
           </label>
 
           {errors.agree && (
-            <p className="mt-2 text-sm text-red-500">
-              {errors.agree}
-            </p>
+            <p className="mt-2 text-sm text-red-500">{errors.agree}</p>
           )}
         </div>
 
@@ -232,13 +238,12 @@ const Register = () => {
         className="mt-6 rounded-2xl border border-orange-100 bg-orange-50 p-4"
       >
         <h3 className="text-sm font-semibold text-orange-600">
-          🔐 Your Account is Safe
+          Account security
         </h3>
 
         <p className="mt-2 text-sm leading-6 text-gray-600">
-          We use encrypted authentication, secure password storage,
-          and protected communication to keep your personal data safe.
-          Your information is never shared without your permission.
+          Use a unique password. Your profile and delivery details are used to
+          manage your account and fulfil your orders.
         </p>
       </motion.div>
 

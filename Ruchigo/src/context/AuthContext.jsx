@@ -246,7 +246,6 @@ export function AuthProvider({ children }) {
       const target = fromPath || buildRedirectPath(user.role);
       // Navigate after state update in next tick to avoid ProtectedRoute race checks
       setTimeout(() => {
-        toast.success(`Redirecting to ${target}`);
         navigate(target, { replace: true });
       }, 0);
       return true;
@@ -264,11 +263,10 @@ export function AuthProvider({ children }) {
             expiresAt: getTokenExpiry(data.tokens.access) || Date.now() + SESSION_FALLBACK_MS,
           };
           setAuth(nextAuth);
-          toast.success("Login successful (role selection ignored). Redirecting to your account.");
+          toast.success("Welcome back. Your account is ready.");
           const fromPath = location.state?.from?.pathname;
           const target = fromPath || buildRedirectPath(user.role);
           setTimeout(() => {
-            toast.success(`Redirecting to ${target}`);
             navigate(target, { replace: true });
           }, 0);
           return true;

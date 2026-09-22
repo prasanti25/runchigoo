@@ -1,8 +1,10 @@
 # RuchiGo Deployment Checklist
 
+> September 2026: consult `PRODUCT_STATUS.md` and `README.md` for current implemented features, test commands and launch blockers. The items below are a historical checklist, not evidence that a production deployment has been validated. Use this nested project as your deployment root.
+
 ## 1. Confirm local readiness
 - [x] Frontend production build passes: `npm run build`
-- [x] Backend API tests pass: `.venv/bin/python backend/manage.py test api` (Windows: `.venv\Scripts\python.exe backend\manage.py test api`)
+- [x] Backend API tests pass: from `backend/`, run `../.venv/bin/python manage.py test api.tests api.test_product --noinput` (Windows: `..\.venv\Scripts\python.exe manage.py test api.tests api.test_product --noinput`)
 - [ ] Review browser console for frontend runtime errors after local testing
 - [ ] Verify backend migrations are current: `.venv/bin/python backend/manage.py migrate`
 

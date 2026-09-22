@@ -2,8 +2,16 @@ from django.contrib.auth import password_validation
 from django.db import transaction
 from django.db import models
 from django.utils import timezone
+import secrets
+import io
+import logging
+from uuid import uuid4
+from django.core.files.base import ContentFile
+from PIL import Image, ImageOps
 from rest_framework import serializers
 from .models import *
+from .notifications import notify, admin_ids, notify_order
+from .menu_options import cart_addons, cart_unit_price
 
 
 def normalize_email(value):
@@ -40,7 +48,26 @@ class UserSerializer(serializers.ModelSerializer):
     def validate_email(self, value):
         return validate_unique_email(value, self.instance)
 
+    def validate_avatar(self, value):
+        if value is None:
+            return None
+        if value.size > 5 * 1024 * 1024:
+            raise serializers.ValidationError("Choose a photo smaller than 5 MB.")
+        with Image.open(value) as original:
+            if original.format not in ["JPEG", "PNG", "WEBP"]:
+                raise serializers.ValidationError("Choose a JPG, PNG or WebP photo.")
+            if original.width > 4096 or original.height > 4096:
+                raise serializers.ValidationError("Photo dimensions must be 4096 × 4096 pixels or smaller.")
+            # Strip location/EXIF metadata and re-encode, never serve the raw
+            # upload. The profile shows the same centre crop as the preview.
+            image = ImageOps.fit(ImageOps.exif_transpose(original).convert("RGB"), (512, 512), method=Image.Resampling.LANCZOS)
+            output = io.BytesIO()
+            image.save(output, "WEBP", quality=85)
+        return ContentFile(output.getvalue(), name=f"{uuid4().hex}.webp")
+
     def update(self, instance, validated_data):
+        previous_avatar = instance.avatar.name if "avatar" in validated_data and instance.avatar else None
+        storage = instance.avatar.storage
         email_changed = (
             "email" in validated_data
             and validated_data["email"].casefold() != instance.email.casefold()
@@ -49,7 +76,16 @@ class UserSerializer(serializers.ModelSerializer):
             instance.username = validated_data["email"]
         if email_changed:
             instance.email_verified = False
-        return super().update(instance, validated_data)
+        updated = super().update(instance, validated_data)
+        if previous_avatar and previous_avatar != updated.avatar.name:
+            def remove_old_photo():
+                if not User.objects.filter(avatar=previous_avatar).exists():
+                    try:
+                        storage.delete(previous_avatar)
+                    except OSError:
+                        logging.getLogger(__name__).warning("Old profile photo cleanup failed")
+            transaction.on_commit(remove_old_photo)
+        return updated
 
 class AdminUserSerializer(UserSerializer):
     password = serializers.CharField(write_only=True, min_length=8, required=False)
@@ -92,10 +128,17 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate_password(self, value):
         password_validation.validate_password(value)
         return value
+    @transaction.atomic
     def create(self, data):
         role = data.get("role", User.Role.CUSTOMER)
         is_active = role == User.Role.CUSTOMER
-        return User.objects.create_user(is_active=is_active, **data)
+        user = User.objects.create_user(is_active=is_active, **data)
+        notify([user.pk], event=f"account:{user.pk}:registered", title="Welcome to RuchiGo",
+               message="Your account is ready. Discover your next favourite meal." if is_active else "Your partner registration has been received and is awaiting approval.", kind="account")
+        if not is_active:
+            notify(admin_ids(), event=f"account:{user.pk}:approval-request", title="Partner approval needed",
+                   message=f"A new {user.get_role_display().lower()} account is waiting for review.", kind="account", metadata={"approval_role": role})
+        return user
 
 class RestaurantSerializer(serializers.ModelSerializer):
     owner_id = serializers.PrimaryKeyRelatedField(
@@ -120,6 +163,13 @@ class RestaurantSerializer(serializers.ModelSerializer):
         return attrs
 class CategorySerializer(serializers.ModelSerializer):
     class Meta: model = Category; fields = "__all__"; read_only_fields = ["created_at", "updated_at"]
+
+class AddOnSerializer(serializers.Serializer):
+    id = serializers.RegexField(r"^[a-zA-Z0-9_-]{1,60}$")
+    name = serializers.CharField(max_length=80, trim_whitespace=True)
+    price = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal("0"), max_value=Decimal("10000"))
+    is_available = serializers.BooleanField(default=True)
+
 class MenuItemSerializer(serializers.ModelSerializer):
     restaurant_detail = RestaurantSerializer(source="restaurant", read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
@@ -130,11 +180,31 @@ class MenuItemSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated and request.user.role == User.Role.RESTAURANT and "restaurant" in attrs:
             raise serializers.ValidationError({"restaurant_id": "Restaurant accounts cannot change item ownership."})
         return attrs
+    def validate_tags(self, tags):
+        if not isinstance(tags, list) or len(tags) > 8 or any(not isinstance(tag, str) or len(tag) > 30 for tag in tags):
+            raise serializers.ValidationError("Use up to eight short dietary tags.")
+        return list(dict.fromkeys(tag.strip().lower() for tag in tags if tag.strip()))
+    def validate_add_ons(self, rows):
+        if not isinstance(rows, list) or len(rows) > 12:
+            raise serializers.ValidationError("Use up to 12 optional add-ons per dish.")
+        validated = AddOnSerializer(data=rows, many=True)
+        validated.is_valid(raise_exception=True)
+        if len({row["id"] for row in validated.validated_data}) != len(rows):
+            raise serializers.ValidationError("Each add-on needs a unique ID.")
+        return [{**row, "price": str(row["price"])} for row in validated.validated_data]
+    def validate_preparation_minutes(self, value):
+        if not 1 <= value <= 180:
+            raise serializers.ValidationError("Preparation time must be 1–180 minutes.")
+        return value
 class AddressSerializer(serializers.ModelSerializer):
     class Meta: model = Address; fields = "__all__"; read_only_fields = ["user", "created_at", "updated_at"]
 class CartItemSerializer(serializers.ModelSerializer):
     menu_item_detail = MenuItemSerializer(source="menu_item", read_only=True)
-    class Meta: model = CartItem; fields = ["id", "menu_item", "menu_item_detail", "quantity", "created_at", "updated_at"]; read_only_fields = ["id", "created_at", "updated_at"]
+    add_ons = serializers.SerializerMethodField()
+    unit_price = serializers.SerializerMethodField()
+    def get_add_ons(self, item): return cart_addons(item)
+    def get_unit_price(self, item): return str(cart_unit_price(item))
+    class Meta: model = CartItem; fields = ["id", "menu_item", "menu_item_detail", "quantity", "add_ons", "unit_price", "created_at", "updated_at"]; read_only_fields = ["id", "created_at", "updated_at"]
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
     class Meta: model = Cart; fields = ["id", "restaurant", "items", "created_at", "updated_at"]
@@ -174,13 +244,48 @@ class PaymentSerializer(serializers.ModelSerializer):
     class Meta: model = Payment; fields = "__all__"; read_only_fields = ["order", "amount", "created_at", "updated_at"]
 class DeliverySerializer(serializers.ModelSerializer):
     class Meta: model = DeliveryAssignment; fields = "__all__"; read_only_fields = ["order", "partner", "pickup_at", "delivered_at", "created_at", "updated_at"]
+    def validate_current_latitude(self, value):
+        if value is not None and not -90 <= value <= 90:
+            raise serializers.ValidationError("Invalid latitude.")
+        return value
+    def validate_current_longitude(self, value):
+        if value is not None and not -180 <= value <= 180:
+            raise serializers.ValidationError("Invalid longitude.")
+        return value
+
+class OrderEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderEvent
+        fields = ["id", "status", "message", "created_at"]
+
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True); payment = PaymentSerializer(read_only=True); delivery = DeliverySerializer(read_only=True); restaurant_detail = RestaurantSerializer(source="restaurant", read_only=True); customer_detail = UserSerializer(source="customer", read_only=True); delivery_address_detail = AddressSerializer(source="delivery_address", read_only=True)
+    delivery_code = serializers.SerializerMethodField()
+    customer_detail = serializers.SerializerMethodField()
+    delivery_address_detail = serializers.SerializerMethodField()
+    events = OrderEventSerializer(many=True, read_only=True)
+    review = serializers.SerializerMethodField()
+    def get_customer_detail(self, order):
+        user = getattr(self.context.get("request"), "user", None)
+        if user and (user.is_superuser or user.role == User.Role.ADMIN or user.pk == order.customer_id):
+            return UserSerializer(order.customer).data
+        return {"first_name": order.customer.first_name, "last_name": order.customer.last_name, "phone": order.customer.phone}
+    def get_delivery_code(self, order):
+        user = getattr(self.context.get("request"), "user", None)
+        return order.delivery_code if user and user.id == order.customer_id else None
+    def get_delivery_address_detail(self, order):
+        return order.address_snapshot or AddressSerializer(order.delivery_address).data
+    def get_review(self, order):
+        review = getattr(order, "review", None)
+        return {"id": review.id, "rating": review.rating, "comment": review.comment} if review else None
     class Meta: model = Order; fields = "__all__"; read_only_fields = ["customer", "restaurant", "number", "status", "subtotal", "delivery_fee", "discount", "total", "coupon", "created_at", "updated_at"]
 class NotificationSerializer(serializers.ModelSerializer):
-    class Meta: model = Notification; fields = "__all__"; read_only_fields = ["user", "title", "message", "kind", "metadata", "created_at", "updated_at"]
+    class Meta:
+        model = Notification
+        fields = ["id", "user", "title", "message", "kind", "metadata", "is_read", "created_at", "updated_at"]
+        read_only_fields = ["user", "title", "message", "kind", "metadata", "created_at", "updated_at"]
 class ReviewSerializer(serializers.ModelSerializer):
-    class Meta: model = Review; fields = "__all__"; read_only_fields = ["customer", "restaurant", "created_at", "updated_at"]
+    class Meta: model = Review; fields = "__all__"; read_only_fields = ["customer", "restaurant", "created_at", "updated_at", "is_visible"]
     def validate_order(self, order):
         request = self.context["request"]
         if order.customer_id != request.user.id:
@@ -197,13 +302,14 @@ class AnalyticsEventSerializer(serializers.ModelSerializer):
 class CartItemMutationSerializer(serializers.Serializer):
     menu_item = serializers.PrimaryKeyRelatedField(queryset=MenuItem.objects.all(), required=False)
     quantity = serializers.IntegerField(min_value=1, max_value=99)
+    addon_ids = serializers.ListField(child=serializers.RegexField(r"^[a-zA-Z0-9_-]{1,60}$"), max_length=12, default=list)
 
 
 class CouponCodeSerializer(serializers.Serializer):
     code = serializers.CharField(max_length=40, trim_whitespace=True)
 
 
-def applicable_coupon(code, subtotal, *, lock=False):
+def applicable_coupon(code, subtotal, *, lock=False, user=None, restaurant=None):
     now = timezone.now()
     queryset = Coupon.objects.filter(
         code__iexact=(code or "").strip(),
@@ -218,46 +324,74 @@ def applicable_coupon(code, subtotal, *, lock=False):
         raise serializers.ValidationError({"coupon_code": "Coupon is invalid or not applicable."})
     if coupon.usage_limit is not None and coupon.usage_count >= coupon.usage_limit:
         raise serializers.ValidationError({"coupon_code": "This coupon has reached its usage limit."})
+    if coupon.restaurant_id and coupon.restaurant_id != getattr(restaurant, "pk", None):
+        raise serializers.ValidationError({"coupon_code": "This coupon belongs to a different restaurant."})
+    history = Order.objects.filter(customer=user).exclude(status=Order.Status.CANCELLED) if user else Order.objects.none()
+    if coupon.first_order_only and (not user or history.exists()):
+        raise serializers.ValidationError({"coupon_code": "This offer is available on your first order only."})
+    if coupon.per_user_limit and (not user or history.filter(coupon=coupon).count() >= coupon.per_user_limit):
+        raise serializers.ValidationError({"coupon_code": "You have reached the limit for this coupon."})
 
     amount = coupon.discount_amount or Decimal("0")
     percent = coupon.discount_percent or Decimal("0")
     if amount <= 0 and percent <= 0:
         raise serializers.ValidationError({"coupon_code": "Coupon has no valid discount."})
     discount = amount if amount > 0 else subtotal * percent / Decimal("100")
+    if coupon.max_discount is not None:
+        discount = min(discount, coupon.max_discount)
     return coupon, min(discount, subtotal)
 
 class CheckoutSerializer(serializers.Serializer):
     address_id = serializers.PrimaryKeyRelatedField(queryset=Address.objects.all(), source="address")
     coupon_code = serializers.CharField(required=False, allow_blank=True)
-    # Card/UPI must not create an order until a payment provider confirms payment.
-    payment_method = serializers.ChoiceField(choices=["cod"], default="cod")
+    # Online orders remain hidden from kitchen queues until capture is verified.
+    payment_method = serializers.ChoiceField(choices=["cod", "razorpay"], default="cod")
     notes = serializers.CharField(required=False, allow_blank=True, max_length=1000)
+    checkout_key = serializers.UUIDField(required=False)
+    def validate_payment_method(self, value):
+        from .payments import payment_enabled
+        if value == "razorpay" and not payment_enabled():
+            raise serializers.ValidationError("Online payments are not available. Choose cash on delivery.")
+        return value
     def validate_address(self, address):
         if address.user != self.context["request"].user: raise serializers.ValidationError("Choose one of your addresses.")
         return address
     @transaction.atomic
     def create(self, data):
         user = self.context["request"].user
+        User.objects.select_for_update().get(pk=user.pk)
+        if data.get("checkout_key"):
+            existing = Order.objects.filter(checkout_key=data["checkout_key"]).first()
+            if existing:
+                if existing.customer_id != user.id:
+                    raise serializers.ValidationError("Use a new checkout request.")
+                return existing
         cart, _ = Cart.objects.select_for_update().get_or_create(user=user)
         items = list(cart.items.select_for_update().select_related("menu_item", "menu_item__restaurant"))
         if not items: raise serializers.ValidationError({"cart": "Cart is empty."})
         restaurant = items[0].menu_item.restaurant
         if any(i.menu_item.restaurant_id != restaurant.id for i in items): raise serializers.ValidationError({"cart": "Items must belong to one restaurant."})
-        if not restaurant.is_approved or not restaurant.is_open:
+        if not restaurant.is_approved or not restaurant.is_open or not restaurant.owner.is_active:
             raise serializers.ValidationError({"cart": "This restaurant is not accepting orders."})
         if any(not item.menu_item.is_available for item in items):
             raise serializers.ValidationError({"cart": "One or more menu items are no longer available."})
-        subtotal = sum((i.menu_item.price * i.quantity for i in items), Decimal("0")); discount = Decimal("0"); coupon = None
+        subtotal = sum((cart_unit_price(i, strict=True) * i.quantity for i in items), Decimal("0")); discount = Decimal("0"); coupon = None
         if data.get("coupon_code"):
-            coupon, discount = applicable_coupon(data["coupon_code"], subtotal, lock=True)
+            coupon, discount = applicable_coupon(data["coupon_code"], subtotal, lock=True, user=user, restaurant=restaurant)
         fee = Decimal("40.00") if subtotal < Decimal("500.00") else Decimal("0")
-        order = Order.objects.create(customer=user, restaurant=restaurant, delivery_address=data["address"], coupon=coupon, subtotal=subtotal, delivery_fee=fee, discount=discount, total=subtotal + fee - discount, notes=data.get("notes", ""))
-        OrderItem.objects.bulk_create([OrderItem(order=order, menu_item=i.menu_item, name=i.menu_item.name, unit_price=i.menu_item.price, quantity=i.quantity, total_price=i.menu_item.price*i.quantity) for i in items])
-        Payment.objects.create(order=order, method=data["payment_method"], amount=order.total)
+        order = Order.objects.create(customer=user, restaurant=restaurant, delivery_address=data["address"], coupon=coupon, subtotal=subtotal, delivery_fee=fee, discount=discount, total=subtotal + fee - discount, notes=data.get("notes", ""), checkout_key=data.get("checkout_key"), delivery_code=f"{secrets.randbelow(1000000):06d}", address_snapshot=dict(AddressSerializer(data["address"]).data))
+        OrderItem.objects.bulk_create([OrderItem(order=order, menu_item=i.menu_item, name=i.menu_item.name, unit_price=cart_unit_price(i, strict=True), quantity=i.quantity, total_price=cart_unit_price(i, strict=True)*i.quantity, add_ons=cart_addons(i, strict=True)) for i in items])
+        payment = Payment.objects.create(order=order, method=data["payment_method"], amount=order.total)
+        if data["payment_method"] == "razorpay":
+            from .payments import create_payment_order
+            order.status = Order.Status.AWAITING_PAYMENT
+            order.save(update_fields=["status"])
+            create_payment_order(payment)
         if coupon:
             Coupon.objects.filter(pk=coupon.pk).update(usage_count=models.F("usage_count") + 1)
         cart.items.all().delete()
         cart.restaurant = None
         cart.save(update_fields=["restaurant", "updated_at"])
-        Notification.objects.create(user=user, title="Order placed", message=f"Your order {order.number} was placed.", kind="order")
+        notify_order(order)
+        OrderEvent.objects.create(order=order, status=order.status, message="Waiting for payment." if order.status == Order.Status.AWAITING_PAYMENT else "Order placed. Waiting for the restaurant to accept.")
         return order

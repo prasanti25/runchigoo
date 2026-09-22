@@ -1,10 +1,13 @@
 from datetime import timedelta
 from decimal import Decimal
 import secrets
+from uuid import uuid4
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, Exists, F, Max, OuterRef, Q, Sum
+from django.db.models.deletion import ProtectedError
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
 from django.utils import timezone
@@ -16,6 +19,8 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema
 from .models import *
 from .permissions import IsAdmin, IsCustomer, IsDelivery, IsRestaurant, IsRestaurantOrAdmin
 from .serializers import *
+from .notifications import notify, admin_ids, notify_order, notify_payment
+from .menu_options import selected_addons, configuration_key, cart_unit_price
 
 def tokens_for(user):
     refresh = RefreshToken.for_user(user)
@@ -74,7 +79,7 @@ class AuthViewSet(viewsets.GenericViewSet):
             "user": UserSerializer(user).data,
             "tokens": tokens_for(user),
             "unread_notifications_count": unread_notifications.count(),
-            "unread_notifications": NotificationSerializer(unread_notifications, many=True).data,
+            "unread_notifications": NotificationSerializer(unread_notifications.order_by("-id")[:5], many=True).data,
         })
     @action(detail=False, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def logout(self, request):
@@ -84,11 +89,18 @@ class AuthViewSet(viewsets.GenericViewSet):
             return Response({"detail": "A valid refresh token is required."}, status=400)
         return Response(status=status.HTTP_204_NO_CONTENT)
     @action(detail=False, methods=["get", "patch"], permission_classes=[permissions.IsAuthenticated])
+    @transaction.atomic
     def me(self, request):
         if request.method == "PATCH":
-            serializer = UserSerializer(request.user, data=request.data, partial=True); serializer.is_valid(raise_exception=True); serializer.save()
+            serializer = UserSerializer(request.user, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            changed = any(getattr(request.user, key) != value for key, value in serializer.validated_data.items() if key != "is_available")
+            serializer.save()
+            if changed:
+                notify([request.user.pk], event=f"profile:{uuid4()}", title="Profile updated", message="Your account details were updated. If this wasn’t you, contact support.", kind="account")
         return Response(UserSerializer(request.user).data)
     @action(detail=False, methods=["post"], permission_classes=[permissions.IsAuthenticated])
+    @transaction.atomic
     def change_password(self, request):
         current_password = request.data.get("current_password", "")
         new_password = request.data.get("new_password", "")
@@ -103,6 +115,7 @@ class AuthViewSet(viewsets.GenericViewSet):
             raise serializers.ValidationError({"new_password": exc.messages}) from exc
         request.user.set_password(new_password)
         request.user.save(update_fields=["password"])
+        notify([request.user.pk], event=f"password:{uuid4()}", title="Password changed", message="Your password was changed. If this wasn’t you, reset your password and contact support.", kind="account")
         return Response({"detail": "Password changed successfully."})
     @action(detail=False, methods=["post"])
     def forgot_password(self, request):
@@ -112,6 +125,7 @@ class AuthViewSet(viewsets.GenericViewSet):
             create_otp(user, OTP.Purpose.RESET_PASSWORD)
         return Response({"detail": "If the account exists, a reset code has been sent."})
     @action(detail=False, methods=["post"])
+    @transaction.atomic
     def reset_password(self, request):
         email, code, password = request.data.get("email"), request.data.get("code"), request.data.get("password")
         if not isinstance(password, str): return Response({"detail": "A valid password is required."}, status=400)
@@ -124,28 +138,36 @@ class AuthViewSet(viewsets.GenericViewSet):
         except DjangoValidationError as exc:
             raise serializers.ValidationError({"password": exc.messages}) from exc
         user = otp.user; user.set_password(password); user.save(); otp.used_at=timezone.now(); otp.save(update_fields=["used_at"])
+        notify([user.pk], event=f"password-reset:{otp.pk}", title="Password reset", message="Your password was reset successfully. Contact support if you didn’t make this change.", kind="account")
         return Response({"detail": "Password reset successfully."})
     @action(detail=False, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def request_email_verification(self, request):
         create_otp(request.user, OTP.Purpose.VERIFY_EMAIL)
         return Response({"detail": "Verification code sent."})
     @action(detail=False, methods=["post"], permission_classes=[permissions.IsAuthenticated])
+    @transaction.atomic
     def verify_email(self, request):
         otp = valid_otp(request.user, request.data.get("code"), OTP.Purpose.VERIFY_EMAIL)
         if not otp: return Response({"detail": "Invalid or expired code."}, status=400)
         request.user.email_verified=True; request.user.save(update_fields=["email_verified"]); otp.used_at=timezone.now(); otp.save(update_fields=["used_at"])
+        notify([request.user.pk], event=f"email-verified:{otp.pk}", title="Email verified", message="Your account email is now verified.", kind="account")
         return Response({"detail": "Email verified."})
 
 class RestaurantViewSet(viewsets.ModelViewSet):
     queryset = Restaurant.objects.select_related("owner").order_by("-created_at"); serializer_class = RestaurantSerializer; filterset_fields=["city", "is_open", "is_approved"]; search_fields=["name", "description", "city"]; ordering_fields=["created_at", "average_rating", "name"]
+    @transaction.atomic
     def perform_create(self, serializer):
         if self.request.user.is_superuser or self.request.user.role == User.Role.ADMIN:
             if "owner" not in serializer.validated_data:
                 raise serializers.ValidationError({"owner_id": "Choose a restaurant owner."})
-            serializer.save()
+            restaurant = serializer.save()
         else:
-            serializer.save(owner=self.request.user)
-    def get_permissions(self): return [permissions.AllowAny()] if self.action in ["list", "retrieve"] else [IsRestaurantOrAdmin()]
+            restaurant = serializer.save(owner=self.request.user)
+        notify(admin_ids(), event=f"restaurant:{restaurant.pk}:submitted", title="Restaurant listing to review", message=f"{restaurant.name} has submitted a restaurant profile.", kind="account", metadata={"restaurant_approval": True})
+    def get_permissions(self):
+        if self.action == "approve":
+            return [IsAdmin()]
+        return [permissions.AllowAny()] if self.action in ["list", "retrieve"] else [IsRestaurantOrAdmin()]
     def get_queryset(self):
         qs=super().get_queryset()
         if self.action in ["list", "retrieve"]:
@@ -156,6 +178,16 @@ class RestaurantViewSet(viewsets.ModelViewSet):
                 return qs.filter(owner=user)
             return qs.filter(is_approved=True, is_open=True)
         return qs if self.request.user.is_superuser or self.request.user.role == User.Role.ADMIN else qs.filter(owner=self.request.user)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAdmin])
+    @transaction.atomic
+    def approve(self, request, pk=None):
+        restaurant = self.get_object()
+        restaurant.is_approved = True
+        restaurant.save(update_fields=["is_approved", "updated_at"])
+        AuditLog.objects.create(actor=request.user, action="restaurant.approved", target=str(restaurant.id))
+        notify([restaurant.owner_id], event=f"restaurant:{restaurant.pk}:approved", title="Restaurant approved", message=f"{restaurant.name} is approved. Check your menu and availability before taking orders.", kind="account")
+        return Response(self.get_serializer(restaurant).data)
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset=Category.objects.order_by("name"); serializer_class=CategorySerializer; lookup_field="slug"; search_fields=["name"]
@@ -218,7 +250,10 @@ class AddressViewSet(OwnedViewSet):
     def perform_destroy(self, instance):
         was_default = instance.is_default
         user = instance.user
-        instance.delete()
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise serializers.ValidationError("This address is linked to an order. You can edit it or add a new address; past order addresses stay unchanged.")
         if was_default:
             replacement = Address.objects.filter(user=user).order_by("-created_at").first()
             if replacement:
@@ -226,6 +261,7 @@ class AddressViewSet(OwnedViewSet):
                 replacement.save(update_fields=["is_default", "updated_at"])
 
 class WishlistViewSet(OwnedViewSet):
+    filterset_fields = ["menu_item"]
     queryset=Wishlist.objects.select_related("menu_item", "menu_item__restaurant").order_by("-created_at"); serializer_class=WishlistSerializer; permission_classes=[IsCustomer]
     def perform_create(self, serializer):
         menu_item = serializer.validated_data["menu_item"]
@@ -236,14 +272,40 @@ class WishlistViewSet(OwnedViewSet):
         serializer.save(user=self.request.user)
 
 class NotificationViewSet(OwnedViewSet):
+    filterset_fields = ["is_read", "kind"]
     queryset=Notification.objects.order_by("-created_at"); serializer_class=NotificationSerializer
     http_method_names=["get", "patch", "delete", "head", "options"]
+
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        queryset = self.get_queryset()
+        summary = queryset.aggregate(unread_count=Count("pk", filter=Q(is_read=False)), latest_id=Max("id"))
+        summary["latest_id"] = summary["latest_id"] or 0
+        summary["latest"] = NotificationSerializer(queryset.filter(is_read=False).order_by("-id")[:5], many=True).data
+        return Response(summary)
+
+    @action(detail=False, methods=["patch"], url_path="mark-all-read")
+    def mark_all_read(self, request):
+        # Always account-scoped, including for administrators. Ignore list filters:
+        # this explicitly marks the whole current account's inbox, not one page.
+        changed = self.get_queryset().filter(is_read=False).update(is_read=True, updated_at=timezone.now())
+        return Response({"updated": changed, "unread_count": self.get_queryset().filter(is_read=False).count()})
 class ReviewViewSet(OwnedViewSet):
     queryset=Review.objects.select_related("restaurant", "order").order_by("-created_at"); serializer_class=ReviewSerializer; owner_field="customer"; permission_classes=[IsCustomer]
+    @transaction.atomic
     def perform_create(self, serializer):
-        serializer.save(customer=self.request.user, restaurant=serializer.validated_data["order"].restaurant)
+        review = serializer.save(customer=self.request.user, restaurant=serializer.validated_data["order"].restaurant)
+        self.update_rating(review.restaurant)
+        notify([review.restaurant.owner_id], event=f"review:{review.pk}:created", title="New customer review", message=f"A customer left a {review.rating}-star review for {review.restaurant.name}.", kind="review", metadata={"restaurant_id": review.restaurant_id})
     def perform_update(self, serializer):
-        serializer.save(restaurant=serializer.validated_data.get("order", serializer.instance.order).restaurant)
+        review = serializer.save(restaurant=serializer.validated_data.get("order", serializer.instance.order).restaurant)
+        self.update_rating(review.restaurant)
+    def perform_destroy(self, instance):
+        restaurant = instance.restaurant
+        instance.delete()
+        self.update_rating(restaurant)
+    def update_rating(self, restaurant):
+        Restaurant.objects.filter(pk=restaurant.pk).update(average_rating=Review.objects.filter(restaurant=restaurant, is_visible=True).aggregate(value=Avg("rating"))["value"] or 0)
 
 class CartViewSet(viewsets.ViewSet):
     permission_classes=[IsCustomer]
@@ -259,9 +321,10 @@ class CartViewSet(viewsets.ViewSet):
         if not menu or not menu.is_available or not menu.restaurant.is_approved or not menu.restaurant.is_open:
             return Response({"detail":"Menu item unavailable."}, status=400)
         quantity = payload.validated_data["quantity"]
+        addons = selected_addons(menu, payload.validated_data["addon_ids"])
         cart,_=Cart.objects.select_for_update().get_or_create(user=request.user)
         if cart.restaurant and cart.restaurant_id != menu.restaurant_id: return Response({"detail":"Cart can contain one restaurant only."}, status=400)
-        cart.restaurant=menu.restaurant; cart.save(); item,created=CartItem.objects.get_or_create(cart=cart, menu_item=menu, defaults={"quantity":quantity})
+        cart.restaurant=menu.restaurant; cart.save(); item,created=CartItem.objects.get_or_create(cart=cart, menu_item=menu, configuration_key=configuration_key(addons), defaults={"quantity":quantity, "add_ons": addons})
         if not created: item.quantity=min(item.quantity+quantity,99); item.save(update_fields=["quantity", "updated_at"])
         return Response(CartSerializer(cart).data, status=201)
     @extend_schema(parameters=[OpenApiParameter("item_id", int, OpenApiParameter.PATH)])
@@ -287,51 +350,127 @@ class CartViewSet(viewsets.ViewSet):
         items = list(cart.items.select_related("menu_item"))
         if not items:
             raise serializers.ValidationError({"cart": "Cart is empty."})
-        subtotal = sum((item.menu_item.price * item.quantity for item in items), Decimal("0"))
-        coupon, discount = applicable_coupon(payload.validated_data["code"], subtotal)
+        subtotal = sum((cart_unit_price(item, strict=True) * item.quantity for item in items), Decimal("0"))
+        coupon, discount = applicable_coupon(payload.validated_data["code"], subtotal, user=request.user, restaurant=cart.restaurant)
         fee = Decimal("40.00") if subtotal < Decimal("500.00") else Decimal("0")
         return Response({"code": coupon.code, "subtotal": subtotal, "delivery_fee": fee, "discount": discount, "total": subtotal + fee - discount})
     @action(detail=False, methods=["post"])
     def checkout(self, request):
-        s=CheckoutSerializer(data=request.data, context={"request":request}); s.is_valid(raise_exception=True); return Response(OrderSerializer(s.save()).data, status=201)
+        s=CheckoutSerializer(data=request.data, context={"request":request}); s.is_valid(raise_exception=True); return Response(OrderSerializer(s.save(), context={"request": request}).data, status=201)
 
 class OrderViewSet(viewsets.ReadOnlyModelViewSet):
     queryset=Order.objects.none(); serializer_class=OrderSerializer; permission_classes=[permissions.IsAuthenticated]; filterset_fields=["status", "restaurant"]
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False): return Order.objects.none()
-        user=self.request.user; qs=Order.objects.select_related("restaurant", "customer").prefetch_related("items").order_by("-created_at")
+        user=self.request.user; qs=Order.objects.select_related("restaurant", "customer", "delivery_address", "payment", "delivery", "review").prefetch_related("items", "events").order_by("-created_at")
         if user.is_superuser or user.role==User.Role.ADMIN: return qs
-        if user.role==User.Role.RESTAURANT: return qs.filter(restaurant__owner=user)
+        if user.role==User.Role.RESTAURANT: return qs.filter(restaurant__owner=user).exclude(status=Order.Status.AWAITING_PAYMENT)
         if user.role==User.Role.DELIVERY:
             if self.action == "accept":
                 return qs.filter(status=Order.Status.READY, delivery__isnull=True)
-            return qs.filter(delivery__partner=user)
+            qs = qs.filter(delivery__partner=user)
+            return qs.filter(status__in=[Order.Status.ASSIGNED, Order.Status.OUT]) if self.request.query_params.get("active") == "true" else qs
         return qs.filter(customer=user)
+
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        orders = self.get_queryset()
+        return Response({
+            "total": orders.count(),
+            "by_status": list(orders.order_by().values("status").annotate(count=Count("id"), value=Sum("total"))),
+        })
 
     @action(detail=False, methods=["get"], permission_classes=[IsDelivery])
     def available(self, request):
         qs = Order.objects.filter(status=Order.Status.READY, delivery__isnull=True).select_related("restaurant", "customer").prefetch_related("items").order_by("created_at")
         page = self.paginate_queryset(qs)
+        # Unassigned couriers need the pickup and destination area, not a
+        # customer's identity, exact address, payment identifiers or delivery code.
+        def preview(order):
+            return {
+                "id": order.id, "number": order.number, "total": order.total,
+                "restaurant_detail": RestaurantSerializer(order.restaurant, context={"request": request}).data,
+                "delivery_address_detail": {"city": order.address_snapshot.get("city", ""), "line1": "Full address shared after assignment"},
+                "items": [{"name": item.name, "quantity": item.quantity} for item in order.items.all()],
+            }
         if page is not None:
-            return self.get_paginated_response(OrderSerializer(page, many=True).data)
-        return Response(OrderSerializer(qs, many=True).data)
+            return self.get_paginated_response([preview(order) for order in page])
+        return Response([preview(order) for order in qs])
 
     @action(detail=True, methods=["post"], permission_classes=[IsDelivery])
     @transaction.atomic
     def accept(self, request, pk=None):
+        if not request.user.is_available:
+            return Response({"detail": "Go online before accepting a delivery."}, status=400)
         # Lock only the order row. PostgreSQL rejects SELECT FOR UPDATE when a
         # nullable reverse one-to-one relation creates an outer join.
         order = Order.objects.select_for_update().filter(pk=pk, status=Order.Status.READY).first()
         if not order or DeliveryAssignment.objects.filter(order=order).exists():
             return Response({"detail": "Order is no longer available for pickup."}, status=409)
         try:
-            DeliveryAssignment.objects.create(order=order, partner=request.user, pickup_at=timezone.now())
+            DeliveryAssignment.objects.create(order=order, partner=request.user)
         except IntegrityError:
             return Response({"detail": "Order is already assigned."}, status=409)
+        order.status = Order.Status.ASSIGNED
+        order.save(update_fields=["status", "updated_at"])
+        OrderEvent.objects.create(order=order, status=order.status, message="A delivery partner accepted your order.")
+        AuditLog.objects.create(actor=request.user, action="delivery.assigned", target=str(order.id))
+        notify_order(order)
+        return Response(OrderSerializer(order).data)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsDelivery])
+    @transaction.atomic
+    def pickup(self, request, pk=None):
+        visible = self.get_object()
+        order = Order.objects.select_for_update().get(pk=visible.pk)
+        assignment = DeliveryAssignment.objects.select_for_update().filter(order=order, partner=request.user).first()
+        if not assignment:
+            raise serializers.ValidationError("This delivery is not assigned to you.")
+        if order.status == Order.Status.OUT and assignment.pickup_at:
+            return Response(self.get_serializer(order).data)
+        if order.status != Order.Status.ASSIGNED:
+            raise serializers.ValidationError("Only an assigned delivery can be picked up.")
+        assignment.pickup_at = timezone.now()
+        assignment.save(update_fields=["pickup_at", "updated_at"])
         order.status = Order.Status.OUT
         order.save(update_fields=["status", "updated_at"])
-        Notification.objects.create(user=order.customer, title="Order update", message=f"Order {order.number} is out for delivery.", kind="order")
-        return Response(OrderSerializer(order).data)
+        OrderEvent.objects.create(order=order, status=order.status, message="Your food was picked up and is on the way.")
+        AuditLog.objects.create(actor=request.user, action="delivery.picked_up", target=str(order.id))
+        notify_order(order)
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsCustomer])
+    @transaction.atomic
+    def cancel(self, request, pk=None):
+        visible = self.get_object()
+        order = Order.objects.select_for_update().get(pk=visible.pk)
+        if order.status != Order.Status.PENDING:
+            raise serializers.ValidationError("This order has already been accepted. Contact support for help.")
+        if Payment.objects.filter(order=order, method="razorpay", status=Payment.Status.PAID).exists():
+            raise serializers.ValidationError("Contact support to cancel this prepaid order and arrange a refund.")
+        order.status = Order.Status.CANCELLED
+        order.save(update_fields=["status", "updated_at"])
+        Payment.objects.filter(order=order, status=Payment.Status.PENDING).update(status=Payment.Status.FAILED)
+        OrderEvent.objects.create(order=order, status=order.status, message="Cancelled by you before the restaurant accepted.")
+        notify_order(order)
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsCustomer])
+    @transaction.atomic
+    def reorder(self, request, pk=None):
+        order = self.get_object()
+        cart, _ = Cart.objects.select_for_update().get_or_create(user=request.user)
+        if cart.items.exists():
+            raise serializers.ValidationError("Please clear your current cart before reordering.")
+        items = list(order.items.select_related("menu_item", "menu_item__restaurant"))
+        if not items or any(not i.menu_item.is_available or not i.menu_item.restaurant.is_open or not i.menu_item.restaurant.is_approved for i in items):
+            raise serializers.ValidationError("Some items are unavailable. Open the restaurant to choose a fresh meal.")
+        for item in items:
+            addons = selected_addons(item.menu_item, [row["id"] for row in item.add_ons])
+            CartItem.objects.create(cart=cart, menu_item=item.menu_item, quantity=min(item.quantity, 99), add_ons=addons, configuration_key=configuration_key(addons))
+        cart.restaurant = order.restaurant
+        cart.save()
+        return Response(CartSerializer(cart).data)
 
     @action(detail=True, methods=["post"])
     @transaction.atomic
@@ -339,6 +478,8 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         visible_order = self.get_object()
         order = Order.objects.select_for_update().get(pk=visible_order.pk)
         new = request.data.get("status")
+        if order.status == Order.Status.AWAITING_PAYMENT:
+            raise serializers.ValidationError("This order is waiting for verified payment.")
         transitions = {
             User.Role.RESTAURANT: {
                 Order.Status.PENDING: {Order.Status.CONFIRMED, Order.Status.CANCELLED},
@@ -353,19 +494,35 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
             allowed = transitions.get(request.user.role, {}).get(order.status, set())
         if new not in allowed:
             return Response({"detail": "Status transition not allowed."}, status=403)
+        if new == Order.Status.CANCELLED and Payment.objects.filter(order=order, method="razorpay", status=Payment.Status.PAID).exists():
+            raise serializers.ValidationError("Prepaid cancellation requires a confirmed refund. Contact platform support.")
         if request.user.role == User.Role.DELIVERY:
             try:
                 if order.delivery.partner != request.user:
                     return Response({"detail": "You are not assigned to this delivery."}, status=403)
             except Order.delivery.RelatedObjectDoesNotExist:
                 return Response({"detail": "You are not assigned to this delivery."}, status=403)
+            if new == Order.Status.DELIVERED and order.delivery_code:
+                attempt_key = f"delivery-code:{order.id}:{request.user.id}"
+                attempts = cache.get(attempt_key, 0)
+                if attempts >= 5:
+                    raise serializers.ValidationError("Too many incorrect codes. Contact support or try again in 10 minutes.")
+                if not secrets.compare_digest(str(request.data.get("delivery_code", "")), order.delivery_code):
+                    cache.set(attempt_key, attempts + 1, 600)
+                    raise serializers.ValidationError("Ask the customer for the correct six-digit delivery code.")
+                cache.delete(attempt_key)
         order.status = new; order.save(update_fields=["status", "updated_at"])
+        OrderEvent.objects.create(order=order, status=new, message=f"Order {order.get_status_display().lower()}.")
+        AuditLog.objects.create(actor=request.user, action=f"order.{new}", target=str(order.id))
+        if new == Order.Status.CANCELLED:
+            Payment.objects.filter(order=order, status=Payment.Status.PENDING).update(status=Payment.Status.FAILED)
         if new == Order.Status.DELIVERED:
             DeliveryAssignment.objects.filter(order=order).update(delivered_at=timezone.now())
             if hasattr(order, "payment") and order.payment.method == "cod":
                 order.payment.status = Payment.Status.PAID
                 order.payment.save(update_fields=["status", "updated_at"])
-        Notification.objects.create(user=order.customer, title="Order update", message=f"Order {order.number} is {order.get_status_display()}.", kind="order")
+                notify_payment(order)
+        notify_order(order)
         return Response(OrderSerializer(order).data)
 
 class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
@@ -405,7 +562,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
             raise serializers.ValidationError({"detail": "Customers with order history cannot be deleted. Block the account instead."})
         if Restaurant.objects.filter(owner=instance, orders__isnull=False).exists():
             raise serializers.ValidationError({"detail": "Restaurant owners with order history cannot be deleted. Block the account instead."})
-        if DeliveryAssignment.objects.filter(partner=instance, order__status=Order.Status.OUT).exists():
+        if DeliveryAssignment.objects.filter(partner=instance, order__status__in=[Order.Status.ASSIGNED, Order.Status.OUT]).exists():
             raise serializers.ValidationError({"detail": "A delivery partner with an active delivery cannot be deleted."})
         instance.delete()
 
@@ -491,6 +648,31 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
 class CouponViewSet(viewsets.ModelViewSet):
     queryset=Coupon.objects.order_by("-created_at"); serializer_class=CouponSerializer; permission_classes=[IsAdmin]; lookup_field="code"
+
+    @action(detail=False, methods=["get"], permission_classes=[permissions.AllowAny])
+    def available(self, request):
+        now = timezone.now()
+        coupons = self.get_queryset().select_related("restaurant").filter(
+            is_active=True, starts_at__lte=now, ends_at__gt=now,
+        ).filter(Q(usage_limit__isnull=True) | Q(usage_count__lt=F("usage_limit"))).filter(
+            Q(restaurant__isnull=True) | Q(restaurant__is_approved=True, restaurant__is_open=True, restaurant__owner__is_active=True)
+        )
+        if request.user.is_authenticated:
+            history = Order.objects.filter(customer=request.user).exclude(status=Order.Status.CANCELLED)
+            if history.exists():
+                coupons = coupons.filter(first_order_only=False)
+            used = history.filter(coupon_id=OuterRef("pk")).values("coupon_id").annotate(uses=Count("id")).filter(uses__gte=OuterRef("per_user_limit"))
+            coupons = coupons.annotate(at_limit=Exists(used)).filter(at_limit=False)
+        page = self.paginate_queryset(coupons)
+        data = [{
+            "id": coupon.id, "code": coupon.code, "description": coupon.description,
+            "restaurant": coupon.restaurant_id, "restaurant_name": coupon.restaurant.name if coupon.restaurant else None,
+            "discount_percent": coupon.discount_percent, "discount_amount": coupon.discount_amount,
+            "min_order_amount": coupon.min_order_amount, "max_discount": coupon.max_discount,
+            "first_order_only": coupon.first_order_only, "per_user_limit": coupon.per_user_limit,
+            "ends_at": coupon.ends_at,
+        } for coupon in (page if page is not None else coupons)]
+        return self.get_paginated_response(data) if page is not None else Response(data)
 class OfferViewSet(viewsets.ModelViewSet):
     queryset=Offer.objects.order_by("-created_at"); serializer_class=OfferSerializer
     def get_permissions(self):
@@ -522,6 +704,10 @@ class DeliveryViewSet(viewsets.ModelViewSet):
     queryset=DeliveryAssignment.objects.select_related("order").order_by("-created_at"); serializer_class=DeliverySerializer; permission_classes=[IsDelivery]
     http_method_names=["get", "patch", "head", "options"]
     def get_queryset(self): return super().get_queryset().filter(partner=self.request.user)
+    def perform_update(self, serializer):
+        if serializer.instance.order.status not in [Order.Status.ASSIGNED, Order.Status.OUT]:
+            raise serializers.ValidationError("Location updates are only allowed during an active delivery.")
+        serializer.save()
 class AnalyticsViewSet(viewsets.ViewSet):
     permission_classes=[IsAdmin]; serializer_class=AnalyticsEventSerializer
     def list(self, request):

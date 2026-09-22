@@ -1,38 +1,125 @@
-import { Link } from "react-router-dom";
-import Logo from "./common/Logo";
+import { Link, useLocation } from "react-router-dom";
+import { ArrowRight, ArrowUp, Bike, Store } from "lucide-react";
+import BrandLogo from "./common/BrandLogo.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
-export default function Footer() {
-  const { isAuthenticated, role } = useAuth();
-  const accountPath = role === "admin"
-    ? "/admin-dashboard"
-    : role === "restaurant"
-      ? "/restaurant-dashboard"
-      : role === "delivery"
-        ? "/delivery-dashboard"
-        : "/profile";
+const groups = [
+  [
+    "Discover",
+    [
+      ["Find restaurants", "/search"],
+      ["Food recommendations", "/for-you"],
+      ["Explore dishes", "/search?view=dishes"],
+      ["Offers for you", "/offers"],
+    ],
+  ],
+  [
+    "RuchiGo",
+    [
+      ["Our story", "/about"],
+      ["Contact us", "/contact"],
+      ["Help & FAQs", "/faq"],
+    ],
+  ],
+  [
+    "Here to help",
+    [
+      ["Order support", "/support"],
+      ["Privacy policy", "/privacy"],
+      ["Terms of service", "/terms"],
+      ["Privacy requests", "/support?category=privacy"],
+    ],
+  ],
+];
 
+export default function Footer() {
+  const { pathname } = useLocation();
+  const { role, isAuthenticated } = useAuth();
+  if (
+    /^\/(login|register|.*password|verify.*|two-factor|account-locked|pending-approval|unauthorized|access-denied|session-expired)/.test(
+      pathname,
+    )
+  )
+    return null;
+  const partner = isAuthenticated && role !== "customer";
+  if (partner)
+    return (
+      <footer className="workspace-footer" aria-label="Workspace footer">
+        <span>© {new Date().getFullYear()} RuchiGo</span>
+        <nav aria-label="Workspace help and legal">
+          <Link to="/support">Support</Link>
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/terms">Terms</Link>
+        </nav>
+      </footer>
+    );
   return (
-    <footer className="border-t border-orange-100 bg-white/90">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-8 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-3">
-          <Logo showText={false} className="h-10 w-auto" />
+    <footer className="product-footer">
+      <div className="container">
+        <div className="footer-intro">
           <div>
-            <p className="font-semibold text-gray-900">RuchiGo</p>
-            <p className="text-sm text-gray-500">Smart food delivery with premium experience.</p>
+            <Link className="brand" to="/" aria-label="RuchiGo home">
+              <BrandLogo />
+            </Link>
+            <p>Good food. Your kind of day.</p>
           </div>
+          <Link className="footer-explore" to="/search">
+            Find your next favourite <ArrowRight size={18} />
+          </Link>
         </div>
-        <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-          <Link to="/" className="transition hover:text-orange-500">Home</Link>
-          <Link to="/search" className="transition hover:text-orange-500">Restaurants</Link>
-          {isAuthenticated ? (
-            <Link to={accountPath} className="transition hover:text-orange-500">My account</Link>
-          ) : (
-            <>
-              <Link to="/login" className="transition hover:text-orange-500">Login</Link>
-              <Link to="/register" className="transition hover:text-orange-500">Register</Link>
-            </>
-          )}
+        <div className="footer-directory">
+          {groups.map(([title, links]) => (
+            <nav key={title} aria-label={`Footer ${title}`}>
+              <h2>{title}</h2>
+              {links.map(([label, to]) => (
+                <Link key={label} to={to}>
+                  {label}
+                </Link>
+              ))}
+            </nav>
+          ))}
+          <section
+            className="footer-partnerships"
+            aria-labelledby="footer-partner-title"
+          >
+            <h2 id="footer-partner-title">Build with RuchiGo</h2>
+            <p>
+              Your kitchen. Your city.
+              <br />A little more possibility.
+            </p>
+            <Link to="/register?role=restaurant">
+              <Store size={17} />
+              <span>Restaurant partner</span>
+              <ArrowRight size={16} />
+            </Link>
+            <Link to="/register?role=delivery">
+              <Bike size={18} />
+              <span>Delivery partner</span>
+              <ArrowRight size={16} />
+            </Link>
+          </section>
+        </div>
+        <div className="footer-bottom">
+          <span>
+            © {new Date().getFullYear()} RuchiGo. All rights reserved.
+          </span>
+          <span className="footer-locale">
+            India <span aria-hidden="true">/</span> English{" "}
+            <span aria-hidden="true">/</span> INR
+          </span>
+          <button
+            onClick={() =>
+              window.scrollTo({
+                top: 0,
+                behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+                  .matches
+                  ? "instant"
+                  : "smooth",
+              })
+            }
+          >
+            Back to top <ArrowUp size={15} />
+          </button>
         </div>
       </div>
     </footer>

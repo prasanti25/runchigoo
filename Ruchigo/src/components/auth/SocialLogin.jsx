@@ -1,8 +1,5 @@
 import { motion } from "framer-motion";
-import {
-  Globe,
-  Apple,
-} from "lucide-react";
+import { Globe, Apple } from "lucide-react";
 const providers = [
   {
     id: "google",
@@ -60,9 +57,7 @@ const SocialLogin = ({ onSocialLogin }) => {
                 scale: 0.97,
               }}
               type="button"
-              onClick={() =>
-                onSocialLogin?.(provider.id)
-              }
+              onClick={() => onSocialLogin?.(provider.id)}
               className={`
                 ${provider.bg}
                 ${provider.text}
@@ -85,9 +80,7 @@ const SocialLogin = ({ onSocialLogin }) => {
             >
               <Icon size={18} />
 
-              <span className="font-medium">
-                {provider.name}
-              </span>
+              <span className="font-medium">{provider.name}</span>
             </motion.button>
           );
         })}

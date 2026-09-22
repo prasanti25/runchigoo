@@ -17,13 +17,14 @@ export default function GuestRoute({ children }) {
   }
 
   if (isAuthenticated) {
-    const roleHome = role === "admin"
-      ? "/admin-dashboard"
-      : role === "restaurant"
-        ? "/restaurant-dashboard"
-        : role === "delivery"
-          ? "/delivery-dashboard"
-          : "/";
+    const roleHome =
+      role === "admin"
+        ? "/admin-dashboard"
+        : role === "restaurant"
+          ? "/restaurant-dashboard"
+          : role === "delivery"
+            ? "/delivery-dashboard"
+            : "/";
     return <Navigate to={location.state?.from?.pathname || roleHome} replace />;
   }
 

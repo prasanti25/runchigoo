@@ -11,7 +11,15 @@
     "vercel-build": "vite build",
     "lint": "eslint .",
     "check": "npm run lint && npm run build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:product": "node scripts/product-e2e.mjs",
+    "test:visual": "node scripts/product-preview.mjs",
+    "test:experience": "node scripts/legal-operations-e2e.mjs",
+    "test:notifications": "node scripts/notifications-e2e.mjs",
+    "test:updates": "node scripts/experience-updates-e2e.mjs",
+    "test:menu": "node scripts/menu-review-e2e.mjs",
+    "test:ai:live": "node scripts/recommendations-live-e2e.mjs",
+    "test:api-retry": "node scripts/api-retry-e2e.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -31,6 +39,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
@@ -39,6 +48,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.7.0",
+    "prettier": "^3.9.8",
     "vite": "^8.1.1"
   }
 }
