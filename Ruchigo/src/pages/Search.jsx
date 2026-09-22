@@ -12,6 +12,7 @@ import {
   Flame,
 } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
+import VoiceInput from "../components/product/VoiceInput.jsx";
 import {
   EmptyState,
   ErrorNotice,
@@ -167,6 +168,7 @@ export default function SearchPage() {
               placeholder="Search restaurants, dishes or cuisines"
               aria-label="Search restaurants, dishes or cuisines"
             />
+            <VoiceInput onText={setInput} />
             {input && (
               <button
                 className="icon-button"

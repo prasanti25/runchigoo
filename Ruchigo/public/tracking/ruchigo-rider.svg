@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 96" fill="none">
+  <ellipse cx="57" cy="84" rx="46" ry="5" fill="#23372c" opacity=".14"/>
+  <circle cx="29" cy="75" r="11" fill="#273632" stroke="#fff" stroke-width="3"/>
+  <circle cx="29" cy="75" r="4" fill="#a8b8aa"/>
+  <g class="rider-wheel" style="transform-origin:29px 75px" stroke="#dbe4dc" stroke-width="1.5">
+    <path d="M29 68v4m0 6v4m-7-7h4m6 0h4m-12-5 3 3m4 4 3 3m-10 0 3-3m4-4 3-3"/>
+  </g>
+  <circle cx="89" cy="75" r="11" fill="#273632" stroke="#fff" stroke-width="3"/>
+  <circle cx="89" cy="75" r="4" fill="#a8b8aa"/>
+  <g class="rider-wheel" style="transform-origin:89px 75px" stroke="#dbe4dc" stroke-width="1.5">
+    <path d="M89 68v4m0 6v4m-7-7h4m6 0h4m-12-5 3 3m4 4 3 3m-10 0 3-3m4-4 3-3"/>
+  </g>
+  <path d="M16 66c1-9 7-14 16-14h13l10 14h16l5-25h9l11 25c-14-1-15 10-26 10H43c-5-15-17-16-27-10Z" fill="#64874c" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="m77 41-3-9h-7" stroke="#273632" stroke-width="4" stroke-linecap="round"/>
+  <path d="M81 39h7l3 9h-8" fill="#f9d99b"/>
+  <path d="M24 55h23" stroke="#273632" stroke-width="5" stroke-linecap="round"/>
+  <path d="m48 43 10 12-2 13h12" stroke="#273632" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="13" y="29" width="28" height="26" rx="5" fill="#3e623b" stroke="#fff" stroke-width="2"/>
+  <path d="M19 30v-4h15v4" stroke="#3e623b" stroke-width="3"/>
+  <text x="27" y="43" text-anchor="middle" font-family="Arial,sans-serif" font-size="8" font-weight="800" fill="white">R</text>
+  <text x="27" y="50" text-anchor="middle" font-family="Arial,sans-serif" font-size="4.7" font-weight="700" fill="white">RuchiGo</text>
+  <path d="m48 25-8 18 15 5 6-15" fill="#6d914f" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+  <path d="m54 31 9 11 11-4" stroke="#6d914f" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m71 39 4-1" stroke="#c78d69" stroke-width="5" stroke-linecap="round"/>
+  <path d="M54 13v12c8 2 12-2 11-8" fill="#ce9a78"/>
+  <path d="M48 17c-2-15 18-17 20-4l-3 5H53Z" fill="#3e623b" stroke="#fff" stroke-width="2"/>
+  <path d="M59 13h10" stroke="#23372c" stroke-width="3" stroke-linecap="round"/>
+  <path d="M23 61h12M55 71h14" stroke="#c3d6b4" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

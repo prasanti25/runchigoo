@@ -146,6 +146,11 @@ export function ErrorNotice({ error, onRetry }) {
 }
 
 export function AddButton({ item }) {
+  const unavailable =
+    item.is_available === false ||
+    item.orderable === false ||
+    item.stock_quantity === 0 ||
+    item.restaurant_detail?.accepting_orders === false;
   const { isAuthenticated, role } = useAuth();
   const { cartItems, addToCart, increaseQuantity, decreaseQuantity } =
     useCart();
@@ -208,7 +213,7 @@ export function AddButton({ item }) {
           className="add-button"
           aria-haspopup="dialog"
           aria-expanded={customizing}
-          disabled={item.is_available === false}
+          disabled={unavailable}
           onClick={() => change(1)}
         >
           ADD <Plus size={15} />
@@ -219,7 +224,7 @@ export function AddButton({ item }) {
           aria-label={`Customise ${item.name}: ${item.add_ons.length} add-ons`}
           aria-haspopup="dialog"
           aria-expanded={customizing}
-          disabled={item.is_available === false}
+          disabled={unavailable}
           onClick={() => change(1)}
         >
           <span>Customise</span>
@@ -245,7 +250,7 @@ export function AddButton({ item }) {
       </button>
       <span aria-live="polite">{cartItem.quantity}</span>
       <button
-        disabled={busy || cartItem.quantity >= 99}
+        disabled={busy || unavailable || cartItem.quantity >= 99}
         onClick={() => change(1)}
         aria-label={`Add one ${item.name}`}
       >
@@ -255,10 +260,16 @@ export function AddButton({ item }) {
   ) : (
     <button
       className="add-button"
-      disabled={busy || item.is_available === false}
+      disabled={busy || unavailable}
       onClick={() => change(1)}
     >
-      {busy ? "Adding…" : "ADD"}
+      {busy
+        ? "Adding…"
+        : item.stock_quantity === 0
+          ? "Sold out"
+          : item.restaurant_detail?.accepting_orders === false
+            ? "Closed"
+            : "ADD"}
       <Plus size={15} />
     </button>
   );
@@ -296,6 +307,21 @@ function AddOnPicker({ item, onClose }) {
     .filter((row) => selected.includes(row.id))
     .reduce((sum, row) => sum + Number(row.price), 0);
   const total = (Number(item.price) + extrasPrice) * quantity;
+  const extraOptions = item.add_ons.filter((row) => !row.group_id);
+  const groups = [
+    ...(item.option_groups || []),
+    ...(extraOptions.length
+      ? [{ id: "", name: "Make it a meal", min_select: 0, max_select: 12 }]
+      : []),
+  ];
+  const countIn = (group) =>
+    item.add_ons.filter(
+      (row) => (row.group_id || "") === group.id && selected.includes(row.id),
+    ).length;
+  const complete = groups.every(
+    (group) =>
+      countIn(group) >= group.min_select && countIn(group) <= group.max_select,
+  );
   return (
     <Modal
       title="Customise your meal"
@@ -306,6 +332,10 @@ function AddOnPicker({ item, onClose }) {
         className="addon-picker"
         onSubmit={async (event) => {
           event.preventDefault();
+          if (!complete) {
+            setError("Choose the required options before continuing.");
+            return;
+          }
           if (!isAuthenticated) {
             const returnParams = new URLSearchParams(location.search);
             returnParams.set("customise", String(item.id));
@@ -355,50 +385,86 @@ function AddOnPicker({ item, onClose }) {
               </strong>
             </div>
           </div>
-          <fieldset className="addon-group">
-            <legend>Make it a meal</legend>
-            <div className="addon-group-meta">
-              <span>Optional · choose any</span>
-              <span>{selected.length} selected</span>
-            </div>
-            <div className="addon-options">
-              {item.add_ons.map((row) => (
-                <label
-                  className={`addon-option ${selected.includes(row.id) ? "selected" : ""} ${!row.is_available ? "unavailable" : ""}`}
-                  key={row.id}
-                >
-                  <span className="addon-option-copy">
-                    <span>{row.name}</span>
-                    <small>
-                      {row.is_available
-                        ? Number(row.price)
-                          ? `+ ${money(row.price)}`
-                          : "No extra charge"
-                        : "Currently unavailable"}
-                    </small>
-                  </span>
-                  <span className="addon-checkbox">
-                    <input
-                      aria-label={`${row.name}, ${Number(row.price) ? money(row.price) : "no extra charge"}${!row.is_available ? ", currently unavailable" : ""}`}
-                      type="checkbox"
-                      disabled={!row.is_available || busy}
-                      checked={selected.includes(row.id)}
-                      onChange={(event) =>
-                        setSelected((current) =>
-                          event.target.checked
-                            ? [...current, row.id]
-                            : current.filter((id) => id !== row.id),
-                        )
-                      }
-                    />
-                    <Check size={15} strokeWidth={3} aria-hidden="true" />
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          {groups.map((group) => (
+            <fieldset className="addon-group" key={group.id}>
+              <legend>{group.name}</legend>
+              <div className="addon-group-meta">
+                <span>
+                  {group.min_select
+                    ? `Required · choose ${group.min_select === group.max_select ? group.min_select : `${group.min_select}–${group.max_select}`}`
+                    : group.id
+                      ? `Optional · up to ${group.max_select}`
+                      : "Optional · choose any"}
+                </span>
+                <span>{countIn(group)} selected</span>
+              </div>
+              <div className="addon-options">
+                {item.add_ons
+                  .filter((row) => (row.group_id || "") === group.id)
+                  .map((row) => (
+                    <label
+                      className={`addon-option ${selected.includes(row.id) ? "selected" : ""} ${!row.is_available ? "unavailable" : ""}`}
+                      key={row.id}
+                    >
+                      <span className="addon-option-copy">
+                        <span>{row.name}</span>
+                        <small>
+                          {row.is_available
+                            ? Number(row.price)
+                              ? `+ ${money(row.price)}`
+                              : "No extra charge"
+                            : "Currently unavailable"}
+                        </small>
+                      </span>
+                      <span className="addon-checkbox">
+                        <input
+                          aria-label={`${row.name}, ${Number(row.price) ? money(row.price) : "no extra charge"}${!row.is_available ? ", currently unavailable" : ""}`}
+                          type={
+                            group.min_select === 1 && group.max_select === 1
+                              ? "radio"
+                              : "checkbox"
+                          }
+                          name={`choice-${item.id}-${group.id || "extras"}`}
+                          disabled={
+                            !row.is_available ||
+                            busy ||
+                            (group.max_select > 1 &&
+                              !selected.includes(row.id) &&
+                              countIn(group) >= group.max_select)
+                          }
+                          checked={selected.includes(row.id)}
+                          onChange={(event) =>
+                            setSelected((current) =>
+                              event.target.checked
+                                ? [
+                                    ...(group.max_select === 1
+                                      ? current.filter(
+                                          (id) =>
+                                            !item.add_ons.some(
+                                              (option) =>
+                                                option.id === id &&
+                                                (option.group_id || "") ===
+                                                  group.id,
+                                            ),
+                                        )
+                                      : current),
+                                    row.id,
+                                  ]
+                                : current.filter((id) => id !== row.id),
+                            )
+                          }
+                        />
+                        <Check size={15} strokeWidth={3} aria-hidden="true" />
+                      </span>
+                    </label>
+                  ))}
+              </div>
+            </fieldset>
+          ))}
           <p className="addon-optional-note">
-            Just the dish? Continue without selecting any extras.
+            {groups.some((group) => group.min_select)
+              ? "Choose the required options. Extras are always up to you."
+              : "Just the dish? Continue without selecting any extras."}
           </p>
         </div>
         <div className="addon-checkout">
@@ -431,7 +497,9 @@ function AddOnPicker({ item, onClose }) {
               <button
                 type="button"
                 aria-label="Increase quantity"
-                disabled={busy || quantity >= 99}
+                disabled={
+                  busy || quantity >= Math.min(99, item.stock_quantity ?? 99)
+                }
                 onClick={() => setQuantity((current) => current + 1)}
               >
                 <Plus size={17} />
@@ -439,7 +507,13 @@ function AddOnPicker({ item, onClose }) {
             </div>
             <button
               className="addon-submit"
-              disabled={busy || item.is_available === false}
+              disabled={
+                busy ||
+                !complete ||
+                item.is_available === false ||
+                item.stock_quantity === 0 ||
+                item.restaurant_detail?.accepting_orders === false
+              }
             >
               {busy ? (
                 "Adding…"
@@ -485,7 +559,11 @@ export function FoodCard({ item, reason }) {
         </Link>
         {reason && <p className="recommendation-reason">{reason}</p>}
         <div className="flex-row between price-row">
-          <strong>{money(item.price)}</strong>
+          <strong>
+            {item.option_groups?.length
+              ? `From ${money(item.minimum_price ?? item.price)}`
+              : money(item.price)}
+          </strong>
           <Link
             className="add-button"
             to={`/restaurant/${item.restaurant}?dish=${item.id}`}

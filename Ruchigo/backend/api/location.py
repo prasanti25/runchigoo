@@ -4,6 +4,7 @@ import ipaddress
 import json
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.cache import cache
@@ -33,8 +34,26 @@ def client_address(request):
     return remote
 
 
-class LocationViewSet(viewsets.ViewSet):
+from .admin_access import AdminScopeMixin
+
+
+class LocationViewSet(AdminScopeMixin, viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
+
+    @action(detail=False, methods=["get"], url_path="map-config")
+    def map_config(self, request):
+        # Only a PUBLIC, origin-restricted browser tile URL may be configured.
+        # Never reuse server-side IPinfo/Gemini credentials here.
+        tile_url = getattr(settings, "MAP_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+        attribution_url = getattr(settings, "MAP_ATTRIBUTION_URL", "https://www.openstreetmap.org/copyright")
+        if urlsplit(tile_url).scheme != "https" or not all(key in tile_url for key in ("{z}", "{x}", "{y}")) or urlsplit(attribution_url).scheme != "https":
+            return Response({"detail": "The map is temporarily unavailable. Your order updates are still available."}, status=503)
+        return Response({
+            "tile_url": tile_url,
+            "attribution": getattr(settings, "MAP_ATTRIBUTION", "© OpenStreetMap contributors"),
+            "attribution_url": attribution_url,
+            "provider": getattr(settings, "MAP_PROVIDER", "OpenStreetMap"),
+        })
 
     @action(detail=False, methods=["get"], throttle_classes=[LocationThrottle])
     def approximate(self, request):

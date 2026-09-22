@@ -14,6 +14,8 @@ import { WorkspaceFrame, Metrics } from "../components/product/Workspace.jsx";
 import { EmptyState, ErrorNotice, Modal } from "../components/product/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
+import OrderOperations from "../components/product/OrderOperations.jsx";
+import DeliveryChat from "../components/product/DeliveryChat.jsx";
 import { dateTime, money, orderNumber, useRemote } from "../lib/product.js";
 
 export function DeliveryRequests() {
@@ -175,10 +177,18 @@ export function ActiveDelivery() {
   useEffect(() => {
     if (!sharing || !active || !assignment || !navigator.geolocation) return;
     let alive = true;
+    let sending = false;
+    lastSent.current = 0;
     const controller = new AbortController();
     const watch = navigator.geolocation.watchPosition(
       async (position) => {
-        if (Date.now() - lastSent.current < 10000) return;
+        if (
+          sending ||
+          Date.now() - lastSent.current < 10000 ||
+          Date.now() - position.timestamp > 30000
+        )
+          return;
+        sending = true;
         lastSent.current = Date.now();
         try {
           await apiRequest(`/deliveries/${assignment}/`, {
@@ -193,6 +203,8 @@ export function ActiveDelivery() {
           if (alive) setGeoError("");
         } catch (err) {
           if (alive) setGeoError(err.message);
+        } finally {
+          sending = false;
         }
       },
       () => {
@@ -332,6 +344,7 @@ export function ActiveDelivery() {
                 </p>
               )}
             </section>
+            <DeliveryChat key={order.id} order={order} />
             <section className="panel">
               <h2>Items to collect</h2>
               {order.items.map((item) => (
@@ -345,6 +358,7 @@ export function ActiveDelivery() {
             </section>
           </div>
           <aside>
+            <OrderOperations order={order} />
             {awaitingPickup && (
               <section className="panel">
                 <h2>Collect from the kitchen</h2>
@@ -354,7 +368,7 @@ export function ActiveDelivery() {
                 </p>
                 <button
                   className="btn primary w-full mt-5"
-                  disabled={busy}
+                  disabled={busy || Boolean(order.fulfillment_paused_at)}
                   onClick={pickup}
                 >
                   <Check size={16} />
@@ -396,7 +410,9 @@ export function ActiveDelivery() {
               </p>
               <button
                 className="btn primary w-full mt-5"
-                disabled={!pickedUp || busy}
+                disabled={
+                  !pickedUp || busy || Boolean(order.fulfillment_paused_at)
+                }
                 onClick={() => setConfirmation(true)}
               >
                 <Check size={16} />

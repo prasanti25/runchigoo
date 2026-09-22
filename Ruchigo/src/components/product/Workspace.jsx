@@ -22,6 +22,7 @@ import Navbar from "../Navbar.jsx";
 import BrandLogo from "../common/BrandLogo.jsx";
 import NotificationBell from "../common/NotificationBell.jsx";
 import UserAvatar from "../common/UserAvatar.jsx";
+import { canOpenAdminRoute } from "../../lib/adminAccess.js";
 
 const menus = {
   restaurant: [
@@ -45,13 +46,18 @@ const menus = {
     ["orders", "Orders", ShoppingBag],
     ["restaurants", "Restaurants", Store],
     ["delivery-partners", "Delivery partners", Bike],
+    ["partner-accounts", "Partner account access", Users],
     ["users", "People", Users],
     ["payments", "Payments", CreditCard],
+    ["delivery-zones", "Delivery areas", MapPin],
+    ["order-policy", "Order policy", ListChecks],
     ["offers", "Offers & coupons", Tag],
+    ["catalog", "Food categories", Utensils],
     ["reports", "Analytics", BarChart3],
     ["reviews", "Review moderation", MessageSquare],
     ["activity", "Activity log", ListChecks],
     ["profile", "My profile", Settings],
+    ["access", "Team access", Users],
   ],
 };
 export function WorkspaceNav({ type }) {
@@ -83,22 +89,29 @@ export function WorkspaceNav({ type }) {
           </div>
         </div>
         <nav aria-label={`${type} workspace`}>
-          {menus[type].map(([path, label, Icon]) => (
-            <NavLink key={path} to={`/${type}-${path}`}>
-              <Icon size={18} />
-              {label}
-            </NavLink>
-          ))}
+          {menus[type]
+            .filter(
+              ([path]) =>
+                type !== "admin" || canOpenAdminRoute(user, `/admin-${path}`),
+            )
+            .map(([path, label, Icon]) => (
+              <NavLink key={path} to={`/${type}-${path}`}>
+                <Icon size={18} />
+                {label}
+              </NavLink>
+            ))}
           <NavLink to="/notifications">
             <Bell size={18} />
             Notifications
           </NavLink>
         </nav>
         <div className="workspace-bottom">
-          <NavLink to="/support">
-            <LifeBuoy size={17} />
-            Help & support
-          </NavLink>
+          {(type !== "admin" || canOpenAdminRoute(user, "/support")) && (
+            <NavLink to="/support">
+              <LifeBuoy size={17} />
+              Help & support
+            </NavLink>
+          )}
           <NavLink to="/settings">
             <Settings size={17} />
             Account settings

@@ -2,7 +2,7 @@ from decimal import Decimal
 import math
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Avg, Count, Exists, F, FloatField, Min, OuterRef, Q, Value
+from django.db.models import Avg, Count, Exists, F, FloatField, Min, OuterRef, Q, Sum, Value
 from django.db.models.functions import ACos, Cos, Greatest, Least, Radians, Sin
 from django.utils import timezone
 from rest_framework import permissions, serializers, viewsets
@@ -10,10 +10,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
 
-from .models import AuditLog, Category, MenuItem, Offer, Order, OrderItem, Restaurant, Review, SupportTicket, TicketMessage, User
+from .models import AuditLog, Category, MenuItem, Offer, Order, OrderItem, Payment, RefundRequest, Restaurant, Review, SupportTicket, TicketMessage, User
+from .refunds import RefundSerializer
 from .serializers import MenuItemSerializer, RestaurantSerializer
 from .recommendations import craving_terms, match_reasons, normalize_preferences, rank_items
 from .notifications import notify, admin_ids
+from .availability import accepting_filter, in_stock_filter
+from .menu_options import minimum_item_price
 
 
 class RecommendationThrottle(SimpleRateThrottle):
@@ -28,6 +31,7 @@ class DiscoveryQuery(serializers.Serializer):
     q = serializers.CharField(required=False, allow_blank=True, max_length=200)
     category = serializers.CharField(required=False, allow_blank=True, max_length=100)
     vegetarian = serializers.BooleanField(required=False)
+    dietary_tags = serializers.ListField(child=serializers.ChoiceField(choices=["vegan", "jain"]), max_length=2, required=False)
     budget = serializers.DecimalField(required=False, max_digits=8, decimal_places=2, min_value=Decimal("1"))
     min_rating = serializers.DecimalField(required=False, max_digits=2, decimal_places=1, min_value=Decimal("0"), max_value=Decimal("5"))
     max_prep = serializers.IntegerField(required=False, min_value=1, max_value=180)
@@ -56,11 +60,14 @@ def distance_expression(filters, prefix=""):
 
 
 def eligible_items(filters):
-    items = MenuItem.objects.select_related("restaurant", "category").filter(is_available=True, restaurant__is_open=True, restaurant__is_approved=True, restaurant__owner__is_active=True)
+    items = MenuItem.objects.select_related("restaurant", "restaurant__owner", "category").filter(accepting_filter("restaurant__"), in_stock_filter(), is_available=True)
     if filters.get("city"):
         items = items.filter(restaurant__city__iexact=filters["city"])
     if filters.get("vegetarian"):
         items = items.filter(is_vegetarian=True)
+    for tag in filters.get("dietary_tags", []):
+        # JSON string boundaries prevent "non-vegan" matching "vegan".
+        items = items.filter(is_vegetarian=True, tags__icontains=f'"{tag}"')
     if filters.get("budget"):
         items = items.filter(price__lte=filters["budget"])
     if filters.get("category"):
@@ -78,10 +85,20 @@ def eligible_items(filters):
         items = items.filter(restaurant__latitude__isnull=False, restaurant__longitude__isnull=False).annotate(distance_km=distance_expression(filters, "restaurant__"))
         if filters.get("radius_km"):
             items = items.filter(distance_km__lte=filters["radius_km"])
+    excluded_options = []
+    for item in items.exclude(option_groups=[]):
+        minimum = minimum_item_price(item)
+        if minimum is None or (filters.get("budget") and minimum > filters["budget"]):
+            excluded_options.append(item.pk)
+    if excluded_options:
+        items = items.exclude(pk__in=excluded_options)
     return items
 
 
-class DiscoveryViewSet(viewsets.ViewSet):
+from .admin_access import AdminScopeMixin
+
+
+class DiscoveryViewSet(AdminScopeMixin, viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
 
     def list(self, request):
@@ -106,6 +123,7 @@ class DiscoveryViewSet(viewsets.ViewSet):
         for restaurant in restaurants[offset:offset + 12]:
             row = RestaurantSerializer(restaurant, context={"request": request}).data
             row.update(menu_count=restaurant.menu_count, from_price=restaurant.from_price, prep_minutes=restaurant.prep_minutes)
+            row["from_price"] = min((minimum_item_price(item) for item in items.filter(restaurant_id=restaurant.pk)), default=None)
             if "latitude" in filters:
                 row["distance_km"] = round(restaurant.distance_km, 1)
             restaurant_data.append(row)
@@ -130,7 +148,10 @@ class DiscoveryViewSet(viewsets.ViewSet):
         items = list(eligible.order_by("-is_bestseller", "id")[:40])
         history = set()
         if request.user.is_authenticated and request.user.role == User.Role.CUSTOMER:
-            history = set(OrderItem.objects.filter(order__customer=request.user, order__status=Order.Status.DELIVERED).order_by("-order__created_at").values_list("menu_item_id", flat=True)[:100])
+            from .models import TasteProfile
+            profile = TasteProfile.objects.filter(user=request.user).first()
+            if not profile or profile.use_order_history:
+                history = set(OrderItem.objects.filter(order__customer=request.user, order__status=Order.Status.DELIVERED).order_by("-order__created_at").values_list("menu_item_id", flat=True)[:100])
         preferences = {k: str(v) for k, v in filters.items() if k not in ["page", "latitude", "longitude"]}
         ranked, source, status = rank_items(items, preferences, history)
         by_id = {i.id: i for i in items}
@@ -150,19 +171,22 @@ class DiscoveryViewSet(viewsets.ViewSet):
 class TicketMessageSerializer(serializers.ModelSerializer):
     from_support = serializers.SerializerMethodField()
     def get_from_support(self, obj):
-        return bool(obj.author and obj.author.role == User.Role.ADMIN)
+        return obj.author_id != obj.ticket.user_id
     class Meta:
         model = TicketMessage
-        fields = ["id", "body", "from_support", "created_at"]
+        fields = ["id", "body", "from_support", "reply_to", "actions", "created_at"]
 
 
 class SupportTicketSerializer(serializers.ModelSerializer):
     messages = TicketMessageSerializer(many=True, read_only=True)
     message = serializers.CharField(write_only=True, max_length=3000, required=False, trim_whitespace=True)
+    affected_item_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), max_length=50, required=False, write_only=True)
+    request_refund = serializers.BooleanField(default=False, write_only=True)
+    refund_request = RefundSerializer(read_only=True)
     class Meta:
         model = SupportTicket
-        fields = ["id", "order", "category", "subject", "status", "message", "messages", "created_at", "updated_at"]
-        read_only_fields = ["status", "created_at", "updated_at"]
+        fields = ["id", "order", "category", "subject", "status", "message", "messages", "affected_items", "affected_item_ids", "request_refund", "refund_request", "feedback_score", "feedback_comment", "feedback_at", "staff_requested_at", "created_at", "updated_at"]
+        read_only_fields = ["status", "affected_items", "feedback_score", "feedback_comment", "feedback_at", "staff_requested_at", "created_at", "updated_at"]
     def validate_order(self, order):
         if order and order.customer_id != self.context["request"].user.id:
             raise serializers.ValidationError("Choose one of your own orders.")
@@ -174,20 +198,46 @@ class SupportTicketSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, data):
         message = data.pop("message")
+        item_ids = set(data.pop("affected_item_ids", []))
+        request_refund = data.pop("request_refund", False)
+        order = data.get("order")
+        if (item_ids or request_refund) and not order:
+            raise serializers.ValidationError({"order": "Choose the order this issue is about."})
+        if order:
+            Order.objects.select_for_update().get(pk=order.pk)
+            items = list(OrderItem.objects.filter(order=order, pk__in=item_ids))
+            if len(items) != len(item_ids):
+                raise serializers.ValidationError({"affected_item_ids": "Choose items from this order only."})
+            data["affected_items"] = [{"id": item.pk, "name": item.name, "quantity": item.quantity} for item in items]
+        if request_refund:
+            payment = Payment.objects.select_for_update().filter(order=order).first()
+            if not payment or payment.status != Payment.Status.PAID:
+                raise serializers.ValidationError({"request_refund": "No captured payment is available to refund. Choose Payment help if money was debited unexpectedly."})
+            if RefundRequest.objects.filter(order=order, status__in=["requested", "reviewing", "approved", "processing"]).exists():
+                raise serializers.ValidationError({"request_refund": "A refund review is already open for this order. Continue in its existing conversation."})
+            returned = RefundRequest.objects.filter(order=order, status="processed").aggregate(total=Sum("approved_amount"))["total"] or Decimal(0)
+            if payment.amount <= returned:
+                raise serializers.ValidationError("This payment has already been fully refunded.")
         ticket = SupportTicket.objects.create(user=self.context["request"].user, **data)
         TicketMessage.objects.create(ticket=ticket, author=ticket.user, body=message)
+        if request_refund:
+            RefundRequest.objects.create(ticket=ticket, order=order, requested_amount=payment.amount-returned)
+            TicketMessage.objects.create(ticket=ticket, body="Your refund review is requested. Support will check this order and the issue you reported. This is not a refund approval or a completed payment reversal.")
         metadata = {"ticket_id": ticket.pk}
         notify([ticket.user_id], event=f"support:{ticket.pk}:created", title="Support request received", message=f"Your ticket #{ticket.pk} is open. Follow the conversation in Help & support.", kind="support", metadata=metadata)
         notify(admin_ids(), event=f"support:{ticket.pk}:created", title="New support request", message=f"Ticket #{ticket.pk} needs a response.", kind="support", metadata=metadata)
         return ticket
 
 
-class SupportViewSet(viewsets.ModelViewSet):
+class SupportViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     serializer_class = SupportTicketSerializer
     permission_classes = [permissions.IsAuthenticated]
     http_method_names = ["get", "post", "head", "options"]
     def get_queryset(self):
-        qs = SupportTicket.objects.prefetch_related("messages__author")
+        qs = SupportTicket.objects.select_related("refund_request").prefetch_related("messages__author")
+        if self.request.query_params.get("order"):
+            order_id = serializers.IntegerField(min_value=1).run_validation(self.request.query_params["order"])
+            qs = qs.filter(order_id=order_id)
         return qs if self.request.user.role == User.Role.ADMIN else qs.filter(user=self.request.user)
 
     @action(detail=True, methods=["post"])
@@ -196,20 +246,57 @@ class SupportViewSet(viewsets.ModelViewSet):
         ticket = SupportTicket.objects.select_for_update().get(pk=self.get_object().pk)
         field = serializers.CharField(max_length=3000, trim_whitespace=True)
         body = field.run_validation(request.data.get("message"))
-        reply = TicketMessage.objects.create(ticket=ticket, author=request.user, body=body)
+        client_id = serializers.UUIDField(required=False).run_validation(request.data["client_id"]) if "client_id" in request.data else None
+        if client_id:
+            existing = ticket.messages.filter(author=request.user, client_id=client_id).first()
+            if existing:
+                if existing.body != body:
+                    raise serializers.ValidationError("This message key was already used for different text.")
+                return Response(self.get_serializer(ticket).data)
+        reply = TicketMessage.objects.create(ticket=ticket, author=request.user, body=body, client_id=client_id)
         ticket._prefetched_objects_cache = {}
         if ticket.status == SupportTicket.Status.RESOLVED:
             ticket.status = SupportTicket.Status.OPEN
+        if request.user.role == User.Role.ADMIN:
+            ticket.staff_requested_at = ticket.staff_requested_at or timezone.now()
+            ticket.status = SupportTicket.Status.IN_PROGRESS
         ticket.save()
         is_staff = request.user.role == User.Role.ADMIN
         recipients = [ticket.user_id] if is_staff else admin_ids()
         notify(recipients, event=f"support-reply:{reply.pk}", title="Support replied" if is_staff else "New reply on a support ticket", message=f"You have a reply on ticket #{ticket.id}.", kind="support", metadata={"ticket_id": ticket.id})
         return Response(self.get_serializer(ticket).data)
 
+    @action(detail=True, methods=["post"], throttle_classes=[RecommendationThrottle])
+    def respond(self, request, pk=None):
+        ticket = self.get_object()
+        if ticket.user_id != request.user.pk:
+            return Response({"detail": "Only the conversation owner can request quick assistance."}, status=403)
+        message_id = serializers.IntegerField(min_value=1).run_validation(request.data.get("message_id"))
+        from .support_assistant import respond
+        ticket = respond(ticket.pk, request.user, message_id)
+        return Response(self.get_serializer(ticket).data)
+
+    @action(detail=True, methods=["post"])
+    @transaction.atomic
+    def handoff(self, request, pk=None):
+        ticket = SupportTicket.objects.select_for_update().get(pk=self.get_object().pk)
+        if ticket.user_id != request.user.pk:
+            return Response({"detail": "Only the conversation owner can request a team review."}, status=403)
+        if not ticket.staff_requested_at or ticket.status == SupportTicket.Status.RESOLVED:
+            ticket.staff_requested_at = timezone.now()
+            ticket.status = SupportTicket.Status.IN_PROGRESS
+            ticket.save()
+            message = TicketMessage.objects.create(ticket=ticket, body="Your conversation is in the support queue. Replies will appear here; you don’t need to repeat the details. No refund or cancellation has been performed by this handoff.")
+            notify([ticket.user_id, *admin_ids()], event=f"support-handoff:{message.pk}", title="Team review requested", message=f"Conversation #{ticket.pk} needs a support review.", kind="support", metadata={"ticket_id": ticket.pk, "order_id": ticket.order_id})
+            AuditLog.objects.create(actor=request.user, action="support.team_requested", target=str(ticket.pk))
+        return Response(self.get_serializer(ticket).data)
+
     @action(detail=True, methods=["post"])
     @transaction.atomic
     def resolve(self, request, pk=None):
         ticket = SupportTicket.objects.select_for_update().get(pk=self.get_object().pk)
+        if Order.objects.filter(fulfillment_issue=ticket, fulfillment_paused_at__isnull=False).exists():
+            raise serializers.ValidationError("Support must resume or cancel the held order before closing this conversation.")
         if ticket.status == SupportTicket.Status.RESOLVED:
             return Response(self.get_serializer(ticket).data)
         ticket.status = SupportTicket.Status.RESOLVED
@@ -218,8 +305,25 @@ class SupportViewSet(viewsets.ModelViewSet):
         notify([ticket.user_id, *admin_ids()], event=f"support-resolved:{event.pk}", title="Support ticket resolved", message=f"Ticket #{ticket.id} was marked resolved. Reply to reopen if you still need help.", kind="support", metadata={"ticket_id": ticket.id})
         return Response(self.get_serializer(ticket).data)
 
+    @action(detail=True, methods=["post"])
+    @transaction.atomic
+    def feedback(self, request, pk=None):
+        ticket = SupportTicket.objects.select_for_update().get(pk=self.get_object().pk)
+        if request.user.pk != ticket.user_id:
+            return Response({"detail": "Only the person who opened this conversation can rate it."}, status=403)
+        if ticket.status != SupportTicket.Status.RESOLVED:
+            raise serializers.ValidationError("You can rate this conversation after it is resolved.")
+        score = serializers.IntegerField(min_value=1, max_value=5).run_validation(request.data.get("score"))
+        comment = serializers.CharField(max_length=1000, allow_blank=True).run_validation(request.data.get("comment", ""))
+        ticket.feedback_score = score
+        ticket.feedback_comment = comment
+        ticket.feedback_at = timezone.now()
+        ticket.save(update_fields=["feedback_score", "feedback_comment", "feedback_at", "updated_at"])
+        AuditLog.objects.create(actor=request.user, action="support.feedback", target=str(ticket.pk), metadata={"score": score})
+        return Response(self.get_serializer(ticket).data)
 
-class PublicReviewViewSet(viewsets.ViewSet):
+
+class PublicReviewViewSet(AdminScopeMixin, viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
     def list(self, request):
         restaurant_id = serializers.IntegerField(min_value=1).run_validation(request.query_params.get("restaurant"))

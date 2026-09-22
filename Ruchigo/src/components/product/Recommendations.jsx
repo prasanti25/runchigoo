@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Clock3, MapPin, Sparkles } from "lucide-react";
+import { ArrowRight, Clock3, MapPin, Utensils } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { apiRequest } from "../../lib/api.js";
 import { useDeliveryLocation } from "../../lib/product.js";
 import { EmptyState, ErrorNotice, FoodCard, Skeleton } from "./UI.jsx";
+import VoiceInput from "./VoiceInput.jsx";
 
 const preferenceKey = (value) =>
   JSON.stringify([
@@ -75,7 +76,7 @@ export default function Recommendations() {
       <div className="ai-panel" aria-busy={busy}>
         <div className="ai-copy">
           <span className="ai-label">
-            <Sparkles size={15} />
+            <Utensils size={15} />
             YOUR NEXT GOOD MEAL
           </span>
           <h2>
@@ -103,6 +104,7 @@ export default function Recommendations() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Something spicy, comforting and filling…"
             />
+            <VoiceInput onText={setQuery} disabled={busy} />
           </div>
           <div className="ai-options">
             <label className="check-label">
@@ -221,7 +223,7 @@ export default function Recommendations() {
             <>
               <p className="eyebrow mb-4">
                 {result.source === "gemini"
-                  ? "AI PICKS FOR YOUR CRAVING"
+                  ? "PICKS FOR YOUR CRAVING"
                   : "PICKS FROM THE CURRENT MENU"}
               </p>
               <div className="recommendation-result-note" role="status">

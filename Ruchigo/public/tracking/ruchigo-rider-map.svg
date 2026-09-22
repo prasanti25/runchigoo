@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 96" fill="none">
+  <defs>
+    <linearGradient id="scooterPaint" x1="19" y1="17" x2="46" y2="80" gradientUnits="userSpaceOnUse"><stop stop-color="#a5bd87"/><stop offset="1" stop-color="#3c624b"/></linearGradient>
+    <linearGradient id="riderHelmet" x1="22" y1="34" x2="42" y2="50" gradientUnits="userSpaceOnUse"><stop stop-color="#769b5c"/><stop offset="1" stop-color="#35583e"/></linearGradient>
+    <clipPath id="frontTyre"><rect x="28" y="5" width="8" height="17" rx="4"/></clipPath>
+    <clipPath id="rearTyre"><rect x="28" y="76" width="8" height="15" rx="4"/></clipPath>
+  </defs>
+  <ellipse cx="34" cy="51" rx="22" ry="40" fill="#243d2e" opacity=".13"/>
+  <rect x="27" y="4" width="10" height="20" rx="5" fill="#26342f" stroke="white" stroke-width="1.5"/>
+  <rect x="27" y="74" width="10" height="18" rx="5" fill="#26342f" stroke="white" stroke-width="1.5"/>
+  <g clip-path="url(#frontTyre)"><path class="rider-tyre-tread" d="M28 1h8m-8 6h8m-8 6h8m-8 6h8m-8 6h8" stroke="#a6b1a8" stroke-width="1.3"/></g>
+  <g clip-path="url(#rearTyre)"><path class="rider-tyre-tread" d="M28 70h8m-8 6h8m-8 6h8m-8 6h8m-8 6h8" stroke="#a6b1a8" stroke-width="1.3"/></g>
+  <path d="M22 24c0-9 20-9 20 0l-2 12 5 29c2 12-2 20-13 20S17 77 19 65l5-29-2-12Z" fill="url(#scooterPaint)" stroke="white" stroke-width="2"/>
+  <path d="M24 23q8-5 16 0" stroke="#f8e9c5" stroke-width="4" stroke-linecap="round"/>
+  <path d="M27 28h10M23 67l2 11m16-11-2 11" stroke="#cfdfb9" stroke-width="2" stroke-linecap="round"/>
+  <path d="m17 30 15 3 15-3" stroke="#24382f" stroke-width="4" stroke-linecap="round"/>
+  <path d="m17 30-4-7m34 7 4-7" stroke="#637b6d" stroke-width="2"/>
+  <ellipse cx="11" cy="22" rx="5" ry="3" fill="#d9e5de" stroke="#49634f" stroke-width="1.5"/>
+  <ellipse cx="53" cy="22" rx="5" ry="3" fill="#d9e5de" stroke="#49634f" stroke-width="1.5"/>
+  <path d="m23 55-2 12m20-12 2 12" stroke="#223930" stroke-width="7" stroke-linecap="round"/>
+  <path d="m24 42-6-9m22 9 6-9" stroke="#60864e" stroke-width="7" stroke-linecap="round"/>
+  <path d="m18 33-2-3m30 3 2-3" stroke="#d3a580" stroke-width="4" stroke-linecap="round"/>
+  <path d="M23 41q9-5 18 0l1 18H22l1-18Z" fill="#527b46" stroke="#e7efdf" stroke-width="1.5"/>
+  <rect x="20" y="53" width="24" height="25" rx="5" fill="#355b3c" stroke="#fff" stroke-width="2"/>
+  <path d="M24 57h16" stroke="#739068" stroke-width="1.5"/>
+  <text x="32" y="68" text-anchor="middle" font-family="Arial,sans-serif" font-weight="800" font-size="9" fill="white">R</text>
+  <text x="32" y="73" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="3.7" fill="white">RuchiGo</text>
+  <ellipse cx="32" cy="40" rx="11" ry="12" fill="url(#riderHelmet)" stroke="#fff" stroke-width="2"/>
+  <path d="M23 37q9-7 18 0v3q-9-4-18 0v-3Z" fill="#273d34"/>
+  <path d="M28 32q4-2 7 0" stroke="#bad0a1" stroke-width="2" stroke-linecap="round"/>
+  <path d="M27 81h10" stroke="#e29378" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -25,18 +25,27 @@ import { money, useRemote } from "../lib/product.js";
 import { apiRequest } from "../lib/api.js";
 import { payForOrder } from "../lib/payments.js";
 
-export function Bill({ children }) {
-  const { itemTotal, deliveryFee, discount, total, cartItems } = useCart();
+export function Bill({ children, quote, checking = false, checkout = false }) {
+  const { itemTotal, discount: cartDiscount, cartItems } = useCart();
+  const discount = quote ? Number(quote.discount) : cartDiscount;
   return (
     <aside className="panel sticky-summary">
       <h2>Bill details</h2>
       <div className="bill-line">
         <span>Items ({cartItems.reduce((n, i) => n + i.quantity, 0)})</span>
-        <span>{money(itemTotal)}</span>
+        <span>{money(quote?.subtotal ?? itemTotal)}</span>
       </div>
       <div className="bill-line">
         <span>Delivery fee</span>
-        <span>{deliveryFee ? money(deliveryFee) : "FREE"}</span>
+        <span>
+          {quote
+            ? Number(quote.delivery_fee)
+              ? money(quote.delivery_fee)
+              : "FREE"
+            : checking
+              ? "Checking…"
+              : "At checkout"}
+        </span>
       </div>
       {discount > 0 && (
         <div className="bill-line">
@@ -45,8 +54,14 @@ export function Bill({ children }) {
         </div>
       )}
       <div className="bill-line bill-total">
-        <span>To pay</span>
-        <span>{money(total)}</span>
+        <span>{checkout ? "To pay" : "Food subtotal"}</span>
+        <span>
+          {quote
+            ? money(quote.total)
+            : checkout
+              ? "—"
+              : money(itemTotal - discount)}
+        </span>
       </div>
       {discount > 0 && (
         <p className="saving-line">
@@ -57,7 +72,9 @@ export function Bill({ children }) {
       <div className="flex-row mt-5">
         <ShieldCheck size={18} style={{ color: "#84956c" }} />
         <p className="form-help" style={{ margin: 0 }}>
-          Final prices are confirmed when you place your order.
+          {quote
+            ? "Delivery checked for your selected address. No unlisted charges."
+            : "Delivery availability and the final bill are checked at checkout."}
         </p>
       </div>
     </aside>
@@ -72,7 +89,6 @@ export function CartPage() {
     applyCoupon,
     clearCoupon,
     couponCode,
-    itemTotal,
   } = useCart();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -212,11 +228,6 @@ export function CartPage() {
                     <ArrowRight size={14} />
                   </Link>
                 </section>
-                {itemTotal < 500 && (
-                  <p className="saving-line">
-                    Add {money(500 - itemTotal)} more for free delivery.
-                  </p>
-                )}
               </div>
               <Bill>
                 <Link className="btn primary w-full mt-6" to="/checkout">
@@ -246,6 +257,32 @@ export function AddressForm({ onSaved, onClose, initial }) {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [locating, setLocating] = useState(false);
+  const locate = () => {
+    if (!navigator.geolocation) {
+      setError("Location access is unavailable in this browser.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setForm((current) => ({
+          ...current,
+          latitude: coords.latitude.toFixed(6),
+          longitude: coords.longitude.toFixed(6),
+        }));
+        setLocating(false);
+        setError("");
+      },
+      () => {
+        setLocating(false);
+        setError(
+          "Allow location access, then try again while you’re at this delivery address.",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  };
   const save = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -270,6 +307,26 @@ export function AddressForm({ onSaved, onClose, initial }) {
   return (
     <Modal title="Where should we bring your food?" onClose={onClose}>
       <form onSubmit={save} className="form-stack">
+        <div className="address-pin-controls">
+          <button
+            type="button"
+            className="btn secondary"
+            disabled={locating}
+            onClick={locate}
+          >
+            <MapPin size={16} />
+            {locating
+              ? "Finding your location…"
+              : form.latitude != null
+                ? "Update location pin"
+                : "Use my current location"}
+          </button>
+          <p className="form-help">
+            {form.latitude != null
+              ? "Location pin saved. Make sure it matches the address below."
+              : "At this address? Add your location pin for delivery checks and rider directions."}
+          </p>
+        </div>
         <label className="field">
           <span>Save as</span>
           <select
@@ -338,17 +395,46 @@ export function CheckoutPage() {
   const [notes, setNotes] = useState("");
   const [contactless, setContactless] = useState(false);
   const [addAddress, setAddAddress] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const key = useRef(crypto.randomUUID());
   const list = addresses.data?.results || [];
   const addressId =
     selected || list.find((a) => a.is_default)?.id || list[0]?.id;
+  const [quoteState, setQuoteState] = useState({});
+  const [quoteVersion, setQuoteVersion] = useState(0);
+  const quoteKey = JSON.stringify({
+    address: list.find((row) => row.id === addressId),
+    items: cartItems,
+    couponCode,
+    quoteVersion,
+  });
+  useEffect(() => {
+    if (!addressId || !cartItems.length) return;
+    const controller = new AbortController();
+    apiRequest("/cart/quote/", {
+      token,
+      method: "POST",
+      signal: controller.signal,
+      body: { address_id: addressId, coupon_code: couponCode },
+    })
+      .then((data) => setQuoteState({ key: quoteKey, data }))
+      .catch((err) => {
+        if (err.name !== "AbortError")
+          setQuoteState({ key: quoteKey, error: err.message });
+      });
+    return () => controller.abort();
+  }, [addressId, cartItems.length, couponCode, quoteKey, token]);
+  const quote = quoteState.key === quoteKey ? quoteState.data : null;
+  const quoteError = quoteState.key === quoteKey ? quoteState.error : "";
+  const checkingQuote = Boolean(addressId && !quote && !quoteError);
   const place = async () => {
     if (!addressId) {
       setError("Choose a delivery address first.");
       return;
     }
+    if (!quote) return;
     setBusy(true);
     setError("");
     try {
@@ -361,6 +447,7 @@ export function CheckoutPage() {
           payment_method: paymentMethod,
           notes: `${contactless ? "Contactless delivery requested. " : ""}${notes}`,
           checkout_key: key.current,
+          quote_token: quote.quote_token,
         },
       });
       if (order.status === "awaiting_payment") {
@@ -379,6 +466,7 @@ export function CheckoutPage() {
       navigate(`/tracking/${order.id}`, { replace: true });
     } catch (err) {
       setError(err.message);
+      if (err.data?.quote_token) setQuoteVersion((value) => value + 1);
     } finally {
       setBusy(false);
     }
@@ -429,34 +517,43 @@ export function CheckoutPage() {
                     <p className="muted mt-4">Loading your addresses…</p>
                   )}
                   {list.map((address) => (
-                    <label
-                      className={`address-option ${addressId === address.id ? "selected" : ""}`}
-                      key={address.id}
-                    >
-                      <span>
-                        <input
-                          type="radio"
-                          name="delivery-address"
-                          checked={addressId === address.id}
-                          onChange={() => setSelected(address.id)}
-                        />
-                        {address.label}
-                        {address.is_default && (
-                          <span className="tiny muted">DEFAULT</span>
-                        )}
-                      </span>
-                      <p>
-                        {[
-                          address.line1,
-                          address.line2,
-                          address.city,
-                          address.state,
-                          address.postal_code,
-                        ]
-                          .filter(Boolean)
-                          .join(", ")}
-                      </p>
-                    </label>
+                    <div key={address.id}>
+                      <label
+                        className={`address-option ${addressId === address.id ? "selected" : ""}`}
+                        key={address.id}
+                      >
+                        <span>
+                          <input
+                            type="radio"
+                            name="delivery-address"
+                            checked={addressId === address.id}
+                            onChange={() => setSelected(address.id)}
+                          />
+                          {address.label}
+                          {address.is_default && (
+                            <span className="tiny muted">DEFAULT</span>
+                          )}
+                        </span>
+                        <p>
+                          {[
+                            address.line1,
+                            address.line2,
+                            address.city,
+                            address.state,
+                            address.postal_code,
+                          ]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
+                      </label>
+                      <button
+                        className="text-link"
+                        onClick={() => setEditingAddress(address)}
+                      >
+                        Edit {address.label.toLowerCase()} address
+                        {address.latitude == null ? " / add pin" : ""}
+                      </button>
+                    </div>
                   ))}
                   {!addresses.loading && !list.length && (
                     <button
@@ -522,18 +619,37 @@ export function CheckoutPage() {
                 </section>
                 <ErrorNotice error={error} />
               </div>
-              <Bill>
+              <Bill quote={quote} checking={checkingQuote} checkout>
+                <div className="checkout-serviceability" aria-live="polite">
+                  {checkingQuote && (
+                    <p className="muted">Checking delivery to your address…</p>
+                  )}
+                  {quote && (
+                    <p>
+                      <Check size={16} /> Delivery available
+                      {quote.zone ? ` · ${quote.zone}` : ""}
+                    </p>
+                  )}
+                  <ErrorNotice
+                    error={quoteError}
+                    onRetry={() => setQuoteVersion((value) => value + 1)}
+                  />
+                </div>
                 <button
                   className="btn primary w-full mt-6"
-                  disabled={busy || !addressId}
+                  disabled={busy || !addressId || !quote}
                   onClick={place}
                 >
                   {busy ? "Placing your order…" : "Place order"}
                   <ArrowRight size={17} />
                 </button>
                 <p className="form-help">
-                  Cash orders can be cancelled before the restaurant accepts.
-                  Prepaid cancellations and refunds require support.
+                  {quote?.cancellation_policy?.cutoff === "preparation"
+                    ? "Cancellation closes when cooking starts."
+                    : "Cancellation closes when the restaurant accepts."}{" "}
+                  {quote?.cancellation_policy?.allow_prepaid_refunds
+                    ? "Eligible prepaid cancellations receive a full refund to the original payment method."
+                    : "Prepaid cancellations require support review."}
                 </p>
               </Bill>
             </div>
@@ -547,6 +663,13 @@ export function CheckoutPage() {
             setSelected(address.id);
             addresses.reload();
           }}
+        />
+      )}
+      {editingAddress && (
+        <AddressForm
+          initial={editingAddress}
+          onClose={() => setEditingAddress(null)}
+          onSaved={() => addresses.reload()}
         />
       )}
     </>

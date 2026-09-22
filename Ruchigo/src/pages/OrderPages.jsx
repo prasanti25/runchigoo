@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -11,14 +11,13 @@ import {
   PackageCheck,
   Printer,
   RotateCcw,
-  Star,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Navbar from "../components/Navbar.jsx";
+import { DeliveryEstimate } from "../components/product/BusinessInsights.jsx";
 import {
   EmptyState,
   ErrorNotice,
-  Modal,
   Skeleton,
 } from "../components/product/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -32,6 +31,17 @@ import {
 } from "../lib/product.js";
 import { apiRequest } from "../lib/api.js";
 import { payForOrder } from "../lib/payments.js";
+import OrderReview from "../components/product/OrderReview.jsx";
+import OrderHelp from "../components/product/OrderHelp.jsx";
+import CancelOrder from "../components/product/CancelOrder.jsx";
+import OrderOperations from "../components/product/OrderOperations.jsx";
+import RefundStatus from "../components/product/RefundStatus.jsx";
+
+import DeliveryChat from "../components/product/DeliveryChat.jsx";
+
+const LiveDeliveryMap = lazy(
+  () => import("../components/product/LiveDeliveryMap.jsx"),
+);
 
 export function OrdersPage() {
   const { token } = useAuth();
@@ -45,10 +55,6 @@ export function OrdersPage() {
   );
   const [tab, setTab] = useState("all");
   const [busy, setBusy] = useState(null);
-  const [reviewing, setReviewing] = useState(null);
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
-  const [cancelling, setCancelling] = useState(null);
   const orders = (data?.results || []).filter(
     (order) =>
       tab === "all" ||
@@ -69,30 +75,7 @@ export function OrdersPage() {
         toast.success(
           "Your favourites are back in your bag. Prices reflect today’s menu.",
         );
-      } else {
-        setCancelling(null);
-        reload();
-        toast.success("Order cancelled");
       }
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setBusy(null);
-    }
-  };
-  const submitReview = async (event) => {
-    event.preventDefault();
-    setBusy(reviewing.id);
-    try {
-      await apiRequest("/reviews/", {
-        token,
-        method: "POST",
-        body: { order: reviewing.id, rating, comment },
-      });
-      setReviewing(null);
-      setComment("");
-      reload();
-      toast.success("Thanks for sharing your experience!");
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -177,32 +160,8 @@ export function OrdersPage() {
                         Reorder
                       </button>
                     )}
-                    {order.status === "pending" && (
-                      <button
-                        className="btn secondary"
-                        disabled={busy === order.id}
-                        onClick={() => setCancelling(order)}
-                      >
-                        Cancel
-                      </button>
-                    )}
-                    {order.status === "delivered" && !order.review && (
-                      <button
-                        className="btn secondary"
-                        onClick={() => {
-                          setRating(5);
-                          setReviewing(order);
-                        }}
-                      >
-                        <Star size={14} />
-                        Rate meal
-                      </button>
-                    )}
-                    {order.review && (
-                      <span className="tiny muted">
-                        Rated {order.review.rating}/5
-                      </span>
-                    )}
+                    <CancelOrder order={order} onUpdated={reload} compact />
+                    <OrderReview order={order} onSaved={reload} compact />
                   </div>
                   <strong>{money(order.total)}</strong>
                 </div>
@@ -242,66 +201,6 @@ export function OrdersPage() {
           )}
         </div>
       </main>
-      {reviewing && (
-        <Modal title="How was your meal?" onClose={() => setReviewing(null)}>
-          <form className="form-stack" onSubmit={submitReview}>
-            <p className="muted">{reviewing.restaurant_detail?.name}</p>
-            <div className="flex-row" role="group" aria-label="Meal rating">
-              {[1, 2, 3, 4, 5].map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  className="icon-button"
-                  aria-label={`${value} stars`}
-                  aria-pressed={rating === value}
-                  onClick={() => setRating(value)}
-                >
-                  <Star
-                    color="#ce9a37"
-                    fill={value <= rating ? "#ce9a37" : "none"}
-                    size={24}
-                  />
-                </button>
-              ))}
-            </div>
-            <label className="field">
-              <span>Anything you’d like to share?</span>
-              <textarea
-                maxLength={2000}
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="What made it memorable?"
-              />
-            </label>
-            <button className="btn primary" disabled={busy === reviewing.id}>
-              Share your review
-            </button>
-          </form>
-        </Modal>
-      )}
-      {cancelling && (
-        <Modal title="Cancel this order?" onClose={() => setCancelling(null)}>
-          <p className="muted mt-4">
-            You can cancel while the restaurant hasn’t accepted your order. If
-            it has already started preparing, contact support.
-          </p>
-          <div className="flex-row mt-5">
-            <button
-              className="btn secondary"
-              onClick={() => setCancelling(null)}
-            >
-              Keep my order
-            </button>
-            <button
-              className="btn danger"
-              disabled={busy === cancelling.id}
-              onClick={() => action(cancelling, "cancel")}
-            >
-              Cancel order
-            </button>
-          </div>
-        </Modal>
-      )}
     </>
   );
 }
@@ -319,7 +218,6 @@ export function TrackingPage() {
   const { id } = useParams();
   const { token, user } = useAuth();
   const [paying, setPaying] = useState(false);
-  const [mapOrder, setMapOrder] = useState(null);
   const { data, loading, error, reload } = useRemote(
     id ? `/orders/${id}/` : "/orders/",
     token,
@@ -344,9 +242,6 @@ export function TrackingPage() {
   };
   const stage = stages.findIndex(([status]) => status === order?.status);
   const address = order?.delivery_address_detail;
-  const delivery = order?.delivery;
-  const hasLocation =
-    delivery?.current_latitude != null && delivery?.current_longitude != null;
   return (
     <>
       <Navbar />
@@ -370,7 +265,9 @@ export function TrackingPage() {
                     ? "This order was cancelled."
                     : order.status === "delivered"
                       ? "Good food. Happy you."
-                      : statusLabel(order.status)}
+                      : order.fulfillment_paused_at
+                        ? "Your order needs attention."
+                        : statusLabel(order.status)}
                 </h1>
                 <p className="muted">
                   {order.restaurant_detail?.name} · {dateTime(order.created_at)}
@@ -378,31 +275,80 @@ export function TrackingPage() {
               </div>
               <div className="two-column">
                 <div>
+                  {import.meta.env.DEV && (
+                    <div className="tracking-demo-link">
+                      <div>
+                        <strong>
+                          Want to try the complete delivery journey?
+                        </strong>
+                        <p>
+                          Local preview · automatic kitchen updates and a moving
+                          rider. This order stays unchanged.
+                        </p>
+                      </div>
+                      <Link to="/demo/delivery" className="text-link">
+                        Try delivery demo <ArrowRight size={16} />
+                      </Link>
+                    </div>
+                  )}
+                  <OrderReview order={order} onSaved={reload} />
+                  <CancelOrder order={order} onUpdated={reload} />
+                  <OrderOperations order={order} onUpdated={reload} />
+                  {order.refunds?.map((refund) => (
+                    <div key={refund.id}>
+                      <RefundStatus refund={refund} onUpdated={reload} />
+                      <Link
+                        className="text-link mb-5"
+                        to={`/support?order=${order.id}&ticket=${refund.ticket}`}
+                      >
+                        View refund conversation <ArrowRight size={15} />
+                      </Link>
+                    </div>
+                  ))}
+                  {order.status === "delivered" && <OrderHelp order={order} />}
                   {!["cancelled", "delivered", "awaiting_payment"].includes(
                     order.status,
-                  ) && (
-                    <p className="tracking-live-note" role="status">
-                      {
-                        {
-                          pending:
-                            "Waiting for the restaurant to accept. Your order is in its live queue.",
-                          confirmed:
-                            "The restaurant has accepted your order and will update you when cooking starts.",
-                          preparing:
-                            "Your restaurant is cooking. You’ll be notified when the meal is ready.",
-                          ready:
-                            "Cooking is complete. Waiting for a delivery partner to collect your meal.",
-                          assigned:
-                            "A delivery partner has accepted the pickup. Your meal is still at the restaurant.",
-                          out_for_delivery:
-                            "Your partner has collected the meal. Their shared location appears below when available.",
-                        }[order.status]
-                      }{" "}
-                      <span>
-                        Updates refresh automatically while this page is open.
-                      </span>
-                    </p>
+                  ) &&
+                    !order.fulfillment_paused_at && (
+                      <Suspense
+                        fallback={
+                          <section className="panel" role="status">
+                            Loading delivery map…
+                          </section>
+                        }
+                      >
+                        <LiveDeliveryMap key={order.id} order={order} />
+                      </Suspense>
+                    )}
+                  {!order.fulfillment_paused_at && (
+                    <DeliveryEstimate order={order} />
                   )}
+                  {!["cancelled", "delivered", "awaiting_payment"].includes(
+                    order.status,
+                  ) &&
+                    !order.fulfillment_paused_at && (
+                      <p className="tracking-live-note" role="status">
+                        {
+                          {
+                            pending:
+                              "Waiting for the restaurant to accept. Your order is in its live queue.",
+                            confirmed:
+                              "The restaurant has accepted your order and will update you when cooking starts.",
+                            preparing:
+                              "Your restaurant is cooking. You’ll be notified when the meal is ready.",
+                            ready:
+                              "Cooking is complete. Waiting for a delivery partner to collect your meal.",
+                            assigned:
+                              "A delivery partner has accepted the pickup. Your meal is still at the restaurant.",
+                            out_for_delivery:
+                              "Your partner has collected the meal. Follow their shared location on the map when available.",
+                          }[order.status]
+                        }{" "}
+                        <span>
+                          Updates refresh automatically while this page is open.
+                        </span>
+                      </p>
+                    )}
                   {order.status === "awaiting_payment" && (
                     <section className="panel">
                       <h2>Complete your payment</h2>
@@ -410,6 +356,19 @@ export function TrackingPage() {
                         Your order will reach the kitchen after payment is
                         confirmed.
                       </p>
+                      {order.payment_expires_at && (
+                        <p className="form-help">
+                          Complete payment by{" "}
+                          {new Date(
+                            order.payment_expires_at,
+                          ).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                          . After that, the order expires and reserved items are
+                          released.
+                        </p>
+                      )}
                       <button
                         className="btn primary mt-5"
                         disabled={paying || !options.data?.online_available}
@@ -457,63 +416,6 @@ export function TrackingPage() {
                       </div>
                     )}
                   </section>
-                  {order.status === "out_for_delivery" && (
-                    <section className="panel">
-                      <h2>Your delivery</h2>
-                      {hasLocation ? (
-                        <>
-                          {mapOrder === order.id ? (
-                            <iframe
-                              className="tracking-map"
-                              title="Delivery partner’s last shared location"
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                              src={`https://maps.google.com/maps?q=${delivery.current_latitude},${delivery.current_longitude}&z=15&output=embed`}
-                            />
-                          ) : (
-                            <div className="empty-state">
-                              <MapPin size={25} />
-                              <p className="muted mt-3">
-                                Google Maps will receive the partner’s location
-                                query and your connection information.
-                              </p>
-                              <button
-                                className="btn secondary mt-4"
-                                onClick={() => setMapOrder(order.id)}
-                              >
-                                Show live map
-                              </button>
-                              <Link
-                                className="text-link mt-3"
-                                to="/privacy#location"
-                              >
-                                About location privacy
-                              </Link>
-                            </div>
-                          )}
-                          <p className="form-help">
-                            Last location shared {dateTime(delivery.updated_at)}
-                            . Location updates depend on your partner’s
-                            connection.
-                          </p>
-                          <a
-                            className="text-link mt-4"
-                            target="_blank"
-                            rel="noreferrer"
-                            href={`https://www.google.com/maps/search/?api=1&query=${delivery.current_latitude},${delivery.current_longitude}`}
-                          >
-                            Open location in Maps
-                            <ArrowRight size={14} />
-                          </a>
-                        </>
-                      ) : (
-                        <p className="muted mt-4">
-                          Your partner is on the way. Their location will appear
-                          here when they start sharing it.
-                        </p>
-                      )}
-                    </section>
-                  )}
                   <section className="panel">
                     <div className="flex-row between">
                       <h2>Your meal</h2>
@@ -561,6 +463,9 @@ export function TrackingPage() {
                   </section>
                 </div>
                 <aside>
+                  {user?.role === "customer" && order.delivery && (
+                    <DeliveryChat key={order.id} order={order} />
+                  )}
                   <section className="panel">
                     <h2>
                       <MapPin size={19} className="inline mr-2" />

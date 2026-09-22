@@ -35,6 +35,13 @@ function loadCheckout() {
 }
 
 export async function payForOrder(order, { token, keyId, user }) {
+  if (
+    order.payment_expires_at &&
+    new Date(order.payment_expires_at).getTime() <= Date.now()
+  )
+    throw new Error(
+      "This payment window has expired. Refresh your order. Contact support if money was debited.",
+    );
   if (!keyId || !order.payment?.provider_order_id)
     throw new Error("Online payment is unavailable for this order.");
   await loadCheckout();
@@ -56,17 +63,20 @@ export async function payForOrder(order, { token, keyId, user }) {
       handler: async (response) => {
         verifying = true;
         try {
-          resolve(
-            await apiRequest("/online-payments/verify/", {
-              token,
-              method: "POST",
-              body: {
-                order_id: order.id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              },
-            }),
-          );
+          const verified = await apiRequest("/online-payments/verify/", {
+            token,
+            method: "POST",
+            body: {
+              order_id: order.id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            },
+          });
+          if (verified.status === "cancelled")
+            throw new Error(
+              "Payment arrived after this order closed. A support case has been opened; your order has not restarted.",
+            );
+          resolve(verified);
         } catch (error) {
           reject(error);
         }

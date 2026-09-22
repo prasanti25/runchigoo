@@ -4,6 +4,14 @@ React 19 + Vite frontend, Django REST backend. Modern customer discovery/orderin
 
 Read [PRODUCT_STATUS.md](PRODUCT_STATUS.md) for the feature comparison, launch limitations and next-release priorities. This is a tested local product foundation, not a finished 300-feature platform.
 
+See [DATA_STORAGE.md](DATA_STORAGE.md) for the live Neon PostgreSQL data model,
+sample-catalog disclosure, deployment migrations and production upload limits.
+
+See [DASHBOARD_RUNBOOK.md](DASHBOARD_RUNBOOK.md) for granular administrator access,
+paginated People/orders/payment queues, date-filtered analytics/CSV, finance
+refund review and private customer–courier conversations. Local migrations are
+through 0022; production deployment/provider certification are separate work.
+
 ## Setup
 
 Run from this directory. Use Node 20.19+ or 22.12+ and Python 3.11+.
@@ -78,14 +86,14 @@ https://your-api-host/api/v1/online-payments/webhook/
 
 Payment amounts come from the backend. Online orders stay `awaiting_payment` and outside the kitchen queue until capture is verified. A customer can retry a dismissed checkout from tracking. Browser signatures, provider capture, webhook signatures and duplicate delivery are handled server-side.
 
-Automated refunds, abandoned-payment expiry and full financial reconciliation are not implemented. Paid order cancellations currently require a refund workflow that must be completed before public online-payment launch. A support ticket is not an executed refund. Live provider behavior remains unverified without credentials.
+Online orders expire after 15 unpaid minutes and release reserved inventory. Late captures open reconciliation rather than restarting cancelled orders. Admin-reviewed Razorpay refunds target the original payment, with verified partial/full completion and timeout reconciliation. Configure `refund.processed` and `refund.failed` on the same signed webhook endpoint. A support conversation/refund approval is not an executed refund. History/tracking expose status-checked cancellation with explicit reasons. Admin → Order policy controls the checkout-snapshotted cutoff and opt-in automatic prepaid refunds; the default remains before acceptance with prepaid support review. Cooking and later stages always block self-cancellation. Kitchen issues can pause fulfilment; a separate admin action resumes or cancels with an explicit full original-method refund approval, followed by separate provider submission. Cash payouts and live provider certification remain outstanding. See [CHECKOUT_SUPPORT_RUNBOOK.md](CHECKOUT_SUPPORT_RUNBOOK.md).
 
 ## Validation
 
 ```sh
 npm run check
 cd backend
-../.venv/bin/python manage.py test api.tests api.test_product --noinput
+../.venv/bin/python manage.py test api.tests api.test_product api.test_intelligence api.test_menu_operations api.test_tracking_feedback api.test_assistant_recovery api.test_checkout_support api.test_cancellations api.test_support_operations api.test_dashboards api.test_delivery_chat api.test_admin_access --noinput
 ../.venv/bin/python manage.py makemigrations --check --dry-run
 ```
 
@@ -102,6 +110,12 @@ npm run test:updates
 npm run test:menu
 npm run test:ai:live
 npm run test:api-retry
+npm run test:checkout-support
+npm run test:cancellations
+npm run test:support-conversation
+npm run test:dashboard-chat
+npm run test:admin-access
+npm run test:dashboard-queues
 ```
 
 Browser scripts target only `127.0.0.1:5173`, use the documented local fixture password, and create preview orders/tickets. Product-test reviews carry a unique automated-test marker and are deleted immediately after assertions, with a `finally` cleanup on failure; forced process termination or API downtime can still prevent cleanup. Never treat test data as customer testimonials. Change the script fixture password if you choose a different seed password. Do not point them at production. Screenshots are written to `/private/tmp/ruchigo-product-*.png`.
@@ -110,7 +124,7 @@ Run the browser suites sequentially: they share local fixture accounts and norma
 
 New flows: `/search` combines price/rating/preparation/veg/cuisine/offer filters and opt-in nearby filtering; `/for-you` exposes recommendations; `/profile` → Change photo uploads/removes a persistent avatar. Restaurant → Your menu → Edit configures optional add-ons. Home/discovery dishes open the restaurant menu before ordering. Selected extras are carried through server pricing, cart, order history and the kitchen ticket. Automatic activity appears in the shared bell, modern toast and `/notifications` inbox.
 
-Validation on 22 September 2026: **89 backend tests passed**, frontend lint/production build passed and migration drift check was clean. Live Gemini, nonsensical-input clarification, IPinfo, customer/kitchen/courier/admin flows, public/legal pages, profile-photo upload/removal, notifications, toasts, images, footer links, combined discovery filters and safe read retries are documented in [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md). These are functional checks, not load tests, accessibility certification or proof of production readiness.
+Validation on 22 September 2026: **137 backend tests passed**, frontend lint/production build passed and migration drift check was clean. The expanded checks cover preferences/privacy, chat, groups, stock, hours, owned GPS timestamps and editable reviews. Earlier public/legal, avatar, notification, image and retry suites plus new live-AI/customer/kitchen/courier/admin checks are documented in [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md). These are functional checks, not load tests, accessibility certification or proof of production readiness.
 
 Privacy and Terms are explicitly preview drafts until operator details and policies are confirmed. Read [LEGAL_RELEASE_CHECKLIST.md](LEGAL_RELEASE_CHECKLIST.md) before publication. The activity log and review moderation are at `/admin-activity` and `/admin-reviews`; moderation requires a reason and recalculates the public rating. Customer, restaurant and partner account pages preserve the original RuchiGo branding.
 
@@ -145,4 +159,58 @@ Other optimized photos derive from the existing local preview assets. Review all
 
 ## Production
 
-No deployment was performed. Before launch, complete the blockers in [PRODUCT_STATUS.md](PRODUCT_STATUS.md), configure a persistent database, shared cache, real transactional email, private secrets, HTTPS and image storage, validate backup/restore, and run concurrency/load/security checks. Review [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) as a historical checklist; this README and product-status document describe the new implementation and its current limitations.
+### Local delivery preview
+
+Open **http://localhost:5173/demo/delivery** and select **Watch delivery**. The
+50-second replay automatically accepts, prepares, assigns, picks up and delivers
+a sample meal. No login or manual role switching is needed. It never creates or
+changes an order, payment, rating or delivery assignment. Real orders remain
+dependent on real kitchen/courier activity.
+
+The preview rider accepts from a separate starting location, follows a 1.80 km
+road leg to the kitchen while the meal is being prepared, waits for pickup,
+then follows a separate 1.56 km leg to the doorstep. Arrival estimates derive
+from the two recorded route durations, remaining preparation and pickup time;
+they are labelled accelerated simulation, not live traffic or exact promises.
+The top-down scooter has direction/tyre motion, a blue route, fullscreen controls
+and touch pinch zoom. Example road geometry is bundled from OSRM/OpenStreetMap;
+third-party tiles load only after starting. It does not request device GPS.
+The route/module is excluded from production builds. Run
+`npm run test:delivery-demo` for the automated desktop/mobile replay checks.
+
+This is **OpenStreetMap, not Google Maps**. A Google Maps renderer and a properly
+restricted Maps JavaScript API key/billing setup are still needed for that
+provider. Do not reuse the server-side Gemini key or copy undocumented Google
+tile endpoints. See [tracking notes](TRACKING_DESIGN_NOTES.md).
+
+Release `2a8ebb8` was pushed to `prasanti25/runchigoo` main and manually promoted at https://runchigoo.vercel.app. Vercel's Git link remains connected to a different repository; align it before relying on automatic deployments. Production migrations through 0011 were applied while preserving existing users/orders.
+
+The subsequent intelligence/retention/menu-operations/tracking changes and migrations 0012–0014 are **local, not yet deployed**. Run migrations against your intended environment before starting this version. Never point local fixture scripts at production. Before a public paid launch, complete the blockers in [PRODUCT_STATUS.md](PRODUCT_STATUS.md), configure durable media, shared cache, transactional email and production payment/refund/reconciliation operations, then verify backups and concurrency/load/security behavior.
+
+## Intelligence and personalisation
+
+All 300 requested entries, including partial/missing/provider-dependent work, are tracked in [FEATURE_MATRIX.md](FEATURE_MATRIX.md). Do not count unused legacy mock dashboards as implemented features.
+
+- `/for-you?tab=chat`: follow-up food assistant, grounded support guidance and explicit restaurant-menu handoff.
+- Empty assistant shortlists explain city/price/menu limitations. Browsing another city's menu requires an explicit action and never changes the delivery address. Named dishes such as butter chicken are not substituted with unrelated chicken dishes. `npm run test:assistant-recovery` replays the reported Delhi/pizza scenario on desktop/mobile against the actual catalog/provider.
+- `/for-you`: desktop photo-led feed with a side-by-side conversational composer; `/for-you?tab=quick` keeps detailed recommendation filters.
+- Home: real-menu auto-sliding hero, small navigation dots (no playback toolbar), reduced-motion support and a dismissible delivered-meal review reminder.
+- Login/register: four bundled food photos crossfade automatically. Auth and hero/feed imagery advance at 3.5 seconds; form fields stay intact.
+- Tracking: lazy-loaded map with original RuchiGo scooter marker, real received GPS interpolation and accurate freshness; delivered-order rating/feedback create and edit.
+- `/support?order=ID`: own-order help; `/support?order=ID&compose=1` opens issue intake. `/support?ticket=ID` is one persistent conversation with factual assistance, real-request typing, team handoff, staff replies, refund status and feedback. It does not perform financial/order actions from free text.
+- `npm run test:desktop`: desktop layout/carousel/chat and responsive/reduced-motion checks. See [tracking research and configuration](TRACKING_DESIGN_NOTES.md) for public map settings and limitations.
+- `/for-you?tab=taste`: saved food preferences and order-history opt-out.
+- `/for-you?tab=picks`: personalized restaurants/coupons, saved kitchens, recent visits and previously ordered dishes.
+- Home, search, quick picks and chat: integrated microphone icon where browser speech is supported. No listening popup; voice never places an order.
+- Restaurant/admin analytics: real scoped metrics, public-review sentiment, historical forecast baselines and admin-only risk-review signals. Baselines/rules are not trained AI forecasts or proof of fraud.
+
+Verify locally:
+
+```sh
+DJANGO_SQLITE_PATH=/private/tmp/ruchigo-product-preview.sqlite3 .venv/bin/python backend/manage.py migrate --noinput
+DJANGO_SQLITE_PATH=/private/tmp/ruchigo-product-preview.sqlite3 .venv/bin/python backend/manage.py test api.tests api.test_product api.test_intelligence api.test_menu_operations --noinput
+npm run test:intelligence
+npm run test:menu-operations
+```
+
+The intelligence browser suite uses real local APIs and configured Gemini. It simulates Web Speech events to test microphone UI and text handling; actual recognition quality needs a supported browser/device/microphone. It restores fixture preferences/saved-state, creates no orders/reviews, and may update fixture browsing history. Restart a backend launched with `--noreload` after Python changes.

@@ -4,9 +4,24 @@ from decimal import Decimal
 from rest_framework import serializers
 
 
+def minimum_item_price(menu_item):
+    total = menu_item.price
+    for group in menu_item.option_groups:
+        prices = sorted(Decimal(row["price"]) for row in menu_item.add_ons if row.get("group_id") == group["id"] and row.get("is_available", True))
+        if len(prices) < group["min_select"]:
+            return None
+        total += sum(prices[:group["min_select"]], Decimal("0"))
+    return total
+
+
 def selected_addons(menu_item, ids, *, previous=None, strict=True):
     available = {row["id"]: row for row in menu_item.add_ons}
     previous = {row["id"]: row for row in (previous or [])}
+    if strict:
+        for group in menu_item.option_groups:
+            count = sum(row.get("group_id") == group["id"] for key, row in available.items() if key in set(ids))
+            if not group["min_select"] <= count <= group["max_select"]:
+                raise serializers.ValidationError({"add_ons": f"{group['name']}: choose {group['min_select']}–{group['max_select']} options."})
     result = []
     for key in sorted(set(ids)):
         addon = available.get(key)

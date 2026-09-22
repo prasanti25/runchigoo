@@ -9,10 +9,13 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.core.cache import cache
+from .menu_options import minimum_item_price
 
 logger = logging.getLogger(__name__)
 
 FOODS = {
+    "butter chicken": ("butter chicken", "murgh makhani"),
+    "chicken biryani": ("chicken biryani", "chicken biriyani"),
     "pizza": ("pizza", "pizzas", "margherita"),
     "burger": ("burger", "burgers"),
     "biryani": ("biryani", "biriyani"),
@@ -30,6 +33,13 @@ def normalize_preferences(filters):
     """Conservative explicit constraints; structured controls remain authoritative."""
     filters = dict(filters)
     query = filters.get("q", "").lower()
+    tags = set(filters.get("dietary_tags", []))
+    for tag in ("vegan", "jain"):
+        if re.search(rf"\b{tag}\b", query) and not re.search(rf"\b(?:non[ -]?|not ){tag}\b", query):
+            tags.add(tag)
+    if tags:
+        filters["dietary_tags"] = sorted(tags)
+        filters["vegetarian"] = True
     if re.search(r"\b(?:veg|vegetarian)\b", query) and not re.search(r"\b(?:non[ -]?veg|not vegetarian)\b", query):
         filters["vegetarian"] = True
     match = re.search(r"\b(?:under|below|within|up to|upto|budget(?: of)?)\s*(?:₹|rs\.?|inr)?\s*(\d{1,6}(?:\.\d{1,2})?)\b", query)
@@ -40,12 +50,18 @@ def normalize_preferences(filters):
 
 def craving_terms(query):
     included, excluded = [], []
-    for food, aliases in FOODS.items():
-        for alias in aliases:
-            if re.search(rf"\b{re.escape(alias)}\b", query.lower()):
-                target = excluded if re.search(rf"\b(?:no|not|without|avoid|exclude)\s+{re.escape(alias)}\b", query.lower()) else included
+    occupied = []
+    # A named dish must not degrade to a broader ingredient: butter chicken
+    # is not chicken biryani. Match longer phrases before their component words.
+    aliases = sorted(((alias, food) for food, values in FOODS.items() for alias in values), key=lambda row: -len(row[0]))
+    for alias, food in aliases:
+        for match in re.finditer(rf"\b{re.escape(alias)}\b", query.lower()):
+            if any(match.start() < end and match.end() > start for start, end in occupied):
+                continue
+            occupied.append(match.span())
+            target = excluded if re.search(r"\b(?:no|not|without|avoid|exclude)\s+$", query[:match.start()].lower()) else included
+            if food not in target:
                 target.append(food)
-                break
     return included, excluded
 
 
@@ -67,6 +83,9 @@ def match_reasons(item, preferences, history):
         reasons.append(f"Matches your {matched} craving")
     if preferences.get("vegetarian") in (True, "True", "true") and item.is_vegetarian:
         reasons.append("Vegetarian")
+    for tag in preferences.get("dietary_tags", []):
+        if tag in (item.tags or []):
+            reasons.append(f"Restaurant-labelled {tag}")
     if preferences.get("budget"):
         reasons.append(f"Within ₹{Decimal(str(preferences['budget'])):g} per dish")
     if preferences.get("max_prep"):
@@ -98,7 +117,7 @@ def rank_items(items, preferences, history):
     model = getattr(settings, "GEMINI_MODEL", "gemini-3.5-flash-lite")
     if not re.fullmatch(r"[a-zA-Z0-9.\-]+", model):
         return safe_fallback("invalid_configuration")
-    catalog = [{"id": i.id, "name": i.name, "description": i.description, "category": i.category.name if i.category_id else "", "price": str(i.price), "vegetarian": i.is_vegetarian, "tags": i.tags, "preparation_minutes": i.preparation_minutes, "city": i.restaurant.city, "ordered_before": i.id in history} for i in items]
+    catalog = [{"id": i.id, "name": i.name, "description": i.description, "category": i.category.name if i.category_id else "", "price": str(minimum_item_price(i)), "vegetarian": i.is_vegetarian, "tags": i.tags, "preparation_minutes": i.preparation_minutes, "city": i.restaurant.city, "ordered_before": i.id in history} for i in items]
     data = {"preferences": preferences, "catalog": catalog, "model": model, "version": 3}
     cache_key = "recommendations:" + hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
     cached = cache.get(cache_key)

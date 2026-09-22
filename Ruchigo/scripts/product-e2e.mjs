@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 
 const base = "http://127.0.0.1:5173";
 const password = "RuchiGo-preview-2026";
@@ -10,6 +10,7 @@ const context = await browser.newContext({
   viewport: { width: 1440, height: 1000 },
 });
 const page = await context.newPage();
+page.setDefaultTimeout(30000);
 page.on("pageerror", (error) => errors.push(error.message));
 const report = [];
 const reviewComment = `[Automated local test ${randomUUID()}] Temporary review; not a customer testimonial.`;
@@ -93,6 +94,7 @@ async function authenticatedPage(email, role) {
     session,
   );
   const rolePage = await context.newPage();
+  rolePage.setDefaultTimeout(30000);
   rolePage.on("pageerror", (error) => errors.push(error.message));
   return { page: rolePage, token: session.tokens.access, context };
 }
@@ -105,7 +107,7 @@ try {
   await page.getByLabel("Meal budget").selectOption("250");
   await page.getByRole("button", { name: "Find my food" }).click();
   await page
-    .getByText(/^(PICKS FROM THE CURRENT MENU|AI PICKS FOR YOUR CRAVING)$/)
+    .getByText(/^(PICKS FROM THE CURRENT MENU|PICKS FOR YOUR CRAVING)$/)
     .waitFor();
   report.push("Catalog-grounded recommendations");
 
@@ -227,6 +229,75 @@ try {
   await courier.page
     .getByRole("button", { name: "Confirm pickup", exact: true })
     .click();
+  await expect
+    .poll(
+      async () =>
+        (await api(`/orders/${orderId}/`, { token: auth.token })).status,
+    )
+    .toBe("out_for_delivery");
+  order = await api(`/orders/${orderId}/`, { token: auth.token });
+  // Two clearly identified LOCAL fixture GPS samples. Not a simulated route
+  // in the product: the rendered marker must consume server-stored points.
+  await api(`/deliveries/${order.delivery.id}/`, {
+    token: courier.token,
+    method: "PATCH",
+    body: { current_latitude: "28.613900", current_longitude: "77.209000" },
+  });
+  await page.goto(`${base}/tracking/${orderId}`, { waitUntil: "networkidle" });
+  await page
+    .getByRole("button", { name: "Show live map", exact: true })
+    .click();
+  const rider = page.locator(".ruchigo-rider-marker");
+  await expect(rider).toHaveAttribute("data-latitude", "28.6139");
+  const oldTransform = await rider.evaluate(
+    (element) => element.style.transform,
+  );
+  await page.locator(".delivery-leaflet-map").evaluate((element) => {
+    element.dataset.testIdentity = "same-map";
+  });
+  await api(`/deliveries/${order.delivery.id}/`, {
+    token: courier.token,
+    method: "PATCH",
+    body: { current_latitude: "28.614500", current_longitude: "77.210000" },
+  });
+  await expect(rider).toHaveAttribute("data-latitude", "28.6145", {
+    timeout: 16000,
+  });
+  await expect
+    .poll(() => rider.evaluate((element) => element.style.transform))
+    .not.toBe(oldTransform);
+  await expect(page.locator(".delivery-leaflet-map")).toHaveAttribute(
+    "data-test-identity",
+    "same-map",
+  );
+  await page.waitForTimeout(1400); // Allow the bounded interpolation to finish.
+  const settled = await rider.evaluate((element) => element.style.transform);
+  await page.waitForTimeout(11000); // One more polling cycle with NO new point.
+  assert.equal(
+    await rider.evaluate((element) => element.style.transform),
+    settled,
+    "No invented rider movement between GPS samples",
+  );
+  await page.screenshot({
+    path: "/private/tmp/ruchigo-live-rider-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Recenter delivery map" }).click();
+  await page.screenshot({
+    path: "/private/tmp/ruchigo-live-rider-mobile.png",
+    fullPage: true,
+  });
+  assert.ok(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    "Tracking fits mobile width",
+  );
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  report.push(
+    "Real local GPS writes → moving scooter marker; same map retained; stationary without fresh GPS",
+  );
   await courier.page
     .getByRole("button", { name: "Confirm delivery", exact: true })
     .click();
@@ -245,11 +316,12 @@ try {
   assert.equal(order.events.length, 7);
   report.push("Delivery code confirmation and COD payment reconciliation");
 
-  await page.goto(`${base}/orders`, { waitUntil: "networkidle" });
-  const customerCard = page
-    .locator(".order-card")
-    .filter({ hasText: shortNumber });
-  await customerCard.getByRole("button", { name: "Rate meal" }).click();
+  await page.goto(`${base}/tracking/${orderId}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Rate meal", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Share your review" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "5 stars", exact: true }).click();
   await page.getByLabel("Anything you’d like to share?").fill(reviewComment);
   reviewCleanupNeeded = true;
   const reviewResponse = page.waitForResponse(
@@ -259,11 +331,74 @@ try {
   );
   await page.getByRole("button", { name: "Share your review" }).click();
   assert.equal((await reviewResponse).status(), 201);
-  await customerCard.getByText("Rated 5/5").waitFor();
+  await page.getByText("Thanks for your feedback", { exact: true }).waitFor();
+  await page.goto(`${base}/orders`, { waitUntil: "networkidle" });
+  const customerCard = page
+    .locator(".order-card")
+    .filter({ hasText: shortNumber });
+  await customerCard.getByRole("button", { name: "Rated 5/5 · Edit" }).click();
+  await page.getByRole("button", { name: "4 stars", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Update review", exact: true })
+    .click();
+  await customerCard
+    .getByRole("button", { name: "Rated 4/5 · Edit" })
+    .waitFor();
+  await page.goto(`${base}/tracking/${orderId}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Edit review", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "4 stars", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel(/Anything you’d like to share/)).toHaveValue(
+    reviewComment,
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: "/private/tmp/ruchigo-review-mobile.png",
+    fullPage: true,
+  });
   await cleanupTestReview();
-  report.push("Verified-order review with immediate, exact-record cleanup");
+  report.push(
+    "Delivered-order rating and feedback from tracking; edit from history; persistence; exact-record review cleanup",
+  );
 
   await page.goto(`${base}/support?order=${orderId}`, {
+    waitUntil: "networkidle",
+  });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".support-order-context")).toContainText(
+    shortNumber,
+  );
+  await page.route("**/api/v1/intelligence/assistant/", async (route) => {
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    await route.fulfill({ response });
+  });
+  await page
+    .getByRole("button", { name: "Where is my order?", exact: true })
+    .click();
+  await expect(page.locator(".assistant-thinking")).toBeVisible();
+  await page.screenshot({
+    path: "/private/tmp/ruchigo-support-typing-mobile.png",
+    fullPage: true,
+  });
+  await expect(
+    page.locator(".assistant-bubble.assistant").last(),
+  ).toContainText("delivered");
+  await expect(page.locator(".assistant-thinking")).toHaveCount(0);
+  await page.unroute("**/api/v1/intelligence/assistant/");
+  await page
+    .getByRole("link", { name: "Open a support ticket", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Tell us what happened" }),
+  ).toBeVisible();
+  report.push(
+    "Order-linked support chat, typing state and explicit ticket handoff",
+  );
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  await page.goto(`${base}/support?order=${orderId}&compose=1`, {
     waitUntil: "networkidle",
   });
   await page
@@ -285,6 +420,7 @@ try {
     .fill("Adding a follow-up for the support team.");
   await page.getByRole("button", { name: "Send reply", exact: true }).click();
   await page
+    .getByRole("log", { name: "Conversation messages" })
     .getByText("Adding a follow-up for the support team.", { exact: true })
     .waitFor();
   report.push("Support ticket creation and replies");
@@ -346,10 +482,16 @@ try {
     .getByRole("button", { name: "Send reply", exact: true })
     .click();
   await admin.page
+    .getByRole("log", { name: "Conversation messages" })
     .getByText(`Support acknowledged ${shortNumber}`, { exact: true })
     .waitFor();
   await admin.page.getByRole("button", { name: "Mark resolved" }).click();
-  await admin.page.getByText("resolved", { exact: true }).waitFor();
+  await expect(
+    admin.page
+      .getByRole("region", { name: "Support conversation", exact: true })
+      .locator(".status-pill")
+      .first(),
+  ).toHaveText("Resolved");
   report.push("Admin support reply and ticket resolution");
 
   for (const [rolePage, routes] of [

@@ -39,6 +39,8 @@ const groups = [
       ["/profile", "Overview", User],
       ["/orders", "Your orders", ShoppingBag],
       ["/wishlist", "Saved dishes", Heart],
+      ["/for-you?tab=picks", "Saved restaurants & recent visits", Heart],
+      ["/for-you?tab=taste", "Food preferences", Settings],
       ["/offers", "Offers & coupons", Tag],
     ],
   ],

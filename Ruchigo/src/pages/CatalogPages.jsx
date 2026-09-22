@@ -31,9 +31,13 @@ import {
 import { dateTime, money, useRemote } from "../lib/product.js";
 import { apiRequest } from "../lib/api.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { RestaurantAffinity } from "../components/product/PersonalizedFeed.jsx";
+import { RestaurantHours } from "../components/product/MenuConfiguration.jsx";
+import OrderReview from "../components/product/OrderReview.jsx";
 
 export function RestaurantPage() {
   const { id } = useParams();
+  const { token, role } = useAuth();
   const [searchParams] = useSearchParams();
   const focusedDish = searchParams.get("dish");
   const [query, setQuery] = useState("");
@@ -41,7 +45,13 @@ export function RestaurantPage() {
   const [veg, setVeg] = useState(false);
   const [page, setPage] = useState(1);
   const restaurant = useRemote(`/restaurants/${id}/`);
-  const categories = useRemote("/categories/");
+  const categories = useRemote(`/categories/?restaurant=${id}`);
+  const reviewable = useRemote(
+    token && role === "customer"
+      ? `/orders/?restaurant=${id}&status=delivered`
+      : null,
+    token,
+  );
   const params = new URLSearchParams({ restaurant: id, search: query, page });
   if (category) params.set("category", category);
   if (veg) params.set("is_vegetarian", "true");
@@ -73,7 +83,13 @@ export function RestaurantPage() {
             <>
               <section className="restaurant-hero">
                 <div>
-                  <span className="status-pill">Open for orders</span>
+                  <span
+                    className={`status-pill ${restaurant.data.accepting_orders === false ? "cancelled" : ""}`}
+                  >
+                    {restaurant.data.accepting_orders === false
+                      ? "Currently closed"
+                      : "Open for orders"}
+                  </span>
                   <h1>{restaurant.data.name}</h1>
                   <p className="muted">{restaurant.data.description}</p>
                   <div className="restaurant-details">
@@ -88,6 +104,8 @@ export function RestaurantPage() {
                     </span>
                   </div>
                   <p className="muted mt-4">{restaurant.data.address}</p>
+                  <RestaurantAffinity restaurantId={id} />
+                  <RestaurantHours restaurant={restaurant.data} />
                 </div>
                 <FoodImage item={restaurant.data} eager restaurant />
               </section>
@@ -218,6 +236,26 @@ export function RestaurantPage() {
                   title="From the people who’ve tried it"
                   description="Reviews from verified delivered orders."
                 />
+                {reviewable.data?.results?.[0] ? (
+                  <OrderReview
+                    order={reviewable.data.results[0]}
+                    onSaved={() => {
+                      reviewable.reload();
+                      reviews.reload();
+                      restaurant.reload();
+                    }}
+                  />
+                ) : (
+                  <p className="form-help">
+                    Ratings unlock after your order is delivered.{" "}
+                    <Link
+                      className="text-link"
+                      to={token ? "/orders" : "/login"}
+                    >
+                      {token ? "View your orders" : "Sign in to rate a meal"}
+                    </Link>
+                  </p>
+                )}
                 <ErrorNotice error={reviews.error} onRetry={reviews.reload} />
                 {reviews.loading ? (
                   <div role="status" aria-label="Loading reviews">

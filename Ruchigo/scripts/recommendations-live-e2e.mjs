@@ -24,7 +24,7 @@ async function pick(name) {
   const body = await result.json();
   assert.equal(body.source, "gemini", `Live AI required, got ${body.status}`);
   await expect(
-    page.getByText("AI PICKS FOR YOUR CRAVING", { exact: true }),
+    page.getByText("PICKS FOR YOUR CRAVING", { exact: true }),
   ).toBeVisible();
   await expect(page.locator("main")).not.toContainText(
     /gemini-|Ranked by|Explanations use menu facts/,
@@ -52,7 +52,7 @@ async function pick(name) {
   return body;
 }
 try {
-  await page.goto(`${base}/for-you`, { waitUntil: "networkidle" });
+  await page.goto(`${base}/for-you?tab=quick`, { waitUntil: "networkidle" });
   const veg = await pick("Veg under ₹250");
   assert.ok(
     veg.items.every((item) => item.is_vegetarian && Number(item.price) <= 250),

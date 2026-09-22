@@ -46,7 +46,8 @@ const sections = [
           </li>
           <li>
             <strong>Your contributions:</strong> ratings, written reviews,
-            support tickets, replies and recommendation preferences you submit.
+            support tickets, replies, customer–courier delivery messages and
+            recommendation preferences you submit.
           </li>
           <li>
             <strong>Service operation:</strong> authentication tokens, request
@@ -96,6 +97,14 @@ const sections = [
           or other private information in a review.
         </p>
         <p>
+          Delivery conversations are saved for the customer and their assigned
+          courier, with sent/read timestamps. They become read-only when the
+          delivery ends. A replacement courier cannot read messages exchanged
+          with a previous courier. Message bodies are not included in inbox
+          notification previews or sent to the recommendation provider. Do not
+          share payment credentials or delivery confirmation codes in a chat.
+        </p>
+        <p>
           Configured hosting, email, payment, maps and AI providers process
           information relevant to their service. Their processing locations and
           retention terms depend on the chosen provider setup; these must be
@@ -133,6 +142,39 @@ const sections = [
           Suggestions are not medical or allergy advice. Confirm ingredients and
           dietary suitability with the restaurant.
         </p>
+        <p>
+          The conversational assistant also sends your current message and up to
+          six recent food messages to the same service to understand follow-up
+          requests. It cannot place orders, cancel them or issue refunds. Chats
+          are held in the current page session, not stored as support tickets.
+          In Help & Support, the RuchiGo assistant provides automated guidance.
+          Unrecognised questions may be sent to Gemini to identify their topic;
+          common email addresses and long digit sequences are removed first.
+          This is not complete anonymisation, so avoid personal details. Your
+          order details, delivery code and GPS coordinates are not sent for this
+          classification. Status replies come from your own order records; a
+          support ticket is a separate conversation for staff review. Voice
+          input is optional and uses your browser’s speech-recognition service,
+          which may process audio remotely. Review the recognised text before
+          submitting; RuchiGo does not upload or store raw audio.
+        </p>
+        <p>
+          Saved food preferences, favourite restaurants and up to 20 recent
+          restaurant visits personalise your feed. Recent visits older than 90
+          days are not displayed. You can clear visits, reset preferences and
+          turn off order-history personalisation under For you → Your taste.
+          Saved restaurants can be removed individually.
+        </p>
+        <p>
+          Restaurant and admin users can request AI analysis of up to 30 recent
+          public written reviews. Review text, with common email and phone
+          patterns removed, is sent for sentiment and topic classification.
+          Names or identifiers typed inside a review may remain. Account names
+          and contact fields are not sent. Analysis is cached for 15 minutes and
+          does not automatically moderate reviews. Demand, sales and arrival
+          estimates use local historical baselines, not the AI provider. Risk
+          signals require human review and never automatically block an account.
+        </p>
       </>
     ),
   },
@@ -164,10 +206,16 @@ const sections = [
           it does not delete a coordinate already recorded with the delivery.
         </p>
         <p>
-          Opening a Google map or directions shares the location query and
-          normal connection information with Google. You can view order status
-          without opening the map. Browser settings let you revoke location
-          permission.
+          The in-app map loads only after you choose Show live map. Map tiles
+          are supplied by OpenStreetMap by default, or the operator’s configured
+          tile provider. The provider receives your IP address, site origin and
+          requested map area. Location markers are drawn in your browser; exact
+          order records are not sent to the tile provider. Tiles can still
+          reveal the approximate area being viewed. Required provider
+          attribution is shown on the map. You can follow order status without
+          opening it. External Google Maps directions separately share the
+          destination query with Google. Browser settings let you revoke
+          location permission.
         </p>
       </>
     ),

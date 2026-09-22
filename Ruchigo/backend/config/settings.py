@@ -45,6 +45,9 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
+SERVERLESS_RUNTIME = bool(os.getenv("VERCEL"))
+if SERVERLESS_RUNTIME and not DATABASE_URL:
+    raise RuntimeError("Vercel requires a persistent DATABASE_URL or POSTGRES_URL; local SQLite is not durable.")
 if DATABASE_URL:
     import dj_database_url
 
@@ -105,3 +108,9 @@ RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
 RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
 SIMPLE_JWT = {"ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.getenv("JWT_ACCESS_MINUTES", "15"))), "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.getenv("JWT_REFRESH_DAYS", "7"))), "ROTATE_REFRESH_TOKENS": True, "BLACKLIST_AFTER_ROTATION": True}
+# Public browser map configuration. Use a contracted tile provider for launch
+# capacity/SLA; these values are deliberately exposed by /location/map-config/.
+MAP_TILE_URL = os.environ.get("MAP_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+MAP_ATTRIBUTION = os.environ.get("MAP_ATTRIBUTION", "© OpenStreetMap contributors")
+MAP_ATTRIBUTION_URL = os.environ.get("MAP_ATTRIBUTION_URL", "https://www.openstreetmap.org/copyright")
+MAP_PROVIDER = os.environ.get("MAP_PROVIDER", "OpenStreetMap")

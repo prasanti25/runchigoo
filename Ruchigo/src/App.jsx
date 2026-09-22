@@ -28,6 +28,10 @@ const Payment = lazy(() =>
 const Tracking = lazy(() =>
   import("./pages/OrderPages.jsx").then((m) => ({ default: m.TrackingPage })),
 );
+// The preview and its route data are tree-shaken out of production builds.
+const DeliveryDemo = import.meta.env.DEV
+  ? lazy(() => import("./pages/DeliveryDemo.jsx"))
+  : null;
 const Profile = lazy(() => import("./pages/CustomerProfile.jsx"));
 const Orders = lazy(() =>
   import("./pages/OrderPages.jsx").then((m) => ({ default: m.OrdersPage })),
@@ -80,9 +84,7 @@ const RestaurantProfile = lazy(() =>
   })),
 );
 const rolePages = () => import("./pages/LiveRolePages.jsx");
-const RestaurantEarnings = lazy(() =>
-  rolePages().then((module) => ({ default: module.RestaurantEarnings })),
-);
+const RestaurantEarnings = lazy(() => import("./pages/LedgerWorkspace.jsx"));
 const RestaurantAnalytics = lazy(() =>
   rolePages().then((module) => ({ default: module.RestaurantAnalytics })),
 );
@@ -104,22 +106,25 @@ const DeliveryEarnings = lazy(() =>
 );
 const DeliveryProfile = lazy(() => import("./pages/PartnerAccount.jsx"));
 const adminPages = () => import("./pages/admin/LiveAdminPages.jsx");
+const AdminOrderPolicies = lazy(
+  () => import("./pages/admin/OrderPolicies.jsx"),
+);
+const TeamAccess = lazy(() => import("./pages/admin/TeamAccess.jsx"));
+const AdminDeliveryZones = lazy(
+  () => import("./pages/admin/DeliveryZones.jsx"),
+);
 const AdminDashboard = lazy(() =>
   adminPages().then((module) => ({ default: module.AdminDashboard })),
 );
-const UserManagement = lazy(() => import("./pages/admin/UserManagement.jsx"));
+const UserManagement = lazy(() => import("./pages/admin/PeopleWorkspace.jsx"));
 const AdminRestaurants = lazy(() =>
   adminPages().then((module) => ({ default: module.AdminRestaurants })),
 );
 const AdminDeliveryPartners = lazy(() =>
   adminPages().then((module) => ({ default: module.AdminDeliveryPartners })),
 );
-const AdminOrders = lazy(() =>
-  adminPages().then((module) => ({ default: module.AdminOrders })),
-);
-const AdminPayments = lazy(() =>
-  adminPages().then((module) => ({ default: module.AdminPayments })),
-);
+const AdminOrders = lazy(() => import("./pages/admin/OrderQueue.jsx"));
+const AdminPayments = lazy(() => import("./pages/LedgerWorkspace.jsx"));
 const AdminReports = lazy(() =>
   adminPages().then((module) => ({ default: module.AdminReports })),
 );
@@ -236,6 +241,9 @@ export default function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/for-you" element={<ForYou />} />
+          {import.meta.env.DEV && (
+            <Route path="/demo/delivery" element={<DeliveryDemo />} />
+          )}
           <Route path="/restaurant/:id" element={<Restaurant />} />
           <Route path="/food-details/:id" element={<FoodDetails />} />
           <Route
@@ -418,10 +426,42 @@ export default function App() {
           />
 
           <Route
+            path="/admin-access"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <TeamAccess />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin-dashboard"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin-order-policy"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminOrderPolicies />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin-delivery-zones"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminDeliveryZones />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin-partner-accounts"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <UserManagement key="partners" partnersOnly />
               </ProtectedRoute>
             }
           />
@@ -470,6 +510,14 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminReports />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin-catalog"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <PromotionWorkspace key="catalog" initialTab="categories" />
               </ProtectedRoute>
             }
           />

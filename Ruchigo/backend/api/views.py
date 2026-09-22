@@ -21,6 +21,13 @@ from .permissions import IsAdmin, IsCustomer, IsDelivery, IsRestaurant, IsRestau
 from .serializers import *
 from .notifications import notify, admin_ids, notify_order, notify_payment
 from .menu_options import selected_addons, configuration_key, cart_unit_price
+from .availability import accepting_orders, check_cart_stock, restore_order_stock
+from .serviceability import delivery_quote, quote_fingerprint, sign_quote
+from .payment_expiry import expire_unpaid_orders
+from .cancellations import CancellationInput, cancel_customer_order
+from .order_operations import require_active_fulfillment
+from .admin_access import AdminScopeMixin, effective_scopes
+from .dashboard_filters import OrderDashboardFilter, PaymentDashboardFilter
 
 def tokens_for(user):
     refresh = RefreshToken.for_user(user)
@@ -36,7 +43,7 @@ def valid_otp(user, code, purpose):
     otp = OTP.objects.filter(user=user, purpose=purpose, used_at__isnull=True).order_by("-created_at").first()
     return otp if otp and otp.is_valid() and check_password(code or "", otp.code) else None
 
-class AuthViewSet(viewsets.GenericViewSet):
+class AuthViewSet(AdminScopeMixin, viewsets.GenericViewSet):
     permission_classes = [permissions.AllowAny]
     serializer_class = UserSerializer
     @action(detail=False, methods=["post"])
@@ -153,7 +160,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         notify([request.user.pk], event=f"email-verified:{otp.pk}", title="Email verified", message="Your account email is now verified.", kind="account")
         return Response({"detail": "Email verified."})
 
-class RestaurantViewSet(viewsets.ModelViewSet):
+class RestaurantViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     queryset = Restaurant.objects.select_related("owner").order_by("-created_at"); serializer_class = RestaurantSerializer; filterset_fields=["city", "is_open", "is_approved"]; search_fields=["name", "description", "city"]; ordering_fields=["created_at", "average_rating", "name"]
     @transaction.atomic
     def perform_create(self, serializer):
@@ -163,9 +170,9 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             restaurant = serializer.save()
         else:
             restaurant = serializer.save(owner=self.request.user)
-        notify(admin_ids(), event=f"restaurant:{restaurant.pk}:submitted", title="Restaurant listing to review", message=f"{restaurant.name} has submitted a restaurant profile.", kind="account", metadata={"restaurant_approval": True})
+        notify(admin_ids("partners"), event=f"restaurant:{restaurant.pk}:submitted", title="Restaurant listing to review", message=f"{restaurant.name} has submitted a restaurant profile.", kind="account", metadata={"restaurant_approval": True})
     def get_permissions(self):
-        if self.action == "approve":
+        if self.action in ["approve", "lookup"]:
             return [IsAdmin()]
         return [permissions.AllowAny()] if self.action in ["list", "retrieve"] else [IsRestaurantOrAdmin()]
     def get_queryset(self):
@@ -176,7 +183,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
                 return qs
             if user.is_authenticated and user.role == User.Role.RESTAURANT:
                 return qs.filter(owner=user)
-            return qs.filter(is_approved=True, is_open=True)
+            return qs.filter(is_approved=True, owner__is_active=True)
         return qs if self.request.user.is_superuser or self.request.user.role == User.Role.ADMIN else qs.filter(owner=self.request.user)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAdmin])
@@ -189,16 +196,34 @@ class RestaurantViewSet(viewsets.ModelViewSet):
         notify([restaurant.owner_id], event=f"restaurant:{restaurant.pk}:approved", title="Restaurant approved", message=f"{restaurant.name} is approved. Check your menu and availability before taking orders.", kind="account")
         return Response(self.get_serializer(restaurant).data)
 
-class CategoryViewSet(viewsets.ModelViewSet):
+    @action(detail=False, methods=["get"], permission_classes=[IsAdmin])
+    def lookup(self, request):
+        rows = self.paginate_queryset(self.filter_queryset(Restaurant.objects.all().order_by("name", "id")))
+        return self.get_paginated_response([{"id": row.pk, "name": row.name, "city": row.city} for row in rows])
+
+class CategoryViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     queryset=Category.objects.order_by("name"); serializer_class=CategorySerializer; lookup_field="slug"; search_fields=["name"]
     def get_permissions(self): return [permissions.AllowAny()] if self.action in ["list", "retrieve"] else [IsAdmin()]
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
+        if self.request.query_params.get("restaurant"):
+            restaurant_id = serializers.IntegerField(min_value=1).run_validation(self.request.query_params["restaurant"])
+            match = Q(menu_items__restaurant_id=restaurant_id, menu_items__restaurant__is_approved=True, menu_items__restaurant__owner__is_active=True, menu_items__is_available=True)
+            qs = qs.annotate(item_count=Count("menu_items", filter=match)).filter(item_count__gt=0, is_active=True)
         return qs if user.is_authenticated and (user.is_superuser or user.role == User.Role.ADMIN) else qs.filter(is_active=True)
-class MenuItemViewSet(viewsets.ModelViewSet):
-    queryset=MenuItem.objects.select_related("restaurant", "category").all(); serializer_class=MenuItemSerializer; filterset_fields=["restaurant", "category", "is_available", "is_vegetarian"]; search_fields=["name", "description"]; ordering_fields=["price", "created_at", "name"]
+class MenuItemViewSet(AdminScopeMixin, viewsets.ModelViewSet):
+    queryset=MenuItem.objects.select_related("restaurant", "restaurant__owner", "category").all(); serializer_class=MenuItemSerializer; filterset_fields=["restaurant", "category", "is_available", "is_vegetarian"]; search_fields=["name", "description"]; ordering_fields=["price", "created_at", "name"]
     def get_permissions(self): return [permissions.AllowAny()] if self.action in ["list", "retrieve"] else [IsRestaurantOrAdmin()]
+    @transaction.atomic
+    def perform_update(self, serializer):
+        locked = MenuItem.objects.select_for_update().get(pk=serializer.instance.pk)
+        before = locked.stock_quantity
+        serializer = self.get_serializer(locked, data=serializer.initial_data, partial=serializer.partial)
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save()
+        if "stock_quantity" in serializer.validated_data:
+            AuditLog.objects.create(actor=self.request.user, action="inventory.stock_set", target=str(item.pk), metadata={"before": before, "after": item.stock_quantity})
     def perform_create(self, serializer):
         if self.request.user.is_superuser or self.request.user.role == User.Role.ADMIN:
             if "restaurant" not in serializer.validated_data:
@@ -217,9 +242,9 @@ class MenuItemViewSet(viewsets.ModelViewSet):
             return qs
         if user.is_authenticated and user.role == User.Role.RESTAURANT:
             return qs.filter(restaurant__owner=user)
-        return qs.filter(is_available=True, restaurant__is_approved=True, restaurant__is_open=True)
+        return qs.filter(is_available=True, restaurant__is_approved=True, restaurant__owner__is_active=True)
 
-class OwnedViewSet(viewsets.ModelViewSet):
+class OwnedViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     permission_classes=[permissions.IsAuthenticated]
     owner_field="user"
     def get_queryset(self): return self.queryset.filter(**{self.owner_field:self.request.user})
@@ -276,6 +301,18 @@ class NotificationViewSet(OwnedViewSet):
     queryset=Notification.objects.order_by("-created_at"); serializer_class=NotificationSerializer
     http_method_names=["get", "patch", "delete", "head", "options"]
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.user.role == User.Role.ADMIN:
+            scopes = effective_scopes(self.request.user)
+            if "*" not in scopes:
+                for scope, kinds in [("support", ["support"]), ("finance", ["refund", "payment"]), ("orders", ["order", "delivery"])]:
+                    if scope not in scopes:
+                        qs = qs.exclude(kind__in=kinds)
+                if "partners" not in scopes:
+                    qs = qs.exclude(Q(metadata__has_key="approval_role") | Q(metadata__has_key="restaurant_approval"))
+        return qs
+
     @action(detail=False, methods=["get"])
     def summary(self, request):
         queryset = self.get_queryset()
@@ -294,20 +331,28 @@ class ReviewViewSet(OwnedViewSet):
     queryset=Review.objects.select_related("restaurant", "order").order_by("-created_at"); serializer_class=ReviewSerializer; owner_field="customer"; permission_classes=[IsCustomer]
     @transaction.atomic
     def perform_create(self, serializer):
+        order = Order.objects.select_for_update().get(pk=serializer.validated_data["order"].pk)
+        if Review.objects.filter(order=order).exists():
+            raise serializers.ValidationError({"order": "This order has already been reviewed. You can edit your review."})
+        Restaurant.objects.select_for_update().get(pk=order.restaurant_id)
         review = serializer.save(customer=self.request.user, restaurant=serializer.validated_data["order"].restaurant)
         self.update_rating(review.restaurant)
         notify([review.restaurant.owner_id], event=f"review:{review.pk}:created", title="New customer review", message=f"A customer left a {review.rating}-star review for {review.restaurant.name}.", kind="review", metadata={"restaurant_id": review.restaurant_id})
+    @transaction.atomic
     def perform_update(self, serializer):
+        Restaurant.objects.select_for_update().get(pk=serializer.instance.restaurant_id)
         review = serializer.save(restaurant=serializer.validated_data.get("order", serializer.instance.order).restaurant)
         self.update_rating(review.restaurant)
+    @transaction.atomic
     def perform_destroy(self, instance):
+        Restaurant.objects.select_for_update().get(pk=instance.restaurant_id)
         restaurant = instance.restaurant
         instance.delete()
         self.update_rating(restaurant)
     def update_rating(self, restaurant):
         Restaurant.objects.filter(pk=restaurant.pk).update(average_rating=Review.objects.filter(restaurant=restaurant, is_visible=True).aggregate(value=Avg("rating"))["value"] or 0)
 
-class CartViewSet(viewsets.ViewSet):
+class CartViewSet(AdminScopeMixin, viewsets.ViewSet):
     permission_classes=[IsCustomer]
     serializer_class=CartSerializer
     def list(self, request):
@@ -318,12 +363,13 @@ class CartViewSet(viewsets.ViewSet):
         payload = CartItemMutationSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         menu = payload.validated_data.get("menu_item")
-        if not menu or not menu.is_available or not menu.restaurant.is_approved or not menu.restaurant.is_open:
+        if not menu or not menu.is_available or not accepting_orders(menu.restaurant):
             return Response({"detail":"Menu item unavailable."}, status=400)
         quantity = payload.validated_data["quantity"]
         addons = selected_addons(menu, payload.validated_data["addon_ids"])
         cart,_=Cart.objects.select_for_update().get_or_create(user=request.user)
         if cart.restaurant and cart.restaurant_id != menu.restaurant_id: return Response({"detail":"Cart can contain one restaurant only."}, status=400)
+        check_cart_stock(cart, menu, quantity)
         cart.restaurant=menu.restaurant; cart.save(); item,created=CartItem.objects.get_or_create(cart=cart, menu_item=menu, configuration_key=configuration_key(addons), defaults={"quantity":quantity, "add_ons": addons})
         if not created: item.quantity=min(item.quantity+quantity,99); item.save(update_fields=["quantity", "updated_at"])
         return Response(CartSerializer(cart).data, status=201)
@@ -338,6 +384,7 @@ class CartViewSet(viewsets.ViewSet):
             payload = CartItemMutationSerializer(data=request.data)
             payload.fields.pop("menu_item")
             payload.is_valid(raise_exception=True)
+            check_cart_stock(cart, item.menu_item, payload.validated_data["quantity"], excluding=item.pk)
             item.quantity=payload.validated_data["quantity"]
             item.save(update_fields=["quantity", "updated_at"])
         if not cart.items.exists(): cart.restaurant=None; cart.save(update_fields=["restaurant"])
@@ -353,16 +400,50 @@ class CartViewSet(viewsets.ViewSet):
         subtotal = sum((cart_unit_price(item, strict=True) * item.quantity for item in items), Decimal("0"))
         coupon, discount = applicable_coupon(payload.validated_data["code"], subtotal, user=request.user, restaurant=cart.restaurant)
         fee = Decimal("40.00") if subtotal < Decimal("500.00") else Decimal("0")
-        return Response({"code": coupon.code, "subtotal": subtotal, "delivery_fee": fee, "discount": discount, "total": subtotal + fee - discount})
+        return Response({"code": coupon.code, "subtotal": subtotal, "delivery_fee": fee, "discount": discount, "total": subtotal + fee - discount, "delivery_estimate_only": True})
+    @action(detail=False, methods=["post"])
+    def quote(self, request):
+        payload = CheckoutSerializer(data=request.data, context={"request": request})
+        payload.is_valid(raise_exception=True)
+        address = payload.validated_data["address"]
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        items = list(cart.items.select_related("menu_item").order_by("menu_item_id", "id"))
+        if not items:
+            raise serializers.ValidationError({"cart": "Cart is empty."})
+        restaurant = items[0].menu_item.restaurant
+        if not accepting_orders(restaurant) or any(not item.menu_item.is_available or item.menu_item.restaurant_id != restaurant.pk for item in items):
+            raise serializers.ValidationError({"cart": "This meal is not available right now. Please update your bag."})
+        quantities = {}
+        for item in items:
+            quantities[item.menu_item_id] = quantities.get(item.menu_item_id, 0) + item.quantity
+            if item.menu_item.stock_quantity is not None and quantities[item.menu_item_id] > item.menu_item.stock_quantity:
+                raise serializers.ValidationError({"cart": f"Not enough portions of {item.menu_item.name} are available. Update your bag."})
+        subtotal = sum((cart_unit_price(item, strict=True) * item.quantity for item in items), Decimal("0"))
+        coupon, discount = None, Decimal("0")
+        if payload.validated_data.get("coupon_code"):
+            coupon, discount = applicable_coupon(payload.validated_data["coupon_code"], subtotal, user=request.user, restaurant=restaurant)
+        discount = discount.quantize(Decimal("0.01"))
+        quote = delivery_quote(restaurant, address, subtotal)
+        fingerprint = quote_fingerprint(request.user, address, items, quote, coupon.code if coupon else "", subtotal, discount)
+        return Response({**quote, "serviceable": True, "subtotal": subtotal, "discount": discount,
+                         "total": subtotal + Decimal(quote["delivery_fee"]) - discount, "quote_token": sign_quote(fingerprint), "valid_for_seconds": 600})
     @action(detail=False, methods=["post"])
     def checkout(self, request):
+        cart = Cart.objects.filter(user=request.user).first()
+        if cart and cart.restaurant_id:
+            expire_unpaid_orders(restaurant_id=cart.restaurant_id)
         s=CheckoutSerializer(data=request.data, context={"request":request}); s.is_valid(raise_exception=True); return Response(OrderSerializer(s.save(), context={"request": request}).data, status=201)
 
-class OrderViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset=Order.objects.none(); serializer_class=OrderSerializer; permission_classes=[permissions.IsAuthenticated]; filterset_fields=["status", "restaurant"]
+class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
+    queryset=Order.objects.none(); serializer_class=OrderSerializer; permission_classes=[permissions.IsAuthenticated]
+    filterset_class = OrderDashboardFilter
+    search_fields = ["number", "restaurant__name"]
+    ordering_fields = ["created_at", "total"]
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False): return Order.objects.none()
-        user=self.request.user; qs=Order.objects.select_related("restaurant", "customer", "delivery_address", "payment", "delivery", "review").prefetch_related("items", "events").order_by("-created_at")
+        if self.request.user.role == User.Role.CUSTOMER and self.action in ["list", "retrieve"]:
+            expire_unpaid_orders(customer_id=self.request.user.pk)
+        user=self.request.user; qs=Order.objects.select_related("restaurant", "customer", "delivery_address", "payment", "delivery", "review").prefetch_related("items", "events", "refund_requests").order_by("-created_at")
         if user.is_superuser or user.role==User.Role.ADMIN: return qs
         if user.role==User.Role.RESTAURANT: return qs.filter(restaurant__owner=user).exclude(status=Order.Status.AWAITING_PAYMENT)
         if user.role==User.Role.DELIVERY:
@@ -374,7 +455,7 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"])
     def summary(self, request):
-        orders = self.get_queryset()
+        orders = self.filter_queryset(self.get_queryset())
         return Response({
             "total": orders.count(),
             "by_status": list(orders.order_by().values("status").annotate(count=Count("id"), value=Sum("total"))),
@@ -382,7 +463,7 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"], permission_classes=[IsDelivery])
     def available(self, request):
-        qs = Order.objects.filter(status=Order.Status.READY, delivery__isnull=True).select_related("restaurant", "customer").prefetch_related("items").order_by("created_at")
+        qs = Order.objects.filter(status=Order.Status.READY, delivery__isnull=True, fulfillment_paused_at__isnull=True).select_related("restaurant", "customer").prefetch_related("items").order_by("created_at")
         page = self.paginate_queryset(qs)
         # Unassigned couriers need the pickup and destination area, not a
         # customer's identity, exact address, payment identifiers or delivery code.
@@ -407,6 +488,7 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         order = Order.objects.select_for_update().filter(pk=pk, status=Order.Status.READY).first()
         if not order or DeliveryAssignment.objects.filter(order=order).exists():
             return Response({"detail": "Order is no longer available for pickup."}, status=409)
+        require_active_fulfillment(order)
         try:
             DeliveryAssignment.objects.create(order=order, partner=request.user)
         except IntegrityError:
@@ -423,6 +505,7 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
     def pickup(self, request, pk=None):
         visible = self.get_object()
         order = Order.objects.select_for_update().get(pk=visible.pk)
+        require_active_fulfillment(order)
         assignment = DeliveryAssignment.objects.select_for_update().filter(order=order, partner=request.user).first()
         if not assignment:
             raise serializers.ValidationError("This delivery is not assigned to you.")
@@ -440,19 +523,20 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(self.get_serializer(order).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsCustomer])
-    @transaction.atomic
     def cancel(self, request, pk=None):
         visible = self.get_object()
-        order = Order.objects.select_for_update().get(pk=visible.pk)
-        if order.status != Order.Status.PENDING:
-            raise serializers.ValidationError("This order has already been accepted. Contact support for help.")
-        if Payment.objects.filter(order=order, method="razorpay", status=Payment.Status.PAID).exists():
-            raise serializers.ValidationError("Contact support to cancel this prepaid order and arrange a refund.")
-        order.status = Order.Status.CANCELLED
-        order.save(update_fields=["status", "updated_at"])
-        Payment.objects.filter(order=order, status=Payment.Status.PENDING).update(status=Payment.Status.FAILED)
-        OrderEvent.objects.create(order=order, status=order.status, message="Cancelled by you before the restaurant accepted.")
-        notify_order(order)
+        payload = CancellationInput(data=request.data)
+        payload.is_valid(raise_exception=True)
+        order, refund_id = cancel_customer_order(visible.pk, request.user, payload.validated_data)
+        if refund_id:
+            from .refunds import submit_approved_refund
+            try:
+                submit_approved_refund(refund_id)
+            except serializers.ValidationError:
+                # Cancellation is committed. The approved financial obligation
+                # remains visible/recoverable if the provider is unavailable.
+                pass
+        order.refresh_from_db()
         return Response(self.get_serializer(order).data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsCustomer])
@@ -463,9 +547,10 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         if cart.items.exists():
             raise serializers.ValidationError("Please clear your current cart before reordering.")
         items = list(order.items.select_related("menu_item", "menu_item__restaurant"))
-        if not items or any(not i.menu_item.is_available or not i.menu_item.restaurant.is_open or not i.menu_item.restaurant.is_approved for i in items):
+        if not items or any(not i.menu_item.is_available or not accepting_orders(i.menu_item.restaurant) for i in items):
             raise serializers.ValidationError("Some items are unavailable. Open the restaurant to choose a fresh meal.")
         for item in items:
+            check_cart_stock(cart, item.menu_item, min(item.quantity, 99))
             addons = selected_addons(item.menu_item, [row["id"] for row in item.add_ons])
             CartItem.objects.create(cart=cart, menu_item=item.menu_item, quantity=min(item.quantity, 99), add_ons=addons, configuration_key=configuration_key(addons))
         cart.restaurant = order.restaurant
@@ -477,9 +562,23 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
     def status(self, request, pk=None):
         visible_order = self.get_object()
         order = Order.objects.select_for_update().get(pk=visible_order.pk)
+        if "expected_status" in request.data and request.data["expected_status"] != order.status:
+            return Response({"detail": "This order's status changed. Refresh before making another update."}, status=409)
         new = request.data.get("status")
+        if new == order.status:
+            return Response(self.get_serializer(order).data)
+        require_active_fulfillment(order)
+        if order.status in [Order.Status.CANCELLED, Order.Status.DELIVERED]:
+            raise serializers.ValidationError("Completed or cancelled orders cannot be reopened.")
         if order.status == Order.Status.AWAITING_PAYMENT:
             raise serializers.ValidationError("This order is waiting for verified payment.")
+        lifecycle = [Order.Status.AWAITING_PAYMENT, Order.Status.PENDING, Order.Status.CONFIRMED,
+                     Order.Status.PREPARING, Order.Status.READY, Order.Status.ASSIGNED,
+                     Order.Status.OUT, Order.Status.DELIVERED]
+        if new in lifecycle and lifecycle.index(new) < lifecycle.index(order.status):
+            # Even staff cannot rewind cooking and reopen a self-cancellation
+            # window or return consumed inventory through a second transition.
+            raise serializers.ValidationError("Order progress cannot move backwards. Use order support to record an exception.")
         transitions = {
             User.Role.RESTAURANT: {
                 Order.Status.PENDING: {Order.Status.CONFIRMED, Order.Status.CANCELLED},
@@ -511,10 +610,19 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
                     cache.set(attempt_key, attempts + 1, 600)
                     raise serializers.ValidationError("Ask the customer for the correct six-digit delivery code.")
                 cache.delete(attempt_key)
+        previous_status = order.status
         order.status = new; order.save(update_fields=["status", "updated_at"])
         OrderEvent.objects.create(order=order, status=new, message=f"Order {order.get_status_display().lower()}.")
         AuditLog.objects.create(actor=request.user, action=f"order.{new}", target=str(order.id))
         if new == Order.Status.CANCELLED:
+            if order.coupon_id:
+                Coupon.objects.filter(pk=order.coupon_id, usage_count__gt=0).update(usage_count=F("usage_count")-1)
+            if previous_status in [Order.Status.PENDING, Order.Status.CONFIRMED]:
+                restore_order_stock(order)
+            else:
+                # Food already in preparation is consumed inventory, not a
+                # fresh portion available to sell again after cancellation.
+                order.items.filter(stock_deducted=True).update(stock_deducted=False)
             Payment.objects.filter(order=order, status=Payment.Status.PENDING).update(status=Payment.Status.FAILED)
         if new == Order.Status.DELIVERED:
             DeliveryAssignment.objects.filter(order=order).update(delivered_at=timezone.now())
@@ -525,8 +633,10 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
         notify_order(order)
         return Response(OrderSerializer(order).data)
 
-class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
+class PaymentViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
     queryset=Payment.objects.none(); serializer_class=PaymentSerializer; permission_classes=[permissions.IsAuthenticated]
+    filterset_class = PaymentDashboardFilter
+    ordering_fields = ["created_at", "amount"]
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False): return Payment.objects.none()
         user=self.request.user; qs=Payment.objects.select_related("order", "order__restaurant").order_by("-created_at")
@@ -534,28 +644,89 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         if user.role==User.Role.RESTAURANT: return qs.filter(order__restaurant__owner=user)
         return qs.filter(order__customer=user)
 
-class UserManagementViewSet(viewsets.ModelViewSet):
-    queryset=User.objects.all().order_by("-created_at")
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        payments = self.filter_queryset(self.get_queryset())
+        return Response({"total": payments.count(), "by_status": list(payments.order_by().values("status").annotate(count=Count("id"), amount=Sum("amount")).order_by("status")), "needs_review": payments.filter(reconciliation_required=True).count()})
+
+class UserManagementViewSet(AdminScopeMixin, viewsets.ModelViewSet):
+    queryset=User.objects.all().order_by("-created_at", "-id")
     serializer_class=AdminUserSerializer
     permission_classes=[IsAdmin]
     filterset_fields=["role", "is_active"]
     search_fields=["email", "first_name", "last_name", "phone"]
 
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        scopes = effective_scopes(self.request.user)
+        if ("*" not in scopes and "people" not in scopes) or self.request.query_params.get("partner_only") == "true":
+            qs = qs.filter(role__in=[User.Role.RESTAURANT, User.Role.DELIVERY])
+        return qs.select_for_update() if self.request.method not in permissions.SAFE_METHODS else qs
+
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        users = self.filter_queryset(self.get_queryset())
+        return Response({"total": users.count(), "active": users.filter(is_active=True).count(),
+                         "inactive": users.filter(is_active=False).count(),
+                         "by_role": list(users.order_by().values("role").annotate(count=Count("id")).order_by("role")),
+                         "can_manage_admins": request.user.is_superuser})
+
+    def check_target(self, user):
+        if (user.is_superuser or user.role == User.Role.ADMIN) and not self.request.user.is_superuser:
+            raise serializers.ValidationError({"detail": "Only a superuser can change an administrator account."})
+
+    def check_active_work(self, user):
+        active = Order.objects.exclude(status__in=[Order.Status.CANCELLED, Order.Status.DELIVERED])
+        if active.filter(Q(customer=user) | Q(restaurant__owner=user) | Q(delivery__partner=user)).exists():
+            raise serializers.ValidationError({"detail": "Resolve this account's active orders before changing its role or blocking access."})
+
+    def audit_change(self, user, action_name, metadata=None):
+        reason = serializers.CharField(max_length=500, required=False, allow_blank=True).run_validation(self.request.data.get("reason", ""))
+        AuditLog.objects.create(actor=self.request.user, action=action_name, target=str(user.pk),
+                                metadata={**(metadata or {}), "reason": reason})
+
+    @transaction.atomic
     def perform_create(self, serializer):
         if serializer.validated_data.get("role") == User.Role.ADMIN and not self.request.user.is_superuser:
             raise serializers.ValidationError({"role": "Only a superuser can create an administrator."})
-        serializer.save()
+        user = serializer.save()
+        self.audit_change(user, "account.created", {"role": user.role})
 
+    @transaction.atomic
     def perform_update(self, serializer):
-        if serializer.instance.is_superuser and not self.request.user.is_superuser:
-            raise serializers.ValidationError({"detail": "Only a superuser can modify another superuser."})
+        serializer.instance = User.objects.select_for_update().get(pk=serializer.instance.pk)
+        self.check_target(serializer.instance)
         if serializer.validated_data.get("role") == User.Role.ADMIN and not self.request.user.is_superuser:
             raise serializers.ValidationError({"role": "Only a superuser can grant administrator access."})
         if serializer.instance == self.request.user and serializer.validated_data.get("is_active") is False:
             raise serializers.ValidationError({"is_active": "You cannot deactivate your own account."})
-        serializer.save()
+        changed_role = serializer.validated_data.get("role", serializer.instance.role) != serializer.instance.role
+        if changed_role:
+            if serializer.instance == self.request.user or serializer.instance.is_superuser:
+                raise serializers.ValidationError({"role": "This administrator's role cannot be changed here."})
+            if Restaurant.objects.filter(owner=serializer.instance).exists() or DeliveryAssignment.objects.filter(partner=serializer.instance).exists() or Order.objects.filter(customer=serializer.instance).exists():
+                raise serializers.ValidationError({"role": "This account has marketplace history. Keep its role and create a separate account for another role."})
+        if changed_role or (serializer.instance.is_active and serializer.validated_data.get("is_active") is False):
+            self.check_active_work(serializer.instance)
+        fields = sorted(serializer.validated_data)
+        previous_role, previous_active = serializer.instance.role, serializer.instance.is_active
+        user = serializer.save()
+        if changed_role and user.role == User.Role.ADMIN:
+            AdminAccessGrant.objects.update_or_create(user=user, defaults={"full_access": False, "scopes": []})
+        self.audit_change(user, "account.updated", {"fields": fields, "previous_role": previous_role, "role": user.role, "previous_active": previous_active, "active": user.is_active})
 
+    @transaction.atomic
     def perform_destroy(self, instance):
+        instance = User.objects.select_for_update().get(pk=instance.pk)
+        self.check_target(instance)
         if instance.is_superuser or instance == self.request.user:
             raise serializers.ValidationError({"detail": "This administrator account cannot be deleted here."})
         if Order.objects.filter(customer=instance).exists():
@@ -564,17 +735,22 @@ class UserManagementViewSet(viewsets.ModelViewSet):
             raise serializers.ValidationError({"detail": "Restaurant owners with order history cannot be deleted. Block the account instead."})
         if DeliveryAssignment.objects.filter(partner=instance, order__status__in=[Order.Status.ASSIGNED, Order.Status.OUT]).exists():
             raise serializers.ValidationError({"detail": "A delivery partner with an active delivery cannot be deleted."})
+        if DeliveryMessage.objects.filter(Q(author=instance) | Q(partner=instance)).exists():
+            raise serializers.ValidationError({"detail": "This account has delivery conversation history. Block access instead of deleting it."})
+        self.audit_change(instance, "account.deleted", {"role": instance.role})
         instance.delete()
 
     @action(detail=True, methods=["post"], permission_classes=[IsAdmin])
+    @transaction.atomic
     def approve(self, request, pk=None):
         user = self.get_object()
-        if user.role == User.Role.CUSTOMER:
+        if user.role not in [User.Role.RESTAURANT, User.Role.DELIVERY]:
             return Response({"detail": "Only restaurant and delivery accounts require approval."}, status=status.HTTP_400_BAD_REQUEST)
         if user.is_active:
             return Response({"detail": "User is already active."}, status=status.HTTP_400_BAD_REQUEST)
         user.is_active = True
         user.save(update_fields=["is_active"])
+        self.audit_change(user, "account.approved", {"role": user.role})
         Notification.objects.create(
             user=user,
             title="Account Approved",
@@ -613,16 +789,20 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         return Response({"detail": "User approved successfully."})
 
     @action(detail=True, methods=["post"], permission_classes=[IsAdmin])
+    @transaction.atomic
     def block(self, request, pk=None):
         user = self.get_object()
+        self.check_target(user)
         if user == request.user:
             return Response({"detail": "You cannot block your own account."}, status=status.HTTP_400_BAD_REQUEST)
         if user.is_superuser:
             return Response({"detail": "Cannot block a superuser."}, status=status.HTTP_400_BAD_REQUEST)
         if not user.is_active:
             return Response({"detail": "User is already inactive."}, status=status.HTTP_400_BAD_REQUEST)
+        self.check_active_work(user)
         user.is_active = False
         user.save(update_fields=["is_active"])
+        self.audit_change(user, "account.blocked")
         Notification.objects.create(
             user=user,
             title="Account Blocked",
@@ -632,12 +812,15 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         return Response({"detail": "User blocked successfully."})
 
     @action(detail=True, methods=["post"], permission_classes=[IsAdmin])
+    @transaction.atomic
     def unblock(self, request, pk=None):
         user = self.get_object()
+        self.check_target(user)
         if user.is_active:
             return Response({"detail": "User is already active."}, status=status.HTTP_400_BAD_REQUEST)
         user.is_active = True
         user.save(update_fields=["is_active"])
+        self.audit_change(user, "account.restored")
         Notification.objects.create(
             user=user,
             title="Account Restored",
@@ -646,7 +829,7 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         )
         return Response({"detail": "User restored successfully."})
 
-class CouponViewSet(viewsets.ModelViewSet):
+class CouponViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     queryset=Coupon.objects.order_by("-created_at"); serializer_class=CouponSerializer; permission_classes=[IsAdmin]; lookup_field="code"
 
     @action(detail=False, methods=["get"], permission_classes=[permissions.AllowAny])
@@ -673,7 +856,7 @@ class CouponViewSet(viewsets.ModelViewSet):
             "ends_at": coupon.ends_at,
         } for coupon in (page if page is not None else coupons)]
         return self.get_paginated_response(data) if page is not None else Response(data)
-class OfferViewSet(viewsets.ModelViewSet):
+class OfferViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     queryset=Offer.objects.order_by("-created_at"); serializer_class=OfferSerializer
     def get_permissions(self):
         return [permissions.AllowAny()] if self.action in ["list", "retrieve"] else [IsRestaurantOrAdmin()]
@@ -700,15 +883,20 @@ class OfferViewSet(viewsets.ModelViewSet):
             serializer.save()
         else:
             serializer.save(restaurant=self.request.user.restaurant)
-class DeliveryViewSet(viewsets.ModelViewSet):
+class DeliveryViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     queryset=DeliveryAssignment.objects.select_related("order").order_by("-created_at"); serializer_class=DeliverySerializer; permission_classes=[IsDelivery]
     http_method_names=["get", "patch", "head", "options"]
     def get_queryset(self): return super().get_queryset().filter(partner=self.request.user)
+    @transaction.atomic
     def perform_update(self, serializer):
-        if serializer.instance.order.status not in [Order.Status.ASSIGNED, Order.Status.OUT]:
+        order = Order.objects.select_for_update().get(pk=serializer.instance.order_id)
+        if order.status not in [Order.Status.ASSIGNED, Order.Status.OUT]:
             raise serializers.ValidationError("Location updates are only allowed during an active delivery.")
-        serializer.save()
-class AnalyticsViewSet(viewsets.ViewSet):
+        if "current_latitude" in serializer.validated_data:
+            serializer.save(location_updated_at=timezone.now() if serializer.validated_data["current_latitude"] is not None else None)
+        else:
+            serializer.save()
+class AnalyticsViewSet(AdminScopeMixin, viewsets.ViewSet):
     permission_classes=[IsAdmin]; serializer_class=AnalyticsEventSerializer
     def list(self, request):
         return Response({
@@ -721,6 +909,7 @@ class AnalyticsViewSet(viewsets.ViewSet):
                 "open": Restaurant.objects.filter(is_approved=True, is_open=True).count(),
             },
             "payments": Payment.objects.values("status").annotate(count=Count("id"), amount=Sum("amount")).order_by("status"),
+            "refunds": RefundRequest.objects.filter(status=RefundRequest.Status.PROCESSED).aggregate(count=Count("id"), amount=Sum("approved_amount")),
             "recent_orders": OrderSerializer(
                 Order.objects.select_related("restaurant", "customer").prefetch_related("items")[:5],
                 many=True,

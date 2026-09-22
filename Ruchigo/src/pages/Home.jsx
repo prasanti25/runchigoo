@@ -1,15 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  ArrowRight,
-  Asterisk,
-  Check,
-  Clock3,
-  Search,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, Check, Clock3, Search, Star, Wallet } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
 import Recommendations from "../components/product/Recommendations.jsx";
+import { PersonalizedFeed } from "../components/product/PersonalizedFeed.jsx";
+import VoiceInput from "../components/product/VoiceInput.jsx";
+import MealCarousel from "../components/product/MealCarousel.jsx";
+import RecentMealReview from "../components/product/RecentMealReview.jsx";
 import {
   EmptyState,
   ErrorNotice,
@@ -37,23 +34,17 @@ export default function Home() {
       <Navbar />
       <main className="customer-main">
         <div className="container">
-          <section className="home-hero">
+          <section className="home-hero product-home-hero">
             <div className="hero-copy">
               <span className="hero-kicker">
                 <span />A LITTLE JOY, DELIVERED.
               </span>
               <h1>
-                Your cravings.
+                Great food.
                 <br />
-                <em>Our favourite</em>
-                <br />
-                thing to deliver.
+                <em>Your kind of mood.</em>
               </h1>
-              <p>
-                From the first bite to the last.
-                <br />
-                Discover food you’ll love, from kitchens around you.
-              </p>
+              <p>Find your next favourite, from kitchens around you.</p>
               <form
                 className="hero-search"
                 onSubmit={(event) => {
@@ -68,6 +59,7 @@ export default function Home() {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                 />
+                <VoiceInput onText={setQuery} />
                 <button type="submit" aria-label="Search">
                   <ArrowRight size={21} />
                 </button>
@@ -87,36 +79,29 @@ export default function Home() {
                 </span>
               </div>
             </div>
-            <div className="hero-art">
-              <div className="hero-orbit" />
-              <img
-                className="hero-food"
-                src="/food/protein-bowl.webp"
-                alt="A colourful freshly prepared meal"
-                fetchPriority="high"
-              />
-              <span className="hero-note">
-                <Sparkles size={18} />
-                <span>
-                  YOUR NEXT
-                  <br />
-                  <strong>favourite meal.</strong>
-                </span>
-              </span>
-              <span className="hero-caption">
-                <Clock3 size={18} />
-                <span>
-                  Fresh from the kitchen
-                  <br />
-                  <strong>to your happy place.</strong>
-                </span>
-              </span>
-              <span className="hero-star" aria-hidden="true">
-                <Asterisk size={86} strokeWidth={1.5} />
-              </span>
-              <span className="hero-label">GOOD FOOD. GOOD MOOD.</span>
+            <div className="home-meal-showcase">
+              {data?.items?.length ? (
+                <MealCarousel
+                  key={data.items
+                    .slice(0, 5)
+                    .map((item) => item.id)
+                    .join(":")}
+                  items={data.items}
+                  label="Featured meals"
+                />
+              ) : loading ? (
+                <div className="hero-meal-skeleton" role="status">
+                  Finding something delicious…
+                </div>
+              ) : (
+                <Link to="/search" className="hero-meal-empty">
+                  Explore available kitchens
+                  <ArrowRight size={20} />
+                </Link>
+              )}
             </div>
           </section>
+          <PersonalizedFeed compact />
           <section className="category-section">
             <SectionTitle
               title="What’s on your mind?"
@@ -182,24 +167,32 @@ export default function Home() {
               )
             )}
           </section>
-          <section className="editorial-strip">
-            <div>
-              <span className="eyebrow">SMALL BUDGET. BIG CRAVINGS.</span>
-              <h2>
-                A good meal doesn’t
-                <br />
-                have to be a big deal.
-              </h2>
-              <Link to="/search?budget=250" className="btn dark">
-                Explore meals under ₹250
-                <ArrowRight size={17} />
-              </Link>
-            </div>
-            <span className="editorial-number">
-              ₹250<small>AND UNDER</small>
-            </span>
-            <span className="editorial-squiggle">✳</span>
-          </section>
+          <nav className="meal-shortcuts" aria-label="Find food your way">
+            <Link to="/search?budget=250">
+              <Wallet size={22} />
+              <div>
+                <strong>Easy on the pocket</strong>
+                <span>Dishes under ₹250</span>
+              </div>
+              <ArrowRight size={17} />
+            </Link>
+            <Link to="/search?max_prep=30">
+              <Clock3 size={22} />
+              <div>
+                <strong>Short on time?</strong>
+                <span>Kitchens with quick prep</span>
+              </div>
+              <ArrowRight size={17} />
+            </Link>
+            <Link to="/search?min_rating=4&sort=rating">
+              <Star size={22} />
+              <div>
+                <strong>Loved by diners</strong>
+                <span>Rated 4.0 and above</span>
+              </div>
+              <ArrowRight size={17} />
+            </Link>
+          </nav>
           <Recommendations />
           <section className="discovery-section">
             <SectionTitle
@@ -233,6 +226,7 @@ export default function Home() {
           </section>
         </div>
       </main>
+      <RecentMealReview />
     </>
   );
 }

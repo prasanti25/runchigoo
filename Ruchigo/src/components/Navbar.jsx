@@ -13,7 +13,6 @@ import {
   MapPin,
   Menu,
   Search,
-  Sparkles,
   ShoppingBag,
   Tag,
   User,
@@ -27,9 +26,11 @@ import {
 } from "../lib/product.js";
 import { Modal } from "./product/UI.jsx";
 import BrandLogo from "./common/BrandLogo.jsx";
+import AssistantIcon from "./common/AssistantIcon.jsx";
 import UserAvatar from "./common/UserAvatar.jsx";
 import NotificationBell from "./common/NotificationBell.jsx";
 import { apiRequest } from "../lib/api.js";
+import { canOpenAdminRoute } from "../lib/adminAccess.js";
 
 export default function Navbar() {
   const { user, role, isAuthenticated, logout } = useAuth();
@@ -114,7 +115,7 @@ export default function Navbar() {
           </button>
           <nav className="desktop-nav" aria-label="Main navigation">
             <NavLink to="/for-you">
-              <Sparkles size={18} />
+              <AssistantIcon size={21} />
               For you
             </NavLink>
             <NavLink to="/search">
@@ -234,10 +235,15 @@ export default function Navbar() {
           {[
             ["/", "Home", Compass],
             ["/search", "Explore", Search],
-            ["/for-you", "For you", Sparkles],
+            ["/for-you", "For you", AssistantIcon],
             ["/orders", "Orders", ShoppingBag],
           ].map(([to, label, Icon]) => (
-            <NavLink end={to === "/"} to={to} key={to}>
+            <NavLink
+              end={to === "/"}
+              to={to}
+              key={to}
+              className={to === "/for-you" ? "mobile-feed-link" : undefined}
+            >
               <Icon size={21} />
               <span>{label}</span>
             </NavLink>
@@ -264,13 +270,18 @@ export default function Navbar() {
                     "users",
                     "restaurants",
                     "delivery-partners",
+                    "partner-accounts",
                     "orders",
                     "payments",
                     "offers",
+                    "catalog",
+                    "delivery-zones",
+                    "order-policy",
                     "reports",
                     "reviews",
                     "activity",
                     "profile",
+                    "access",
                   ]
                 : role === "restaurant"
                   ? [
@@ -282,12 +293,19 @@ export default function Navbar() {
                       "offers",
                     ]
                   : ["orders", "navigation", "earnings", "profile"]),
-            ].map((page) => (
-              <option key={page} value={`/${role}-${page}`}>
-                {page.replaceAll("-", " ")}
-              </option>
-            ))}
-            <option value="/support">Support</option>
+            ]
+              .filter(
+                (page) =>
+                  role !== "admin" || canOpenAdminRoute(user, `/admin-${page}`),
+              )
+              .map((page) => (
+                <option key={page} value={`/${role}-${page}`}>
+                  {page.replaceAll("-", " ")}
+                </option>
+              ))}
+            {(role !== "admin" || canOpenAdminRoute(user, "/support")) && (
+              <option value="/support">Support</option>
+            )}
           </select>
         </div>
       )}

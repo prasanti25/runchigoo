@@ -19,7 +19,18 @@
     "test:updates": "node scripts/experience-updates-e2e.mjs",
     "test:menu": "node scripts/menu-review-e2e.mjs",
     "test:ai:live": "node scripts/recommendations-live-e2e.mjs",
-    "test:api-retry": "node scripts/api-retry-e2e.mjs"
+    "test:intelligence": "node scripts/intelligence-e2e.mjs",
+    "test:menu-operations": "node scripts/menu-operations-e2e.mjs",
+    "test:desktop": "node scripts/desktop-experience-e2e.mjs",
+    "test:delivery-demo": "node scripts/delivery-demo-e2e.mjs",
+    "test:assistant-recovery": "node scripts/assistant-recovery-e2e.mjs",
+    "test:api-retry": "node scripts/api-retry-e2e.mjs",
+    "test:checkout-support": "node scripts/checkout-support-e2e.mjs",
+    "test:cancellations": "node scripts/cancellations-e2e.mjs",
+    "test:support-conversation": "node scripts/support-conversation-e2e.mjs",
+    "test:dashboard-chat": "node scripts/dashboard-chat-e2e.mjs",
+    "test:admin-access": "node scripts/admin-access-e2e.mjs",
+    "test:dashboard-queues": "node scripts/dashboard-queues-e2e.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -27,6 +38,7 @@
     "axios": "^1.18.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.25.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

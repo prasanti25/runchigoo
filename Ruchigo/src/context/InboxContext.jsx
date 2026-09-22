@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "./AuthContext.jsx";
 import { useRemote } from "../lib/product.js";
@@ -12,6 +12,7 @@ const InboxContext = createContext(null);
 
 export function InboxProvider({ children }) {
   const { token, isAuthenticated, user, role } = useAuth();
+  const location = useLocation();
   const seen = useRef({ user: null, id: null });
   const { data, error, reload } = useRemote(
     isAuthenticated ? "/notifications/summary/" : null,
@@ -47,10 +48,31 @@ export function InboxProvider({ children }) {
     const newest = data.latest_id || 0;
     // First snapshot is a baseline, not a burst of historical alerts. A read
     // toggle, refetch, token refresh or polling retry cannot replay old events.
+    const activeTicket =
+      location.pathname === "/support"
+        ? Number(new URLSearchParams(location.search).get("ticket"))
+        : null;
     const updates =
       seen.current.id === null
         ? []
-        : (data.latest || []).filter((entry) => entry.id > seen.current.id);
+        : (data.latest || []).filter(
+            (entry) =>
+              entry.id > seen.current.id &&
+              !(
+                entry.metadata?.delivery_chat &&
+                new URLSearchParams(location.search).get("chat") === "1" &&
+                (location.pathname ===
+                  `/tracking/${Number(entry.metadata.order_id)}` ||
+                  (location.pathname === "/delivery-navigation" &&
+                    Number(
+                      new URLSearchParams(location.search).get("order"),
+                    ) === Number(entry.metadata.order_id)))
+              ) &&
+              !(
+                activeTicket &&
+                Number(entry.metadata?.ticket_id) === activeTicket
+              ),
+          );
     seen.current.id = Math.max(seen.current.id || 0, newest);
     if (!updates.length) return;
     const entry = updates[0];
@@ -74,7 +96,15 @@ export function InboxProvider({ children }) {
       </div>,
       { id: "inbox-live", duration: 8000 },
     );
-  }, [data, error, isAuthenticated, role, user?.id]);
+  }, [
+    data,
+    error,
+    isAuthenticated,
+    role,
+    user?.id,
+    location.pathname,
+    location.search,
+  ]);
   const value = useMemo(
     () => ({
       unreadCount:

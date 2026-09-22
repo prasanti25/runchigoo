@@ -4,6 +4,10 @@ import { Check, Clock3, Edit3, Plus, Search, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { WorkspaceFrame, Metrics } from "../components/product/Workspace.jsx";
 import {
+  ChoiceGroupEditor,
+  OpeningHoursEditor,
+} from "../components/product/MenuConfiguration.jsx";
+import {
   EmptyState,
   ErrorNotice,
   FoodImage,
@@ -12,6 +16,7 @@ import {
 } from "../components/product/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
+import OrderOperations from "../components/product/OrderOperations.jsx";
 import {
   dateTime,
   money,
@@ -33,6 +38,8 @@ const blankItem = {
   calories: "",
   tags_text: "",
   add_ons: [],
+  option_groups: [],
+  stock_quantity: "",
 };
 export function MenuWorkspace() {
   const { token } = useAuth();
@@ -55,6 +62,10 @@ export function MenuWorkspace() {
         ...form,
         category: form.category || null,
         calories: form.calories || null,
+        stock_quantity:
+          form.stock_quantity === "" || form.stock_quantity == null
+            ? null
+            : Number(form.stock_quantity),
         tags: form.tags_text
           .split(",")
           .map((tag) => tag.trim())
@@ -137,6 +148,13 @@ export function MenuWorkspace() {
               <p className="muted">
                 {money(item.price)} · {item.preparation_minutes} min
               </p>
+              {item.stock_quantity != null && (
+                <p className="stock-count">
+                  {item.stock_quantity === 0
+                    ? "Sold out"
+                    : `${item.stock_quantity} portions in stock`}
+                </p>
+              )}
               <div className="flex-row between mt-5">
                 <button
                   className={`status-pill ${item.is_available ? "" : "cancelled"}`}
@@ -281,6 +299,33 @@ export function MenuWorkspace() {
               />
             </label>
             <label className="field">
+              <span>Available portions (optional)</span>
+              <input
+                type="number"
+                min="0"
+                max="1000000"
+                value={form.stock_quantity ?? ""}
+                onChange={(event) =>
+                  setForm({ ...form, stock_quantity: event.target.value })
+                }
+                placeholder="Leave blank for untracked stock"
+              />
+              <small className="form-help">
+                Checkout deducts portions across all sizes/configurations.
+                Cancellation before preparation restores tracked portions.
+                Prepared food is not restocked. Awaiting-payment orders also
+                hold stock until resolved; automatic payment expiry is not yet
+                enabled.
+              </small>
+            </label>
+            <ChoiceGroupEditor
+              groups={form.option_groups || []}
+              options={form.add_ons || []}
+              onChange={(option_groups, add_ons) =>
+                setForm({ ...form, option_groups, add_ons })
+              }
+            />
+            <label className="field">
               <span>Dietary tags (comma separated)</span>
               <input
                 value={form.tags_text}
@@ -294,13 +339,38 @@ export function MenuWorkspace() {
               />
             </label>
             <fieldset className="menu-addon-editor">
-              <legend>Optional add-ons</legend>
+              <legend>Options & add-ons</legend>
               <p className="form-help">
-                Set the extras you actually offer. Prices are added per dish;
-                mark an extra unavailable when it runs out.
+                Set the sizes and extras you actually offer. Prices are added
+                per dish; mark an extra unavailable when it runs out.
               </p>
               {(form.add_ons || []).map((addon, index) => (
                 <div className="menu-addon-row" key={addon.id}>
+                  {!!form.option_groups?.length && (
+                    <label className="field addon-group-assignment">
+                      <span>Choice group</span>
+                      <select
+                        value={addon.group_id || ""}
+                        onChange={(event) =>
+                          setForm({
+                            ...form,
+                            add_ons: form.add_ons.map((row, i) =>
+                              i === index
+                                ? { ...row, group_id: event.target.value }
+                                : row,
+                            ),
+                          })
+                        }
+                      >
+                        <option value="">Optional extra</option>
+                        {form.option_groups.map((group) => (
+                          <option key={group.id} value={group.id}>
+                            {group.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   <label className="field">
                     <span>Extra name</span>
                     <input
@@ -514,7 +584,10 @@ export function KitchenOrders() {
               <strong>{money(order.total)}</strong>
               <span className="status-pill">{statusLabel(order.status)}</span>
             </div>
-            {next[order.status] && (
+            <div className="mt-5">
+              <OrderOperations order={order} onUpdated={reload} />
+            </div>
+            {next[order.status] && !order.fulfillment_paused_at && (
               <div className="flex-row mt-5">
                 <button
                   className="btn primary grow"
@@ -524,21 +597,23 @@ export function KitchenOrders() {
                   <Check size={16} />
                   {next[order.status][1]}
                 </button>
-                <button
-                  className="btn danger"
-                  aria-label="Reject order"
-                  disabled={busy === order.id}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        "Cancel this order and notify the customer?",
+                {order.payment?.status !== "paid" && (
+                  <button
+                    className="btn danger"
+                    aria-label="Reject order"
+                    disabled={busy === order.id}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Cancel this order and notify the customer?",
+                        )
                       )
-                    )
-                      update(order, "cancelled");
-                  }}
-                >
-                  <X size={17} />
-                </button>
+                        update(order, "cancelled");
+                    }}
+                  >
+                    <X size={17} />
+                  </button>
+                )}
               </div>
             )}
           </article>
@@ -608,6 +683,7 @@ function ProfileEditor({ existing, token, user, onSaved }) {
       latitude: "",
       longitude: "",
       is_open: true,
+      opening_hours: [],
     },
   );
   const [busy, setBusy] = useState(false);
@@ -708,6 +784,10 @@ function ProfileEditor({ existing, token, user, onSaved }) {
           />
           Accepting orders
         </label>
+        <OpeningHoursEditor
+          value={form.opening_hours || []}
+          onChange={(opening_hours) => setForm({ ...form, opening_hours })}
+        />
         <ErrorNotice error={error} />
         <button className="btn primary" disabled={busy}>
           {busy ? "Saving…" : "Save restaurant profile"}

@@ -149,17 +149,23 @@ const sections = [
     content: (
       <>
         <p>
-          The current app allows customer cancellation before restaurant
-          acceptance where the order status and payment state permit it. Once
-          preparation has started, use order support to explain the issue;
-          cancellation is not automatically guaranteed.
+          The cancellation window is shown at checkout and saved with your
+          order. It closes at restaurant acceptance by default; an explicitly
+          configured policy may allow cancellation until cooking starts. Order
+          details show whether cancellation is available. Once preparation has
+          started, self-service cancellation is unavailable; use order support
+          to explain any problem.
         </p>
         <p>
-          Captured online payments do not currently have an automated
-          cancellation/refund workflow in this preview. A refund request or
-          resolved support ticket does not itself return money. Commercial
-          refund eligibility, decision processes and provider timelines must be
-          approved and implemented before a paid public launch.
+          Eligible prepaid cancellations can submit a full refund to the
+          original payment method only when that policy has been explicitly
+          enabled. Otherwise, prepaid cancellation needs support review.
+          Cancellation, refund approval and provider-confirmed completion are
+          separate steps; a resolved support ticket does not itself return
+          money. Refund status appears in order details and the linked support
+          conversation. Bank posting times depend on the original payment
+          provider. Live payment processing and final commercial policies remain
+          unconfigured in this preview.
         </p>
         <p>
           For a missing item, wrong item, food-quality issue, delivery problem

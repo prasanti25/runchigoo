@@ -17,7 +17,10 @@ class AuditSerializer(serializers.ModelSerializer):
         fields = ["id", "actor_email", "action", "target", "metadata", "created_at"]
 
 
-class AuditViewSet(viewsets.ReadOnlyModelViewSet):
+from .admin_access import AdminScopeMixin
+
+
+class AuditViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAdmin]
     serializer_class = AuditSerializer
     queryset = AuditLog.objects.select_related("actor").order_by("-created_at", "-id")
@@ -38,7 +41,7 @@ class ModerationInput(serializers.Serializer):
     reason = serializers.CharField(max_length=500, trim_whitespace=True, allow_blank=False)
 
 
-class ReviewModerationViewSet(viewsets.ReadOnlyModelViewSet):
+class ReviewModerationViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAdmin]
     serializer_class = ModeratedReviewSerializer
     queryset = Review.objects.select_related("restaurant").order_by("-created_at", "-id")

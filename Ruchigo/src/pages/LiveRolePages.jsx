@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import BusinessInsights from "../components/product/BusinessInsights.jsx";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -133,72 +134,13 @@ export function RestaurantEarnings() {
 }
 
 export function RestaurantAnalytics() {
-  const { records, loading, error } = useCollection("/orders/");
-  const itemCounts = useMemo(() => {
-    const counts = new Map();
-    records.forEach((order) =>
-      order.items.forEach((item) =>
-        counts.set(item.name, (counts.get(item.name) || 0) + item.quantity),
-      ),
-    );
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [records]);
-  const delivered = records.filter((item) => item.status === "delivered");
   return (
     <RoleFrame
       type="restaurant"
       title="Analytics"
       subtitle="Metrics calculated from your live order history."
     >
-      <Metrics
-        entries={[
-          ["Orders", records.length],
-          ["Delivered", delivered.length],
-          [
-            "Delivered value",
-            money(delivered.reduce((sum, item) => sum + Number(item.total), 0)),
-          ],
-          [
-            "Cancelled",
-            records.filter((item) => item.status === "cancelled").length,
-          ],
-        ]}
-      />
-      <Notice
-        loading={loading}
-        error={error}
-        empty={!loading && !records.length}
-      />
-      {!!records.length && (
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <section className="rounded-3xl border border-orange-100 bg-white p-6">
-            <h2 className="text-xl font-bold">Order status</h2>
-            {[...new Set(records.map((item) => item.status))].map((status) => (
-              <div
-                key={status}
-                className="mt-4 flex justify-between capitalize"
-              >
-                <span>{label(status)}</span>
-                <strong>
-                  {records.filter((item) => item.status === status).length}
-                </strong>
-              </div>
-            ))}
-          </section>
-          <section className="rounded-3xl border border-orange-100 bg-white p-6">
-            <h2 className="text-xl font-bold">Top ordered items</h2>
-            {itemCounts.map(([name, count]) => (
-              <div key={name} className="mt-4 flex justify-between">
-                <span>{name}</span>
-                <strong>{count}</strong>
-              </div>
-            ))}
-            {!itemCounts.length && (
-              <p className="mt-4 text-gray-500">No item history yet.</p>
-            )}
-          </section>
-        </div>
-      )}
+      <BusinessInsights />
     </RoleFrame>
   );
 }

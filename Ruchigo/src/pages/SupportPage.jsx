@@ -1,18 +1,57 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowRight, Check, LifeBuoy, Plus, Send } from "lucide-react";
+import { ArrowRight, LifeBuoy, Plus } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
 import { EmptyState, ErrorNotice, Modal } from "../components/product/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { dateTime, useRemote } from "../lib/product.js";
+import { orderNumber, statusLabel, useRemote } from "../lib/product.js";
 import { apiRequest } from "../lib/api.js";
+import FoodAssistant from "../components/product/FoodAssistant.jsx";
+import OrderHelp from "../components/product/OrderHelp.jsx";
+import OrderIssueChat from "../components/product/OrderIssueChat.jsx";
+import SupportThread from "../components/product/SupportThread.jsx";
+import { hasAdminScope } from "../lib/adminAccess.js";
+
+const supportTopics = {
+  food_quality: "Food quality issue",
+  missing_item: "Missing or incorrect items",
+  wrong_item: "Incorrect items",
+  refund: "Payment or refund help",
+  payment: "Payment help",
+  privacy: "Privacy request",
+};
 
 export default function SupportPage() {
+  const { user } = useAuth();
+  if (user?.role === "admin" && !hasAdminScope(user, "support"))
+    return (
+      <main className="container customer-main">
+        <h1>Support access required</h1>
+        <p>Ask a superuser to assign the support workspace to your account.</p>
+        <Link className="btn secondary mt-5" to="/admin-dashboard">
+          Back to your workspace
+        </Link>
+      </main>
+    );
+  return <SupportWorkspace />;
+}
+
+function SupportWorkspace() {
   const { token, isAuthenticated, role } = useAuth();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
+  const orderId = /^[1-9]\d*$/.test(params.get("order") || "")
+    ? Number(params.get("order"))
+    : null;
+  const linkedOrder = useRemote(
+    token && orderId && role === "customer" ? `/orders/${orderId}/` : null,
+    token,
+    10000,
+  );
   const [page, setPage] = useState(1);
   const tickets = useRemote(
-    token ? `/support/?page=${page}` : null,
+    token
+      ? `/support/?page=${page}${orderId ? `&order=${orderId}` : ""}`
+      : null,
     token,
     15000,
   );
@@ -25,19 +64,49 @@ export default function SupportPage() {
     15000,
   );
   const [selected, setSelected] = useState(linkedId);
+  useEffect(() => {
+    if (!linkedId) return;
+    const timer = window.setTimeout(() => setSelected(linkedId), 0);
+    return () => window.clearTimeout(timer);
+  }, [linkedId]);
   const privacyRequest = params.get("category") === "privacy";
+  const requestedTopic = Object.hasOwn(supportTopics, params.get("category"))
+    ? params.get("category")
+    : "delivery";
   const [creating, setCreating] = useState(
-    Boolean(params.get("order")) || privacyRequest,
+    params.get("compose") === "1" || privacyRequest,
   );
   const [form, setForm] = useState({
-    category: privacyRequest ? "privacy" : "delivery",
-    subject: privacyRequest ? "Privacy request" : "",
+    category: requestedTopic,
+    subject: supportTopics[requestedTopic] || "",
     message: "",
     order: params.get("order") || "",
   });
-  const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const compose = params.get("compose") === "1";
+  useEffect(() => {
+    if (!compose) return;
+    // Defer to let route state settle when a chat link opens a ticket in-place.
+    const timer = window.setTimeout(() => {
+      setForm((current) => ({
+        ...current,
+        order: orderId || "",
+        category: requestedTopic,
+        subject: supportTopics[requestedTopic] || current.subject,
+      }));
+      setCreating(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [compose, orderId, requestedTopic]);
+  const closeComposer = () => {
+    setCreating(false);
+    if (compose) {
+      const next = new URLSearchParams(params);
+      next.delete("compose");
+      setParams(next, { replace: true });
+    }
+  };
   const list = tickets.data?.results || [];
   const ticket =
     list.find((item) => item.id === selected) ||
@@ -57,16 +126,42 @@ export default function SupportPage() {
       setBusy(false);
     }
   };
+  const created = (result) => {
+    setSelected(result.id);
+    setPage(1);
+    setCreating(false);
+    const next = new URLSearchParams(params);
+    next.delete("compose");
+    next.delete("category");
+    next.set("ticket", result.id);
+    setParams(next, { replace: true });
+    setForm({
+      category: "other",
+      subject: "",
+      message: "",
+      order: orderId || "",
+    });
+  };
+  const issueChat =
+    creating &&
+    linkedOrder.data &&
+    [
+      "food_quality",
+      "missing_item",
+      "wrong_item",
+      "refund",
+      "payment",
+    ].includes(form.category);
   return (
     <>
       <Navbar />
       <main className="customer-main">
         <div className="container">
           <div className="page-heading">
-            <p className="eyebrow">A REAL HAND WHEN YOU NEED ONE</p>
+            <p className="eyebrow">HELP & SUPPORT</p>
             <div className="section-title">
               <div>
-                <h1>Let’s make it right.</h1>
+                <h1>Let’s sort it out.</h1>
                 <p className="muted mt-3">
                   Order questions, missing items or account help. We’re
                   listening.
@@ -83,6 +178,44 @@ export default function SupportPage() {
               )}
             </div>
           </div>
+          <ErrorNotice error={linkedOrder.error} onRetry={linkedOrder.reload} />
+          {linkedOrder.data && (
+            <Link to={`/tracking/${orderId}`} className="support-order-context">
+              <div>
+                <strong>{linkedOrder.data.restaurant_detail?.name}</strong>
+                <span>
+                  Order #{orderNumber(linkedOrder.data)} ·{" "}
+                  {statusLabel(linkedOrder.data.status)}
+                </span>
+              </div>
+              <ArrowRight size={18} />
+            </Link>
+          )}
+          {issueChat ? (
+            <OrderIssueChat
+              key={`${orderId}:${form.category}`}
+              order={linkedOrder.data}
+              category={form.category}
+              busy={busy}
+              error={error}
+              onClose={closeComposer}
+              onSubmit={(body) => mutate("/support/", body, created)}
+            />
+          ) : (
+            linkedOrder.data && (
+              <OrderHelp
+                order={linkedOrder.data}
+                onChoose={(category, subject) => {
+                  setForm({ category, subject, message: "", order: orderId });
+                  setError("");
+                  setCreating(true);
+                }}
+              />
+            )
+          )}
+          {role !== "admin" && !issueChat && !ticket && !linkedId && (
+            <FoodAssistant support orderId={orderId} />
+          )}
           {!isAuthenticated ? (
             <section className="panel">
               <LifeBuoy size={30} color="#7e9467" />
@@ -114,7 +247,7 @@ export default function SupportPage() {
               {tickets.loading && (
                 <p className="muted">Loading your support conversations…</p>
               )}
-              {list.length ? (
+              {list.length || linkedTicket.data ? (
                 <div className="support-layout">
                   <aside className="ticket-list">
                     {list.map((item) => (
@@ -123,7 +256,6 @@ export default function SupportPage() {
                         key={item.id}
                         onClick={() => {
                           setSelected(item.id);
-                          setReply("");
                           setError("");
                         }}
                       >
@@ -134,86 +266,7 @@ export default function SupportPage() {
                       </button>
                     ))}
                   </aside>
-                  {ticket && (
-                    <section className="panel">
-                      <div className="flex-row between">
-                        <div>
-                          <h2>{ticket.subject}</h2>
-                          <p className="muted mt-2">
-                            Ticket #{ticket.id}
-                            {ticket.order && ` · Order #${ticket.order}`}
-                          </p>
-                        </div>
-                        <span className="status-pill">
-                          {ticket.status.replaceAll("_", " ")}
-                        </span>
-                      </div>
-                      {ticket.messages.map((message) => (
-                        <article
-                          key={message.id}
-                          className={`ticket-message ${message.from_support ? "from-support" : ""}`}
-                        >
-                          <p>{message.body}</p>
-                          <small>
-                            {message.from_support
-                              ? "RuchiGo support"
-                              : role === "admin"
-                                ? "Customer"
-                                : "You"}{" "}
-                            · {dateTime(message.created_at)}
-                          </small>
-                        </article>
-                      ))}
-                      <form
-                        className="form-stack"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          mutate(
-                            `/support/${ticket.id}/reply/`,
-                            { message: reply },
-                            () => setReply(""),
-                          );
-                        }}
-                      >
-                        <label className="field">
-                          <span>
-                            {ticket.status === "resolved"
-                              ? "Still need a hand? Reply to reopen."
-                              : "Your reply"}
-                          </span>
-                          <textarea
-                            required
-                            maxLength={3000}
-                            value={reply}
-                            onChange={(event) => setReply(event.target.value)}
-                            placeholder="Add a message…"
-                          />
-                        </label>
-                        <div className="flex-row between">
-                          <button
-                            className="btn primary"
-                            disabled={busy || !reply.trim()}
-                          >
-                            <Send size={15} />
-                            Send reply
-                          </button>
-                          {ticket.status !== "resolved" && (
-                            <button
-                              type="button"
-                              className="text-link"
-                              disabled={busy}
-                              onClick={() =>
-                                mutate(`/support/${ticket.id}/resolve/`, {})
-                              }
-                            >
-                              <Check size={16} />
-                              Mark resolved
-                            </button>
-                          )}
-                        </div>
-                      </form>
-                    </section>
-                  )}
+                  {ticket && <SupportThread key={ticket.id} ticket={ticket} />}
                 </div>
               ) : (
                 !tickets.loading &&
@@ -233,7 +286,6 @@ export default function SupportPage() {
                 disabled={!tickets.data.previous}
                 onClick={() => {
                   setPage(page - 1);
-                  setReply("");
                 }}
               >
                 Previous tickets
@@ -244,7 +296,6 @@ export default function SupportPage() {
                 disabled={!tickets.data.next}
                 onClick={() => {
                   setPage(page + 1);
-                  setReply("");
                 }}
               >
                 Next tickets
@@ -256,7 +307,7 @@ export default function SupportPage() {
             {[
               [
                 "Can I cancel my order?",
-                "Cash orders can be cancelled from Your orders before the restaurant accepts. Prepaid cancellation, refund requests and changes after acceptance require a support ticket.",
+                "Open Your orders → order details to check the cancellation window saved at checkout. Eligible orders show Cancel order. Self-service cancellation is unavailable once cooking starts. If the window has closed or a payment needs review, choose Get help. A refund request is not a completed refund.",
               ],
               [
                 "An item is missing or incorrect.",
@@ -275,8 +326,8 @@ export default function SupportPage() {
           </section>
         </div>
       </main>
-      {creating && isAuthenticated && (
-        <Modal title="Tell us what happened" onClose={() => setCreating(false)}>
+      {creating && isAuthenticated && !issueChat && (
+        <Modal title="Tell us what happened" onClose={closeComposer}>
           <form
             className="form-stack"
             onSubmit={(event) => {
@@ -284,17 +335,7 @@ export default function SupportPage() {
               mutate(
                 "/support/",
                 { ...form, order: form.order || null },
-                (result) => {
-                  setSelected(result.id);
-                  setPage(1);
-                  setCreating(false);
-                  setForm({
-                    category: "other",
-                    subject: "",
-                    message: "",
-                    order: "",
-                  });
-                },
+                created,
               );
             }}
           >
@@ -373,6 +414,21 @@ export default function SupportPage() {
               />
             </label>
             <ErrorNotice error={error} />
+            {form.order &&
+              ["refund", "food_quality", "missing_item", "wrong_item"].includes(
+                form.category,
+              ) && (
+                <label className="check-label">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.request_refund)}
+                    onChange={(event) =>
+                      setForm({ ...form, request_refund: event.target.checked })
+                    }
+                  />
+                  Request a refund review for this order
+                </label>
+              )}
             <button className="btn primary" disabled={busy}>
               {busy ? "Sending…" : "Create support ticket"}
             </button>

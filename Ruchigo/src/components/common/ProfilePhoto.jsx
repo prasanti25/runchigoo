@@ -7,6 +7,7 @@ import UserAvatar from "./UserAvatar.jsx";
 
 function PhotoEditor({ onClose }) {
   const { user, updateProfile } = useAuth();
+  const uploadAvailable = user.can_upload_photo !== false;
   const input = useRef(null);
   const [selection, setSelection] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -54,12 +55,23 @@ function PhotoEditor({ onClose }) {
           user={{ ...user, avatar: selection?.url || user.avatar }}
           className="photo-preview"
         />
-        <p>Choose a photo that feels like you.</p>
-        <small>
-          JPG, PNG or WebP · up to 5 MB · max 4096 × 4096 px.
-          <br />
-          Your photo is cropped to a square and shown in a circle.
-        </small>
+        <p>
+          {uploadAvailable
+            ? "Choose a photo that feels like you."
+            : "Photo uploads are temporarily unavailable."}
+        </p>
+        {uploadAvailable ? (
+          <small>
+            JPG, PNG or WebP · up to 5 MB · max 4096 × 4096 px.
+            <br />
+            Your photo is cropped to a square and shown in a circle.
+          </small>
+        ) : (
+          <small>
+            You can still edit your name and contact details in account
+            settings.
+          </small>
+        )}
         <input
           ref={input}
           className="sr-only"
@@ -67,12 +79,12 @@ function PhotoEditor({ onClose }) {
           accept="image/jpeg,image/png,image/webp"
           aria-label="Choose profile photo"
           onChange={choose}
-          disabled={busy}
+          disabled={busy || !uploadAvailable}
         />
         <button
           type="button"
           className="btn secondary"
-          disabled={busy}
+          disabled={busy || !uploadAvailable}
           onClick={() => input.current?.click()}
         >
           <ImagePlus size={17} />
@@ -91,7 +103,7 @@ function PhotoEditor({ onClose }) {
           <button
             type="button"
             className="btn primary"
-            disabled={!selection || busy}
+            disabled={!selection || busy || !uploadAvailable}
             onClick={() => save()}
           >
             {busy ? "Saving…" : "Save photo"}

@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import BusinessInsights from "../../components/product/BusinessInsights.jsx";
+import OrderOperations from "../../components/product/OrderOperations.jsx";
+import RefundStatus from "../../components/product/RefundStatus.jsx";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -8,8 +11,10 @@ import {
 import { useAuth } from "../../context/AuthContext.jsx";
 import { apiRequest } from "../../lib/api.js";
 import { fetchAllPages } from "../../lib/collections.js";
+import { canOpenAdminRoute, hasAdminScope } from "../../lib/adminAccess.js";
 
 const orderStatuses = [
+  "awaiting_payment",
   "pending",
   "confirmed",
   "preparing",
@@ -103,6 +108,52 @@ function useAnalytics() {
 }
 
 export function AdminDashboard() {
+  const { user } = useAuth();
+  if (hasAdminScope(user, "reports")) return <PlatformOverview />;
+  const links = [
+    ["/admin-orders", "Order operations"],
+    ["/support", "Support conversations"],
+    ["/admin-users", "Manage accounts"],
+    ["/admin-restaurants", "Restaurant partners"],
+    ["/admin-delivery-partners", "Delivery partners"],
+    ["/admin-partner-accounts", "Partner account access"],
+    ["/admin-payments", "Payments & refunds"],
+    ["/admin-offers", "Offers & coupons"],
+    ["/admin-catalog", "Food categories"],
+    ["/admin-reviews", "Review moderation"],
+    ["/admin-delivery-zones", "Delivery areas"],
+    ["/admin-order-policy", "Order policies"],
+    ["/admin-activity", "Activity log"],
+  ].filter(([path]) => canOpenAdminRoute(user, path));
+  return (
+    <AdminFrame
+      title="Your operations workspace"
+      subtitle="Workspaces assigned to your administrator account."
+    >
+      <div className="workspace-quicklinks">
+        {links.map(([path, title]) => (
+          <Link key={path} to={path}>
+            <div>
+              <strong>{title}</strong>
+              <span>Open workspace</span>
+            </div>
+          </Link>
+        ))}
+      </div>
+      {!links.length && (
+        <section className="panel">
+          <h2>Waiting for workspace access</h2>
+          <p className="muted">
+            Your account is active. Ask a superuser to assign the workspaces you
+            need.
+          </p>
+        </section>
+      )}
+    </AdminFrame>
+  );
+}
+
+function PlatformOverview() {
   const { data, loading, error } = useAnalytics();
   const totalUsers =
     data?.users?.reduce((sum, item) => sum + item.count, 0) || 0;
@@ -475,15 +526,34 @@ export function AdminOrders() {
                   <td>
                     <select
                       value={order.status}
+                      aria-label={`Status for order ${String(order.number).slice(0, 8)}`}
+                      disabled={
+                        ["awaiting_payment", "cancelled", "delivered"].includes(
+                          order.status,
+                        ) || Boolean(order.fulfillment_paused_at)
+                      }
                       onChange={(event) => update(order, event.target.value)}
                       className="rounded-lg border border-gray-200 px-3 py-2 capitalize"
                     >
                       {orderStatuses.map((value) => (
-                        <option key={value} value={value}>
+                        <option
+                          key={value}
+                          value={value}
+                          disabled={
+                            orderStatuses.indexOf(value) <
+                              orderStatuses.indexOf(order.status) ||
+                            (value === "cancelled" &&
+                              order.payment?.method === "razorpay" &&
+                              order.payment?.status === "paid")
+                          }
+                        >
                           {label(value)}
                         </option>
                       ))}
                     </select>
+                    <div className="mt-3">
+                      <OrderOperations order={order} onUpdated={reload} />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -496,7 +566,9 @@ export function AdminOrders() {
 }
 
 export function AdminPayments() {
+  const { user } = useAuth();
   const { records, loading, error } = useCollection("/payments/");
+  const refunds = useCollection("/refund-requests/");
   const paidTotal = records
     .filter((item) => item.status === "paid")
     .reduce((sum, item) => sum + Number(item.amount), 0);
@@ -524,6 +596,40 @@ export function AdminPayments() {
         error={error}
         empty={!loading && !records.length}
       />
+      <section className="panel mt-6">
+        <h2>Refund reviews</h2>
+        <p className="muted mt-2">
+          Processed refunds:{" "}
+          {money(
+            refunds.records
+              .filter((row) => row.status === "processed")
+              .reduce((sum, row) => sum + Number(row.approved_amount), 0),
+          )}
+          . Requested and approved amounts are not counted as money returned.
+        </p>
+        <Notice loading={refunds.loading} error={refunds.error} />
+        {refunds.records.map((refund) => (
+          <details key={refund.id} className="refund-queue-item">
+            <summary>
+              Order #{refund.order} ·{" "}
+              {money(refund.approved_amount || refund.requested_amount)} ·{" "}
+              {label(refund.status)}
+            </summary>
+            <RefundStatus refund={refund} onUpdated={refunds.reload} />
+            {hasAdminScope(user, "support") && (
+              <Link
+                className="text-link"
+                to={`/support?order=${refund.order}&ticket=${refund.ticket}`}
+              >
+                Open support conversation
+              </Link>
+            )}
+          </details>
+        ))}
+        {!refunds.loading && !refunds.records.length && (
+          <p className="muted mt-4">No refund reviews yet.</p>
+        )}
+      </section>
       {!!records.length && (
         <div className="mt-6 overflow-x-auto rounded-3xl border border-orange-100 bg-white p-6">
           <table className="w-full min-w-[760px] text-left text-sm">
@@ -543,7 +649,17 @@ export function AdminPayments() {
                   <td className="py-4 font-semibold">#{payment.id}</td>
                   <td>#{payment.order}</td>
                   <td className="uppercase">{payment.method}</td>
-                  <td className="capitalize">{payment.status}</td>
+                  <td className="capitalize">
+                    {payment.status}
+                    {payment.reconciliation_required && (
+                      <Link
+                        className="block text-link"
+                        to={`/support?order=${payment.order}`}
+                      >
+                        Needs payment review
+                      </Link>
+                    )}
+                  </td>
                   <td>{money(payment.amount)}</td>
                   <td>{date(payment.created_at)}</td>
                 </tr>
@@ -567,6 +683,16 @@ export function AdminReports() {
       title="Reports"
       subtitle="Current aggregate platform data; no placeholder forecasts."
     >
+      <BusinessInsights />
+      <div className="section-title mt-8">
+        <div>
+          <h2>All-time platform totals</h2>
+          <p className="muted">
+            These lifetime totals are separate from the date-filtered report
+            above.
+          </p>
+        </div>
+      </div>
       <Notice loading={loading} error={error} />
       {data && (
         <>

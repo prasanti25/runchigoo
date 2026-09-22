@@ -6,14 +6,21 @@ import { EmptyState, ErrorNotice, Modal } from "../components/product/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
 import { dateTime, money, useRemote } from "../lib/product.js";
+import { hasAdminScope } from "../lib/adminAccess.js";
 
-export default function PromotionWorkspace() {
-  const { token, role } = useAuth();
+export default function PromotionWorkspace({ initialTab = "offers" }) {
+  const { token, role, user } = useAuth();
   const admin = role === "admin";
-  const [tab, setTab] = useState("offers");
+  const [tab, setTab] = useState(initialTab);
+  const [restaurantSearch, setRestaurantSearch] = useState("");
   const [page, setPage] = useState(1);
   const remote = useRemote(`/${tab}/?page=${page}`, token);
-  const restaurants = useRemote(admin ? "/restaurants/" : null, token);
+  const restaurants = useRemote(
+    admin && tab !== "categories"
+      ? `/restaurants/lookup/?search=${encodeURIComponent(restaurantSearch)}`
+      : null,
+    token,
+  );
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -108,7 +115,9 @@ export default function PromotionWorkspace() {
       type={role}
       title={
         admin
-          ? "Give people a reason to return."
+          ? tab === "categories"
+            ? "Food categories"
+            : "Give people a reason to return."
           : "Make your next offer count."
       }
       description={
@@ -130,18 +139,25 @@ export default function PromotionWorkspace() {
     >
       {admin && (
         <div className="segmented mb-6" style={{ width: "fit-content" }}>
-          {["offers", "coupons", "categories"].map((key) => (
-            <button
-              key={key}
-              className={tab === key ? "active" : ""}
-              onClick={() => {
-                setTab(key);
-                setPage(1);
-              }}
-            >
-              {key[0].toUpperCase() + key.slice(1)}
-            </button>
-          ))}
+          {["offers", "coupons", "categories"]
+            .filter((key) =>
+              hasAdminScope(
+                user,
+                key === "categories" ? "catalog" : "promotions",
+              ),
+            )
+            .map((key) => (
+              <button
+                key={key}
+                className={tab === key ? "active" : ""}
+                onClick={() => {
+                  setTab(key);
+                  setPage(1);
+                }}
+              >
+                {key[0].toUpperCase() + key.slice(1)}
+              </button>
+            ))}
         </div>
       )}
       <ErrorNotice error={remote.error} onRetry={remote.reload} />
@@ -275,22 +291,48 @@ export default function PromotionWorkspace() {
                   />
                 </label>
                 {["offers", "coupons"].includes(tab) && admin && (
-                  <label className="field">
-                    <span>Restaurant</span>
-                    <select
-                      value={form.restaurant || ""}
-                      onChange={(e) =>
-                        setForm({ ...form, restaurant: e.target.value })
-                      }
-                    >
-                      <option value="">Platform-wide offer</option>
-                      {restaurants.data?.results.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <>
+                    <label className="field">
+                      <span>Find a restaurant</span>
+                      <input
+                        type="search"
+                        placeholder="Search restaurant name or city"
+                        value={restaurantSearch}
+                        maxLength={100}
+                        onChange={(event) =>
+                          setRestaurantSearch(event.target.value)
+                        }
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Restaurant</span>
+                      <select
+                        value={form.restaurant || ""}
+                        onChange={(e) =>
+                          setForm({ ...form, restaurant: e.target.value })
+                        }
+                      >
+                        <option value="">Platform-wide offer</option>
+                        {form.restaurant &&
+                          !restaurants.data?.results.some(
+                            (row) => Number(row.id) === Number(form.restaurant),
+                          ) && (
+                            <option value={form.restaurant}>
+                              Selected restaurant #{form.restaurant}
+                            </option>
+                          )}
+                        {restaurants.data?.results.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <ErrorNotice
+                      error={restaurants.error}
+                      onRetry={restaurants.reload}
+                    />
+                  </>
                 )}
                 {tab === "coupons" && (
                   <div className="form-grid">

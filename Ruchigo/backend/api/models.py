@@ -66,10 +66,18 @@ class Restaurant(TimestampedModel):
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     image = models.ImageField(upload_to="restaurants/", blank=True, null=True)
     is_open = models.BooleanField(default=True)
+    opening_hours = models.JSONField(default=list, blank=True)
     is_approved = models.BooleanField(default=False, db_index=True)
     average_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
     class Meta:
         indexes = [models.Index(fields=["city", "is_approved"])]
+
+
+class AdminAccessGrant(TimestampedModel):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="admin_access_grant")
+    full_access = models.BooleanField(default=False)
+    scopes = models.JSONField(default=list)
+    revision = models.PositiveIntegerField(default=1)
 
 
 class Category(TimestampedModel):
@@ -94,6 +102,8 @@ class MenuItem(TimestampedModel):
     calories = models.PositiveIntegerField(null=True, blank=True)
     tags = models.JSONField(default=list, blank=True)
     add_ons = models.JSONField(default=list, blank=True)
+    option_groups = models.JSONField(default=list, blank=True)
+    stock_quantity = models.PositiveIntegerField(null=True, blank=True)
     class Meta:
         indexes = [models.Index(fields=["restaurant", "is_available"]), models.Index(fields=["name"])]
         ordering = ["-created_at"]
@@ -167,8 +177,13 @@ class Order(TimestampedModel):
     checkout_key = models.UUIDField(null=True, blank=True, unique=True)
     delivery_code = models.CharField(max_length=6, blank=True)
     address_snapshot = models.JSONField(default=dict, blank=True)
+    delivery_quote = models.JSONField(default=dict, blank=True)
+    cancellation_policy_snapshot = models.JSONField(default=dict, blank=True)
+    fulfillment_paused_at = models.DateTimeField(null=True, blank=True)
+    fulfillment_issue = models.ForeignKey("SupportTicket", on_delete=models.PROTECT, null=True, blank=True, related_name="held_orders")
+    payment_expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
     class Meta:
-        indexes = [models.Index(fields=["customer", "status"]), models.Index(fields=["restaurant", "status"])]
+        indexes = [models.Index(fields=["customer", "status"]), models.Index(fields=["restaurant", "status"]), models.Index(fields=["created_at"], name="order_created_report_idx"), models.Index(fields=["restaurant", "created_at"], name="order_kitchen_report_idx")]
         ordering = ["-created_at"]
 
 class OrderItem(models.Model):
@@ -177,6 +192,7 @@ class OrderItem(models.Model):
     name = models.CharField(max_length=150); unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField(); total_price = models.DecimalField(max_digits=10, decimal_places=2)
     add_ons = models.JSONField(default=list, blank=True)
+    stock_deducted = models.BooleanField(default=False)
 
 class Payment(TimestampedModel):
     class Status(models.TextChoices): PENDING="pending", "Pending"; PAID="paid", "Paid"; FAILED="failed", "Failed"; REFUNDED="refunded", "Refunded"
@@ -184,12 +200,47 @@ class Payment(TimestampedModel):
     method = models.CharField(max_length=30, default="cod"); status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
     transaction_id = models.CharField(max_length=120, blank=True); amount = models.DecimalField(max_digits=10, decimal_places=2)
     provider_order_id = models.CharField(max_length=120, blank=True, db_index=True)
+    reconciliation_required = models.BooleanField(default=False, db_index=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["status", "created_at"], name="payment_status_recorded_idx")]
+
+
+class DeliveryPolicy(TimestampedModel):
+    """Singleton. Existing rates remain in use until an admin enables zones."""
+    enabled = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+
+
+class CancellationPolicy(TimestampedModel):
+    cutoff = models.CharField(max_length=20, choices=[("acceptance", "Before restaurant acceptance"), ("preparation", "Before cooking starts")], default="acceptance")
+    allow_prepaid_refunds = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+
+
+class DeliveryZone(TimestampedModel):
+    name = models.CharField(max_length=100)
+    city = models.CharField(max_length=100, db_index=True)
+    is_active = models.BooleanField(default=False)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, validators=[MinValueValidator(-90), MaxValueValidator(90)])
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, validators=[MinValueValidator(-180), MaxValueValidator(180)])
+    radius_km = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(Decimal("0.10")), MaxValueValidator(100)])
+    max_delivery_km = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(Decimal("0.10")), MaxValueValidator(100)])
+    base_fee = models.DecimalField(max_digits=7, decimal_places=2, validators=[MinValueValidator(0), MaxValueValidator(10000)])
+    per_km_fee = models.DecimalField(max_digits=7, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(1000)])
+    included_km = models.DecimalField(max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
+    free_delivery_above = models.DecimalField(max_digits=9, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
+    minimum_order = models.DecimalField(max_digits=9, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    class Meta:
+        ordering = ["city", "id"]
+        constraints = [models.UniqueConstraint(fields=["city", "name"], name="unique_delivery_zone_name")]
 
 class DeliveryAssignment(TimestampedModel):
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="delivery")
     partner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="deliveries")
     pickup_at = models.DateTimeField(null=True, blank=True); delivered_at = models.DateTimeField(null=True, blank=True)
     current_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True); current_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    location_updated_at = models.DateTimeField(null=True, blank=True)
 
 class Notification(TimestampedModel):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
@@ -200,6 +251,22 @@ class Notification(TimestampedModel):
     class Meta:
         indexes = [models.Index(fields=["user", "is_read"], name="notification_user_unread_idx")]
         constraints = [models.UniqueConstraint(fields=["user", "event_key"], name="notification_user_event_unique")]
+
+
+class DeliveryMessage(TimestampedModel):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="delivery_messages")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="sent_delivery_messages")
+    # Snapshot the recipient partnership. A replacement courier must not read
+    # messages exchanged with the previous courier.
+    partner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="delivery_conversations")
+    text = models.CharField(max_length=1000)
+    client_id = models.UUIDField()
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.UniqueConstraint(fields=["order", "author", "client_id"], name="delivery_message_retry_unique")]
+        indexes = [models.Index(fields=["order", "partner", "id"], name="delivery_message_thread_idx")]
 
 class Review(TimestampedModel):
     is_visible = models.BooleanField(default=True)
@@ -247,16 +314,72 @@ class SupportTicket(TimestampedModel):
     category = models.CharField(max_length=30, choices=[(x, x.replace("_", " ").title()) for x in ["missing_item", "wrong_item", "food_quality", "delivery", "payment", "refund", "account", "privacy", "other"]])
     subject = models.CharField(max_length=150)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    affected_items = models.JSONField(default=list, blank=True)
+    feedback_score = models.PositiveSmallIntegerField(null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)])
+    feedback_comment = models.CharField(max_length=1000, blank=True)
+    feedback_at = models.DateTimeField(null=True, blank=True)
+    staff_requested_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-updated_at"]
+
+
+class RefundRequest(TimestampedModel):
+    class Status(models.TextChoices):
+        REQUESTED = "requested", "Requested"
+        REVIEWING = "reviewing", "Under review"
+        APPROVED = "approved", "Approved, awaiting payment processing"
+        PROCESSING = "processing", "Processing"
+        PROCESSED = "processed", "Refund processed"
+        REJECTED = "rejected", "Not approved"
+        FAILED = "failed", "Processing failed"
+    ticket = models.OneToOneField(SupportTicket, on_delete=models.PROTECT, related_name="refund_request")
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="refund_requests")
+    requested_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    approved_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.REQUESTED, db_index=True)
+    decision_note = models.CharField(max_length=1000, blank=True)
+    provider_refund_id = models.CharField(max_length=120, unique=True, null=True, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    automatic_cancellation = models.BooleanField(default=False, db_index=True)
 
 
 class TicketMessage(models.Model):
     ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name="messages")
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     body = models.TextField(max_length=3000)
+    reply_to = models.OneToOneField("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="assistance_reply")
+    client_id = models.UUIDField(null=True, blank=True)
+    actions = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at", "id"]
+        constraints = [models.UniqueConstraint(fields=["ticket", "author", "client_id"], name="unique_ticket_client_message")]
+
+
+class TasteProfile(TimestampedModel):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="taste_profile")
+    vegetarian = models.BooleanField(default=False)
+    dietary_tags = models.JSONField(default=list, blank=True)
+    budget = models.PositiveIntegerField(null=True, blank=True)
+    cuisines = models.JSONField(default=list, blank=True)
+    use_order_history = models.BooleanField(default=True)
+
+
+class RestaurantVisit(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    visited_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "restaurant"], name="unique_restaurant_visit")]
+        ordering = ["-visited_at"]
+
+
+class SavedRestaurant(TimestampedModel):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "restaurant"], name="unique_saved_restaurant")]

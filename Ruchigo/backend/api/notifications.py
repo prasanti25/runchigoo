@@ -14,8 +14,10 @@ def notify(user_ids, *, event, title, message, kind="general", metadata=None):
     ], ignore_conflicts=True, batch_size=250)
 
 
-def admin_ids():
-    return User.objects.filter(role=User.Role.ADMIN, is_active=True).values_list("id", flat=True)
+def admin_ids(scope="support"):
+    from .admin_access import effective_scopes
+    users = User.objects.filter(role=User.Role.ADMIN, is_active=True)
+    return [user.pk for user in users if "*" in (scopes := effective_scopes(user)) or scope in scopes]
 
 
 def notify_order(order):

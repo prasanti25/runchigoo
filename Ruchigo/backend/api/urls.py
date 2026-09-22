@@ -6,6 +6,14 @@ from .product_views import DiscoveryViewSet, SupportViewSet, PublicReviewViewSet
 from .payments import OnlinePaymentViewSet
 from .operations import AuditViewSet, ReviewModerationViewSet
 from .location import LocationViewSet
+from .intelligence import IntelligenceViewSet
+from .insights import InsightsViewSet
+from .serviceability import DeliveryPolicyViewSet, DeliveryZoneViewSet
+from .refunds import RefundViewSet
+from .cancellations import CancellationPolicyViewSet
+from .order_operations import OrderOperationsViewSet
+from .delivery_chat import DeliveryChatViewSet
+from .admin_access import AdminAccessViewSet
 
 router = DefaultRouter()
 router.register("auth", AuthViewSet, basename="auth")
@@ -31,4 +39,13 @@ router.register("restaurant-reviews", PublicReviewViewSet, basename="restaurant-
 router.register("audit-logs", AuditViewSet, basename="audit-log")
 router.register("review-moderation", ReviewModerationViewSet, basename="review-moderation")
 router.register("location", LocationViewSet, basename="location")
+router.register("intelligence", IntelligenceViewSet, basename="intelligence")
+router.register("insights", InsightsViewSet, basename="insights")
+router.register("delivery-policy", DeliveryPolicyViewSet, basename="delivery-policy")
+router.register("delivery-zones", DeliveryZoneViewSet, basename="delivery-zone")
+router.register("refund-requests", RefundViewSet, basename="refund-request")
+router.register("cancellation-policy", CancellationPolicyViewSet, basename="cancellation-policy")
+router.register("order-operations", OrderOperationsViewSet, basename="order-operations")
+router.register("delivery-chat", DeliveryChatViewSet, basename="delivery-chat")
+router.register("admin-access", AdminAccessViewSet, basename="admin-access")
 urlpatterns = [path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"), path("", include(router.urls))]
