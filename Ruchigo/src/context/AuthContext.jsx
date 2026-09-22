@@ -83,13 +83,25 @@ function persistAuth(nextAuth) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
-function clearAuthStorage() {
+function clearAuthStorage(preserveGuestLocation = false) {
   if (typeof window === "undefined") return;
 
   window.localStorage.removeItem(STORAGE_KEY);
   window.localStorage.removeItem(CART_KEY);
   window.localStorage.removeItem(WISHLIST_KEY);
   window.localStorage.removeItem(CACHE_KEY);
+  // A selected doorstep can contain personal address details, not just a city.
+  let keepGuest = false;
+  if (preserveGuestLocation) {
+    try {
+      const selected = JSON.parse(window.localStorage.getItem("ruchigo-delivery-location"));
+      keepGuest = Boolean(selected && !selected.address_id && selected.source !== "saved");
+    } catch { /* Invalid selections are discarded. */ }
+  }
+  if (!keepGuest) {
+    window.localStorage.removeItem("ruchigo-delivery-location");
+    window.dispatchEvent(new Event("ruchigo-location"));
+  }
 }
 
 export function AuthProvider({ children }) {
@@ -123,7 +135,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!auth.token || !auth.user) {
-      clearAuthStorage();
+      clearAuthStorage(true);
       return;
     }
 

@@ -185,37 +185,53 @@ const sections = [
       <>
         <p>
           Customer location access is optional and requires your browser’s
-          permission. The selected city and any coordinates you choose to
-          capture can be saved in this browser. You can choose a city manually;
-          location capture is not a guarantee that an address is serviceable.
-          Selecting Near me sends approximate coordinates to RuchiGo to filter
-          mapped restaurants by straight-line distance, not driving distance.
+          permission. Your confirmed city, pin and address details can be saved
+          in this browser. Signing out clears that browser selection. Choosing
+          Save delivery address stores the details in your signed-in account.
+          You can enter an address or choose a city manually; location capture
+          is not a guarantee that an address is serviceable. Selecting Near me
+          sends approximate coordinates to RuchiGo to filter mapped restaurants
+          by straight-line distance, not driving distance.
         </p>
         <p>
-          Choosing approximate network location sends your network IP address to
-          IPinfo through our backend to suggest a city. This is optional, may be
-          affected by VPNs, and does not establish your delivery address. City
-          lookup results are cached for up to 15 minutes; you must confirm an
-          available city before it is selected. During a local development
-          preview, the estimate may describe the development server’s network.
+          Choosing Use my current location opens the address map and sends the
+          detected pin through RuchiGo to LocationIQ, when configured, to look
+          up a street address. After moving the pin, choose Find address for
+          this pin to request a new lookup. The provider receives coordinates,
+          not your account, order or typed flat details. Lookup results may be
+          cached for up to 24 hours using a hashed coordinate key. Confirm the
+          address before saving; GPS cannot reliably identify a flat, floor or
+          exact entrance. You can keep a pin and fill in missing details if
+          lookup is unavailable.
+        </p>
+        <p>
+          The delivery selector does not use IP/network-based city guesses.
+          Choosing a city manually only filters restaurant browsing; it does not
+          establish a delivery address.
         </p>
         <p>
           A delivery partner can choose to share live coordinates during an
           active assignment. Sharing relies on the page remaining open, the
           connection and browser permission. Stopping sharing stops new updates;
           it does not delete a coordinate already recorded with the delivery.
+          Opening the live map can send the partner’s recently shared pin
+          through RuchiGo to LocationIQ to identify the nearby road/locality.
+          This separate lookup does not generate or predict GPS positions. Road
+          labels refresh less frequently than GPS and disappear when too old or
+          too far from the current pin. Updates are not guaranteed while a
+          device is offline or the delivery page is closed.
         </p>
         <p>
-          The in-app map loads only after you choose Show live map. Map tiles
-          are supplied by OpenStreetMap by default, or the operator’s configured
-          tile provider. The provider receives your IP address, site origin and
-          requested map area. Location markers are drawn in your browser; exact
-          order records are not sent to the tile provider. Tiles can still
-          reveal the approximate area being viewed. Required provider
-          attribution is shown on the map. You can follow order status without
-          opening it. External Google Maps directions separately share the
-          destination query with Google. Browser settings let you revoke
-          location permission.
+          The in-app map loads after you choose Show live map or explicitly open
+          the delivery-address map. Map tiles are supplied by OpenStreetMap by
+          default, or the operator’s configured tile provider. The provider
+          receives your IP address, site origin and requested map area. Location
+          markers are drawn in your browser; exact order records are not sent to
+          the tile provider. Tiles can still reveal the approximate area being
+          viewed. Required provider attribution is shown on the map. You can
+          follow order status without opening it. External Google Maps
+          directions separately share the destination query with Google. Browser
+          settings let you revoke location permission.
         </p>
       </>
     ),

@@ -113,6 +113,14 @@ export async function apiRequest(
   ) {
     window.dispatchEvent(new Event("ruchigo:activity"));
   }
+  if (
+    response.ok &&
+    token &&
+    !["GET", "HEAD"].includes(method.toUpperCase()) &&
+    path.startsWith("/addresses/")
+  ) {
+    window.dispatchEvent(new Event("ruchigo:addresses"));
+  }
   if (response.status === 204) return null;
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {

@@ -40,6 +40,27 @@ from .admin_access import AdminScopeMixin
 class LocationViewSet(AdminScopeMixin, viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
 
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        if self.action == "reverse":
+            response["Cache-Control"] = "private, no-store"
+        return response
+
+    @action(detail=False, methods=["post"], throttle_classes=[LocationThrottle])
+    def reverse(self, request):
+        from .geocoding import ReverseLocationInput, reverse_address
+        payload = ReverseLocationInput(data=request.data)
+        payload.is_valid(raise_exception=True)
+        fields, result = reverse_address(payload.validated_data["latitude"], payload.validated_data["longitude"])
+        if fields:
+            response = Response({"address": fields, "status": "ready"})
+        else:
+            response = Response({"status": result, "detail": "The address couldn’t be found for this pin. You can keep the pin and enter the address details." if result == "no_match" else "Address lookup is temporarily unavailable. You can keep this pin and fill in the address."}, status=429 if result == "rate_limited" else 503)
+            if result == "rate_limited":
+                response["Retry-After"] = "2"
+        response["Cache-Control"] = "private, no-store"
+        return response
+
     @action(detail=False, methods=["get"], url_path="map-config")
     def map_config(self, request):
         # Only a PUBLIC, origin-restricted browser tile URL may be configured.

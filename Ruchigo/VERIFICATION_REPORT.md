@@ -1,5 +1,69 @@
 # Product verification — 23 September 2026
 
+## Delivery address selection — release checks
+
+- Approximate-network selection removed; the location UI no longer calls IPinfo.
+  Full guest manual entry, reload persistence, device-denied/browser-allowed
+  recovery copy, instructions and retry are covered by browser checks.
+- `test:rider-location` passed using isolated local customer/owner/courier/order
+  fixtures and real API/provider calls. Browser-controlled GPS at a public point
+  reached the customer's map in **1,434 ms** in one run; road lookup was actual
+  LocationIQ. Provider failure did not stop movement. Stop-sharing naturally aged
+  into last-shared state, completion removed the marker, and 1440/390/320 views
+  passed without browser errors. The exact temporary fixture was deleted; no
+  existing user order or production business data was changed. This is not a
+  millisecond or production latency SLA.
+- Eight new backend rider tests pass: owned lightweight one-query reads, foreign
+  account denial, real GPS write/read, missing/stale/future/finished/paused guards,
+  independent street-cache cadence, failure isolation and concurrent lookup lock.
+- Device investigation confirmed the actual Chrome profile grants localhost
+  location and the macOS global Location Services switch is on. System Settings
+  was opened. App-specific Chrome OS permission remains user-controlled because
+  macOS rejected `osascript` assistive access. No privacy setting or OS security
+  restriction was bypassed or silently reset.
+
+- Full current backend regression: **303 tests passed on isolated SQLite**,
+  including 11 new reverse-geocoding tests. The previous 292-test PostgreSQL
+  result below remains evidence for the prior release, not this increment.
+- New tests cover explicit consent, coordinate bounds/precision, zero coordinates,
+  provider timeouts/HTTP failures, malformed results, missing configuration,
+  partial addresses/city aliases, cached vs changed pins, throttling, no-store
+  responses, no leaked key/raw provider centroid, and owned-address persistence.
+  All provider responses in these unit tests are mocked.
+- `test:address-location` passed with controlled device GPS and reverse-geocoding
+  fixtures, real local account/address/cart persistence, and actual map tiles.
+  Covers header → map → flat details → explicit save → reload → checkout selection,
+  preservation of typed details, stale request cancellation, manual fallback,
+  denied permission/timeout, low accuracy, touch pinch zoom/expansion, both-way
+  header/checkout selection and logout clearing precise browser selection.
+  1440/768/390/320 layouts passed with no horizontal overflow or browser errors.
+  The final rerun also verified that saving from the header refreshes the open
+  address page immediately, without a manual page reload.
+- Map tests found sub-metre Leaflet pixel rounding on zoom, which invalidated a
+  confirmed address. Resize ownership and a one-metre jitter guard fix that;
+  meaningful pin movement still clears the stale address and requires lookup.
+- The existing coupon/browser suite passed again with the shared address form
+  and checkout changes: zero orders/redemptions, no browser errors, and existing
+  user order 16 unchanged. These suites delete only their unique local fixtures.
+- A LocationIQ credential was subsequently supplied and configured in the
+  ignored, owner-readable local backend environment and Vercel Production Secret.
+  `test:address-location:live` passed against the real local API/provider using a
+  controlled public-landmark GPS point: **Outer Circle, Connaught Place, Delhi,
+  110001**. Actual account saving, flat editing, exact requested coordinates,
+  reload, desktop/mobile map and zero browser-provider credential exposure passed.
+  No provider response is mocked in this suite. No order or production business
+  row was created; its unique local test account/address was deleted afterwards.
+- The live provider omits the territory on this New Delhi result. A guarded
+  India-only Delhi administrative alias fills that field without inventing
+  streets/postcodes or states for foreign/unknown cities. The focused 13-test
+  geocoding suite passed, including both new normalization guards.
+- Missing keys/provider failures still preserve manual entry; no public
+  Nominatim fallback is used. Production deployment verification is pending.
+  No schema migration is required.
+- Final lint/production build, migration-drift check and whitespace validation
+  passed. A scan of 514 source/build files found no configured provider-secret
+  values. The map/picker remains lazy-loaded outside the initial header bundle.
+
 ## Coupon search, thresholds and confirmation
 
 - `test:coupon-savings` passed twice against the local browser/API/database.

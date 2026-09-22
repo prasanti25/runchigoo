@@ -102,6 +102,11 @@ EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 IPINFO_TOKEN = os.getenv("IPINFO_TOKEN", "")
+# Street-address lookup is distinct from approximate IP location. Keep this
+# provider credential server-only in local/hosted environments; never reuse
+# Gemini/IPinfo or VITE_* keys.
+LOCATIONIQ_API_KEY = os.getenv("LOCATIONIQ_API_KEY", "")
+LOCATIONIQ_REGION = os.getenv("LOCATIONIQ_REGION", "us1")
 # Only set to the network ranges of a reverse proxy you operate/trust.
 IPINFO_TRUSTED_PROXY_CIDRS = [value.strip() for value in os.getenv("IPINFO_TRUSTED_PROXY_CIDRS", "").split(",") if value.strip()]
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")

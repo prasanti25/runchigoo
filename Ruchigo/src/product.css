@@ -1804,6 +1804,50 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.location-trigger .location-address-detail {
+  display: block;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: #798071;
+  font-weight: 400;
+}
+.location-saved-addresses {
+  margin-top: 22px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.location-saved-address {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 4px;
+  text-align: left;
+  border-bottom: 1px solid #edf0e8;
+}
+.location-saved-address > svg {
+  flex-shrink: 0;
+  color: #758967;
+}
+.location-saved-address > span {
+  flex: 1;
+  min-width: 0;
+}
+.location-saved-address strong,
+.location-saved-address small {
+  display: block;
+}
+.location-saved-address small {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #798071;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
 .desktop-nav {
   display: flex;
   margin-left: auto;
@@ -4448,6 +4492,10 @@ button:disabled {
   .location-trigger strong {
     font-size: 10px;
     max-width: 116px;
+  }
+  .location-trigger .location-address-detail {
+    max-width: 116px;
+    font-size: 9px;
   }
   .location-trigger small {
     font-size: 6px;
@@ -7312,6 +7360,44 @@ button:disabled {
   overflow: hidden;
   margin-bottom: 20px;
   isolation: isolate;
+}
+.delivery-map-consent .delivery-map-privacy-note {
+  font-size: 11px;
+  max-width: 360px;
+  color: #767d71;
+}
+.rider-place-status {
+  flex-basis: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: #637b50;
+}
+.rider-place-status > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.rider-place-status > div {
+  flex: 1;
+  min-width: 0;
+}
+.rider-place-status strong {
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  color: #29412c;
+}
+.rider-place-status a {
+  color: #767d71;
+  font-size: 10px;
+  text-decoration: underline;
+}
+.rider-place-status small {
+  display: block;
+  line-height: 1.5;
+  margin-top: 4px;
 }
 .delivery-map-heading {
   display: flex;

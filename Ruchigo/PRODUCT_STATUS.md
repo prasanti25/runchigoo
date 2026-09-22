@@ -12,6 +12,39 @@ historical checkpoints, not evidence of the current Vercel alias.
 
 RuchiGo now has a consistent customer experience and operational workspaces connected to its Django API: discovery → menu → cart/coupon → checkout → kitchen states → delivery confirmation → review/support. The implementation is a working product foundation, **not a completed 300-feature commercial platform**.
 
+### Delivery-location increment — live provider verified locally
+
+The desktop-first header/address flow now supports opt-in GPS, an adjustable map
+pin, zoom/expand, street/locality autofill through an optional server-side
+LocationIQ adapter, editable flat/landmark details and explicit account saving.
+The header displays the selected address rather than only the city; header and
+checkout use the same owned saved address. Typed flat details survive pin updates,
+stale lookup responses are ignored, and missing providers keep manual entry
+available. Logout clears the browser's precise address selection.
+
+LocationIQ is configured in the local backend and Vercel Production environment.
+The real-provider browser test passed locally at a public Connaught Place pin:
+street/locality/city/state/postcode autofill, typed flat details, account saving,
+coordinate preservation and reload. No provider response was mocked in that test;
+only device GPS was controlled. Production deployment verification is pending.
+The 303-test SQLite regression and additional Delhi-territory normalization tests
+pass; the 292-test PostgreSQL result above applies to the preceding deployed
+release. No database migration is required.
+
+Approximate IP/network selection has been removed from the customer interface.
+Guests can enter a full address without GPS; manual city filtering is explicitly
+browsing-only. Browser-vs-device permission recovery/retry is implemented.
+The user's actual Chrome localhost setting and global macOS Location Services
+were verified enabled, but app-specific Chrome OS permission could not be read
+or changed because macOS denied the agent accessibility control.
+
+The customer rider map now has a separate one-second owned GPS polling channel,
+with rider writes limited to once per second and stale fixes labelled after
+15 seconds. LocationIQ nearby-road lookup is independent and cached for 30
+seconds, never used to generate positions. The real local cross-browser test
+observed a new GPS fix on the customer map in **1,434 ms**; this is one controlled
+local measurement, not a device/network/production latency guarantee.
+
 The original code already contained JWT/password/email-OTP authentication, role permissions, restaurant/menu/address/cart/order/payment models, basic CRUD and live admin/role pages. It also contained disconnected legacy screens. This pass added the shared design system, rebuilt the principal journeys, added server-side Gemini recommendations and conditional Razorpay checkout, and added integration/regression tests. Older unused pages are preserved but no longer routed where replacements exist.
 
 ## Comparison against the supplied scope

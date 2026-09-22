@@ -22,7 +22,7 @@ export function locationFreshness(value, now = Date.now()) {
     return { fresh: false, label: "Location time unavailable" };
   const age = Math.max(0, now - timestamp);
   return {
-    fresh: age <= 60000,
+    fresh: age <= 15000,
     label:
       age < 10000
         ? "Updated just now"
@@ -30,6 +30,20 @@ export function locationFreshness(value, now = Date.now()) {
           ? `Updated ${Math.floor(age / 1000)}s ago`
           : `Last updated ${Math.floor(age / 60000)} min ago`,
   };
+}
+
+export function nearbyRiderPlace(place, rider, now = Date.now()) {
+  if (!place || !rider || !place.label) return null;
+  const point = coordinates(place.latitude, place.longitude);
+  const age = now - Date.parse(place.looked_up_at);
+  if (!point || !Number.isFinite(age) || age < -5000 || age > 45000)
+    return null;
+  const latitude = ((point[0] + rider[0]) * Math.PI) / 360;
+  const metres = Math.hypot(
+    (point[0] - rider[0]) * 111320,
+    (point[1] - rider[1]) * 111320 * Math.cos(latitude),
+  );
+  return metres <= 200 ? place.label : null;
 }
 
 export function deliveryStageMessage(status) {

@@ -319,7 +319,11 @@ export function TrackingPage() {
                           />
                         }
                       >
-                        <LiveDeliveryMap key={order.id} order={order} />
+                        <LiveDeliveryMap
+                          key={order.id}
+                          order={order}
+                          onStatusChange={reload}
+                        />
                       </Suspense>
                     )}
                   {!order.fulfillment_paused_at && (

@@ -184,8 +184,8 @@ export function ActiveDelivery() {
       async (position) => {
         if (
           sending ||
-          Date.now() - lastSent.current < 10000 ||
-          Date.now() - position.timestamp > 30000
+          Date.now() - lastSent.current < 1000 ||
+          Date.now() - position.timestamp > 10000
         )
           return;
         sending = true;
@@ -215,7 +215,7 @@ export function ActiveDelivery() {
           setSharing(false);
         }
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
     );
     return () => {
       alive = false;
@@ -380,7 +380,9 @@ export function ActiveDelivery() {
               <h2>Keep them in the loop.</h2>
               <p className="muted mt-3">
                 Share your location during this delivery so the customer can
-                follow your progress. Keep this page open.
+                follow your progress. Your shared GPS is also used by our
+                address-lookup service to show the nearby road. Keep this page
+                open; updates depend on device GPS and your connection.
               </p>
               <button
                 className={`btn ${sharing ? "dark" : "secondary"} w-full mt-5`}

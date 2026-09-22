@@ -70,11 +70,77 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 
 `POST /api/v1/discovery/recommendations/` accepts `q`, `city`, `vegetarian`, `budget` and `max_prep` (plus the shared discovery filters). Open/approved restaurant availability, explicit food-type exclusions, diet and per-dish budgets are enforced before Gemini ranks known IDs. Common English phrases such as “veg pizza under 250” are recognised; the controls remain important for precise preferences. Explanations are generated from menu facts, not unchecked model claims. Responses are deduplicated, cached for five minutes and limited to six recommendations. Timeouts/provider errors/missing keys return labelled menu matches. The endpoint is throttled. Three real browser scenarios passed against Gemini 3.5 Flash-Lite on 22 September 2026; 2.5 Flash-Lite rejected new-user requests on this Google project. Model names/diagnostics remain in the API and test report, not the customer UI.
 
-## Approximate IP city suggestions
+## Location selection (no IP-based delivery guesses)
 
-Set `IPINFO_TOKEN` in the **backend** environment. The location modal offers GPS, manual city selection and an explicit optional network-city lookup. `GET /api/v1/location/approximate/` returns a city suggestion, never a token, raw IP or GPS coordinates. The user confirms an available service city before it is saved. Results are cached for 15 minutes; unavailable locations/providers keep manual selection available.
+The customer selector no longer offers or calls approximate network location.
+It uses device GPS/map pins, owned saved addresses or full manual address entry
+(also available to guests). Manual city selection is labelled browsing only,
+not a delivery address. The legacy optional IPinfo API remains for compatibility
+but is not part of the current customer location flow. Provider secrets must
+stay server-side; rotate credentials shared in chat.
 
-In local development, a loopback request is clearly labelled as the development server's public-network estimate. In production, only globally routable verified client addresses are used. If deploying behind a reverse proxy, configure `IPINFO_TRUSTED_PROXY_CIDRS` with **only your actual trusted proxy ranges** and verify forwarding; arbitrary forwarded headers are ignored. Do not configure all internet addresses as trusted. Never put provider secrets in `VITE_*` variables. Rotate keys shared in chat before production.
+## Delivery address map and autofill
+
+The header and shared address form support opt-in device GPS, a movable map pin,
+zoom/expand, and explicit address confirmation. A customer then reviews flat,
+floor/landmark and postal details before saving through the existing address API.
+Saved selection is shared between the header and checkout; signing out clears
+precise address details from browser selection. Editing addresses does not alter
+past order snapshots. IPinfo is only a city hint, not a street-address lookup.
+
+For reverse geocoding, provision **server-side** `LOCATIONIQ_API_KEY` and optional
+`LOCATIONIQ_REGION=us1` (`eu1` is also supported). On Vercel, add the credential to
+Production environment settings and redeploy; locally set it in ignored
+`backend/.env` and restart Django. Do not send a real key in chat, put it in
+`VITE_*`, or reuse Gemini/IPinfo credentials. Verify quota, permitted origins/IPs
+and provider terms for the selected plan before production activation.
+
+`POST /api/v1/location/reverse/` accepts six-decimal `latitude`, `longitude` and
+`consent: true`. It returns normalized street/locality fields without provider
+centroids or credentials. It does not save an address. Lookups have an eight-second
+provider timeout, ten-per-minute application throttle and 24-hour coordinate-hash
+cache. Dragging does not call the provider; explicitly choose **Find address for
+this pin**. There is no automatic public Nominatim or fabricated-address fallback.
+Missing configuration/provider failures keep pin confirmation and manual entry
+available. GPS cannot reliably identify a house entrance, flat or floor.
+
+LocationIQ is now configured server-side locally and in Vercel Production.
+`npm run test:address-location:live` passed against the local app using the real
+provider at a controlled public-landmark GPS point, including address autofill,
+flat editing, database save and reload. Production deployment verification is
+pending for this increment. The separate `npm run test:address-location` suite
+uses controlled provider fixtures for failure/race/permission scenarios. Neither
+suite claims that GPS can identify a flat or that every address is serviceable.
+
+If GPS returns permission denied, check both this site's browser permission and
+the device's Location Services. On macOS, Google Chrome needs its own Location
+Services toggle in addition to the browser's Allow setting. The picker includes
+recovery steps/retry; websites cannot bypass an OS denial. Guest manual addresses
+persist across reload without needing GPS, and account addresses are cleared from
+browser selection on sign-out.
+
+## Live rider location
+
+An opted-in rider sends fresh device GPS at most once per second while the active
+delivery page remains open. The customer map separately polls the owned-order
+`GET /orders/{id}/live-location/` endpoint every second while visible. This is a
+small authenticated read with no geocoding calls or full order history. Smooth
+animation interpolates only between received fixes; it never predicts movement.
+Pickup/completion/pause changes also trigger the main order view to refresh.
+
+`GET /orders/{id}/rider-place/` separately uses LocationIQ to label the nearby
+street/locality, with a 30-second cache/lookup cadence. Old or distant labels
+are hidden. Provider failures never block the GPS channel. A fix older than
+15 seconds is labelled last-shared, and ended/paused deliveries stop revealing
+current coordinates. Guests and unrelated customers/couriers cannot access
+either endpoint. Serverless workers need a shared cache/streaming architecture
+and capacity testing before claiming large-scale realtime guarantees.
+
+`npm run test:rider-location` exercises real local browser GPS writes, customer
+polling, real provider street lookup, stale/stopped/finished cases and responsive
+maps using an exact temporary fixture at public-landmark coordinates. It does not
+track a real person or create production orders. Millisecond GPS/network accuracy
+is not possible; actual update speed depends on hardware, connection and hosting.
 
 ## Payments
 

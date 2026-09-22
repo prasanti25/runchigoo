@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import CouponSavings from "../components/product/CouponSavings.jsx";
+import AddressForm from "../components/product/AddressForm.jsx";
 import {
   ArrowRight,
   Check,
@@ -17,12 +18,17 @@ import {
   EmptyState,
   ErrorNotice,
   FoodImage,
-  Modal,
   VegMark,
 } from "../components/product/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useCart } from "../context/CartContext.jsx";
-import { money, useRemote } from "../lib/product.js";
+import {
+  money,
+  saveDeliveryLocation,
+  useDeliveryLocation,
+  useRemote,
+} from "../lib/product.js";
+import { deliveryLocationFromAddress } from "../lib/addressLocation.js";
 import { apiRequest } from "../lib/api.js";
 import { payForOrder } from "../lib/payments.js";
 
@@ -186,155 +192,16 @@ export function CartPage() {
   );
 }
 
-export function AddressForm({ onSaved, onClose, initial }) {
-  const { token } = useAuth();
-  const [form, setForm] = useState(
-    initial || {
-      label: "Home",
-      line1: "",
-      line2: "",
-      city: "",
-      state: "",
-      postal_code: "",
-    },
-  );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [locating, setLocating] = useState(false);
-  const locate = () => {
-    if (!navigator.geolocation) {
-      setError("Location access is unavailable in this browser.");
-      return;
-    }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setForm((current) => ({
-          ...current,
-          latitude: coords.latitude.toFixed(6),
-          longitude: coords.longitude.toFixed(6),
-        }));
-        setLocating(false);
-        setError("");
-      },
-      () => {
-        setLocating(false);
-        setError(
-          "Allow location access, then try again while you’re at this delivery address.",
-        );
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
-  };
-  const save = async (event) => {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      const address = await apiRequest(
-        initial?.id ? `/addresses/${initial.id}/` : "/addresses/",
-        {
-          token,
-          method: initial?.id ? "PATCH" : "POST",
-          body: form,
-        },
-      );
-      onSaved(address);
-      onClose();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-  return (
-    <Modal title="Where should we bring your food?" onClose={onClose}>
-      <form onSubmit={save} className="form-stack">
-        <div className="address-pin-controls">
-          <button
-            type="button"
-            className="btn secondary"
-            disabled={locating}
-            onClick={locate}
-          >
-            <MapPin size={16} />
-            {locating
-              ? "Finding your location…"
-              : form.latitude != null
-                ? "Update location pin"
-                : "Use my current location"}
-          </button>
-          <p className="form-help">
-            {form.latitude != null
-              ? "Location pin saved. Make sure it matches the address below."
-              : "At this address? Add your location pin for delivery checks and rider directions."}
-          </p>
-        </div>
-        <label className="field">
-          <span>Save as</span>
-          <select
-            value={form.label}
-            onChange={(event) =>
-              setForm({ ...form, label: event.target.value })
-            }
-          >
-            <option>Home</option>
-            <option>Work</option>
-            <option>Other</option>
-          </select>
-        </label>
-        {[
-          ["line1", "House / flat number and street", true],
-          ["line2", "Landmark or additional details", false],
-        ].map(([key, label, required]) => (
-          <label className="field" key={key}>
-            <span>{label}</span>
-            <input
-              required={required}
-              value={form[key]}
-              maxLength={255}
-              onChange={(event) =>
-                setForm({ ...form, [key]: event.target.value })
-              }
-            />
-          </label>
-        ))}
-        <div className="form-grid">
-          {[
-            ["city", "City"],
-            ["state", "State"],
-            ["postal_code", "Postal code"],
-          ].map(([key, label]) => (
-            <label className="field" key={key}>
-              <span>{label}</span>
-              <input
-                required
-                value={form[key]}
-                maxLength={key === "postal_code" ? 20 : 100}
-                onChange={(event) =>
-                  setForm({ ...form, [key]: event.target.value })
-                }
-              />
-            </label>
-          ))}
-        </div>
-        <ErrorNotice error={error} />
-        <button className="btn primary" disabled={saving}>
-          {saving ? "Saving address…" : "Save delivery address"}
-        </button>
-      </form>
-    </Modal>
-  );
-}
+export { default as AddressForm } from "../components/product/AddressForm.jsx";
 
 export function CheckoutPage() {
   const { token, user } = useAuth();
+  const deliveryLocation = useDeliveryLocation();
   const { cartItems, couponCode, loadCart } = useCart();
   const navigate = useNavigate();
   const addresses = useRemote("/addresses/", token);
   const paymentOptions = useRemote("/online-payments/", token);
   const [paymentMethod, setPaymentMethod] = useState("cod");
-  const [selected, setSelected] = useState(null);
   const [notes, setNotes] = useState("");
   const [contactless, setContactless] = useState(false);
   const [addAddress, setAddAddress] = useState(false);
@@ -344,7 +211,9 @@ export function CheckoutPage() {
   const key = useRef(crypto.randomUUID());
   const list = addresses.data?.results || [];
   const addressId =
-    selected || list.find((a) => a.is_default)?.id || list[0]?.id;
+    list.find((a) => a.id === deliveryLocation.address_id)?.id ||
+    list.find((a) => a.is_default)?.id ||
+    list[0]?.id;
   const [quoteState, setQuoteState] = useState({});
   const [quoteVersion, setQuoteVersion] = useState(0);
   const quoteKey = JSON.stringify({
@@ -470,7 +339,11 @@ export function CheckoutPage() {
                             type="radio"
                             name="delivery-address"
                             checked={addressId === address.id}
-                            onChange={() => setSelected(address.id)}
+                            onChange={() => {
+                              saveDeliveryLocation(
+                                deliveryLocationFromAddress(address),
+                              );
+                            }}
                           />
                           {address.label}
                           {address.is_default && (
@@ -603,8 +476,7 @@ export function CheckoutPage() {
       {addAddress && (
         <AddressForm
           onClose={() => setAddAddress(false)}
-          onSaved={(address) => {
-            setSelected(address.id);
+          onSaved={() => {
             addresses.reload();
           }}
         />

@@ -12,10 +12,12 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useRemote } from "../../lib/product.js";
+import { useAuth } from "../../context/AuthContext.jsx";
 import {
   coordinates,
   deliveryStageMessage,
   locationFreshness,
+  nearbyRiderPlace,
   positionOnRoute,
   travelBearing,
 } from "../../lib/tracking.js";
@@ -48,18 +50,52 @@ export default function LiveDeliveryMap({
   mapLabel = "Delivery map",
   arrival = null,
   statusTitle = null,
+  onStatusChange,
 }) {
+  const { token } = useAuth();
   const [enabled, setEnabled] = useState(initiallyEnabled);
   const [now, setNow] = useState(Date.now);
   const recenterRef = useRef(null);
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 5000);
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
-  const delivery = order.delivery;
-  const rider = ["assigned", "out_for_delivery"].includes(order.status)
-    ? coordinates(delivery?.current_latitude, delivery?.current_longitude)
-    : null;
+  const streaming =
+    enabled &&
+    token &&
+    !route &&
+    Number.isInteger(Number(order.id)) &&
+    ["assigned", "out_for_delivery"].includes(order.status) &&
+    !order.fulfillment_paused_at;
+  // Lightweight GPS reads have their own channel. A slow geocoder never delays
+  // rider movement, and the local demonstration never calls an actual order.
+  const live = useRemote(
+    streaming ? `/orders/${order.id}/live-location/` : null,
+    token,
+    1000,
+  );
+  const status = live.data?.order_status || order.status;
+  useEffect(() => {
+    if (
+      live.data &&
+      (live.data.order_status !== order.status ||
+        live.data.paused !== Boolean(order.fulfillment_paused_at))
+    )
+      onStatusChange?.();
+  }, [live.data, order.status, order.fulfillment_paused_at, onStatusChange]);
+  const liveTime = Date.parse(live.data?.delivery?.location_updated_at);
+  const orderTime = Date.parse(order.delivery?.location_updated_at);
+  const delivery = live.data
+    ? Number.isFinite(liveTime) &&
+      Number.isFinite(orderTime) &&
+      liveTime < orderTime
+      ? order.delivery
+      : live.data.delivery
+    : order.delivery;
+  const rider =
+    ["assigned", "out_for_delivery"].includes(status) && !live.data?.paused
+      ? coordinates(delivery?.current_latitude, delivery?.current_longitude)
+      : null;
   const kitchen = coordinates(
     order.restaurant_detail?.latitude,
     order.restaurant_detail?.longitude,
@@ -69,11 +105,19 @@ export default function LiveDeliveryMap({
     order.delivery_address_detail?.longitude,
   );
   const freshness = locationFreshness(delivery?.location_updated_at, now);
+  const places = useRemote(
+    streaming && rider && freshness.fresh
+      ? `/orders/${order.id}/rider-place/`
+      : null,
+    token,
+    30000,
+  );
+  const nearby = nearbyRiderPlace(places.data?.place, rider, now);
   const hasPoints = rider || kitchen || home;
   const config = useRemote(
     enabled && hasPoints ? "/location/map-config/" : null,
   );
-  const [stageTitle, stageDescription] = deliveryStageMessage(order.status);
+  const [stageTitle, stageDescription] = deliveryStageMessage(status);
   return (
     <section
       className={`live-delivery-card ${arrival ? "has-arrival" : ""}`}
@@ -87,7 +131,7 @@ export default function LiveDeliveryMap({
           <strong>
             {statusTitle ||
               (rider && freshness.fresh
-                ? order.status === "out_for_delivery"
+                ? status === "out_for_delivery"
                   ? "Your order is on the way"
                   : "Your delivery partner is assigned"
                 : rider
@@ -122,6 +166,10 @@ export default function LiveDeliveryMap({
           />
           <h3>From the kitchen to your door</h3>
           <p>{stageDescription}</p>
+          <p className="delivery-map-privacy-note">
+            Opening the map also looks up your partner’s nearby road from their
+            shared GPS.
+          </p>
           <button
             className="btn dark"
             type="button"
@@ -186,6 +234,36 @@ export default function LiveDeliveryMap({
             {rider ? freshness.label : stageDescription}
             {rider && !freshness.fresh ? ". Waiting for a new GPS update." : ""}
           </p>
+          {enabled && rider && (
+            <div className="rider-place-status" aria-live="polite">
+              <Navigation size={16} />
+              <div>
+                <strong>
+                  {nearby
+                    ? `${freshness.fresh ? "Near" : "Last shared near"} ${nearby}`
+                    : freshness.fresh
+                      ? "Live GPS connected"
+                      : "Waiting for your partner’s GPS"}
+                </strong>
+                <small>
+                  {live.error
+                    ? "Connection interrupted. Showing the last received position."
+                    : freshness.fresh
+                      ? "Position updates automatically while this map is open."
+                      : "The marker stays at the last shared position."}
+                </small>
+              </div>
+              {nearby && (
+                <a
+                  href="https://locationiq.com/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Search by LocationIQ
+                </a>
+              )}
+            </div>
+          )}
           {enabled && !home && (
             <small>
               Your saved address has no map pin. Address details are shown

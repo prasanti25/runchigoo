@@ -28,6 +28,7 @@ from .cancellations import CancellationInput, cancel_customer_order
 from .order_operations import require_active_fulfillment
 from .admin_access import AdminScopeMixin, effective_scopes
 from .dashboard_filters import OrderDashboardFilter, PaymentDashboardFilter
+from .rider_location import LiveLocationThrottle, RiderPlaceThrottle, live_location, rider_place
 
 def tokens_for(user):
     refresh = RefreshToken.for_user(user)
@@ -449,7 +450,11 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
         if getattr(self, "swagger_fake_view", False): return Order.objects.none()
         if self.request.user.role == User.Role.CUSTOMER and self.action in ["list", "retrieve"]:
             expire_unpaid_orders(customer_id=self.request.user.pk)
-        user=self.request.user; qs=Order.objects.select_related("restaurant", "customer", "delivery_address", "payment", "delivery", "review").prefetch_related("items", "events", "refund_requests").order_by("-created_at")
+        user=self.request.user
+        if self.action in {"live_location", "rider_place"}:
+            qs = Order.objects.select_related("delivery").only("id", "status", "fulfillment_paused_at", "customer_id", "restaurant_id", "delivery__id", "delivery__current_latitude", "delivery__current_longitude", "delivery__location_updated_at").order_by("-created_at")
+        else:
+            qs=Order.objects.select_related("restaurant", "customer", "delivery_address", "payment", "delivery", "review").prefetch_related("items", "events", "refund_requests").order_by("-created_at")
         if user.is_superuser or user.role==User.Role.ADMIN: return qs
         if user.role==User.Role.RESTAURANT: return qs.filter(restaurant__owner=user).exclude(status=Order.Status.AWAITING_PAYMENT)
         if user.role==User.Role.DELIVERY:
@@ -458,6 +463,14 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(delivery__partner=user)
             return qs.filter(status__in=[Order.Status.ASSIGNED, Order.Status.OUT]) if self.request.query_params.get("active") == "true" else qs
         return qs.filter(customer=user)
+
+    @action(detail=True, methods=["get"], url_path="live-location", throttle_classes=[LiveLocationThrottle])
+    def live_location(self, request, pk=None):
+        return Response(live_location(self.get_object()))
+
+    @action(detail=True, methods=["get"], url_path="rider-place", throttle_classes=[RiderPlaceThrottle])
+    def rider_place(self, request, pk=None):
+        return Response(rider_place(self.get_object()))
 
     @action(detail=False, methods=["get"])
     def summary(self, request):

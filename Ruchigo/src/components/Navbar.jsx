@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -6,7 +6,6 @@ import {
   ChevronDown,
   Compass,
   Heart,
-  Globe2,
   HelpCircle,
   LocateFixed,
   LogOut,
@@ -24,28 +23,35 @@ import {
   useDeliveryLocation,
   useRemote,
 } from "../lib/product.js";
-import { Modal } from "./product/UI.jsx";
+import { ErrorNotice, Modal } from "./product/UI.jsx";
+import LoadingScreen from "./common/LoadingScreen.jsx";
+import { deliveryLocationFromAddress } from "../lib/addressLocation.js";
 import BrandLogo from "./common/BrandLogo.jsx";
 import AssistantIcon from "./common/AssistantIcon.jsx";
 import UserAvatar from "./common/UserAvatar.jsx";
 import NotificationBell from "./common/NotificationBell.jsx";
-import { apiRequest } from "../lib/api.js";
 import { canOpenAdminRoute } from "../lib/adminAccess.js";
 
+const AddressLocationPicker = lazy(
+  () => import("./product/AddressLocationPicker.jsx"),
+);
+const AddressForm = lazy(() => import("./product/AddressForm.jsx"));
+
 export default function Navbar() {
-  const { user, role, isAuthenticated, logout } = useAuth();
+  const { user, role, token, isAuthenticated, logout } = useAuth();
   const { cartItems } = useCart();
   const location = useDeliveryLocation();
   const navigate = useNavigate();
   const [locationOpen, setLocationOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [addressDraft, setAddressDraft] = useState(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [city, setCity] = useState("");
-  const [geoMessage, setGeoMessage] = useState("");
-  const [locating, setLocating] = useState(false);
-  const [networkBusy, setNetworkBusy] = useState(false);
-  const [networkLocation, setNetworkLocation] = useState(null);
-  const [networkError, setNetworkError] = useState("");
   const { data } = useRemote(locationOpen ? "/discovery/" : null);
+  const savedAddresses = useRemote(
+    locationOpen && token && role === "customer" ? "/addresses/" : null,
+    token,
+  );
   const count = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const partner = isAuthenticated && role !== "customer";
   const dashboard = partner ? `/${role}-dashboard` : "/profile";
@@ -53,47 +59,9 @@ export default function Navbar() {
     saveDeliveryLocation({ city: name, label: name || "Explore all cities" });
     setLocationOpen(false);
   };
-  const locateNetwork = async () => {
-    setNetworkBusy(true);
-    setNetworkError("");
-    setNetworkLocation(null);
-    try {
-      setNetworkLocation(await apiRequest("/location/approximate/"));
-    } catch (error) {
-      setNetworkError(error.message);
-    } finally {
-      setNetworkBusy(false);
-    }
-  };
   const locate = () => {
-    if (!navigator.geolocation) {
-      setGeoMessage(
-        "Your browser doesn’t support location. Choose a city below.",
-      );
-      return;
-    }
-    setLocating(true);
-    setGeoMessage("");
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        saveDeliveryLocation({
-          ...location,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-        setGeoMessage(
-          "Location saved. Choose your delivery city below to see available restaurants.",
-        );
-        setLocating(false);
-      },
-      () => {
-        setGeoMessage(
-          "Location permission wasn’t granted. You can choose your city below.",
-        );
-        setLocating(false);
-      },
-      { timeout: 10000, maximumAge: 300000 },
-    );
+    setLocationOpen(false);
+    setPickerOpen(true);
   };
   return (
     <>
@@ -104,12 +72,32 @@ export default function Navbar() {
           </Link>
           <button
             className="location-trigger"
+            title={
+              location.formatted_address ||
+              location.label ||
+              "Choose delivery location"
+            }
+            aria-label={`Delivery location: ${location.label || location.city || "Choose your location"}`}
             onClick={() => setLocationOpen(true)}
           >
             <MapPin size={17} />
             <span>
-              <small>DELIVERING TO</small>
-              <strong>{location.city || "Choose your city"}</strong>
+              <small>
+                {location.city && !location.confirmed
+                  ? "EXPLORING"
+                  : "DELIVERING TO"}
+              </small>
+              <strong>
+                {location.locality ||
+                  location.label ||
+                  location.city ||
+                  "Choose your location"}
+              </strong>
+              {location.formatted_address && (
+                <span className="location-address-detail">
+                  {location.formatted_address}
+                </span>
+              )}
             </span>
             <ChevronDown size={14} />
           </button>
@@ -311,84 +299,92 @@ export default function Navbar() {
       )}
       {locationOpen && (
         <Modal
-          title="Where’s your next meal?"
+          title="Where should we deliver?"
           onClose={() => setLocationOpen(false)}
         >
           <p className="muted">
-            Choose a city to discover restaurants serving your area.
+            Set your doorstep location or choose a saved address.
           </p>
-          <button
-            className="btn secondary w-full mt-5"
-            onClick={locate}
-            disabled={locating || networkBusy}
-          >
+          <button className="btn secondary w-full mt-5" onClick={locate}>
             <LocateFixed size={18} />
-            {locating ? "Finding your location…" : "Use my current location"}
-          </button>
-          <button
-            className="location-network-button"
-            onClick={locateNetwork}
-            disabled={networkBusy || locating}
-          >
-            <Globe2 size={18} />
-            <span>
-              {networkBusy
-                ? "Estimating your city…"
-                : "Use approximate network location"}
-            </span>
-            <ArrowRight size={16} />
+            Use my current location
           </button>
           <p className="location-privacy-note">
-            Your network can help suggest a city. It may not be exact,
-            especially when using a VPN.{" "}
-            <Link to="/privacy#location">How location is used</Link>
+            Allow device location to open the map and look up your address. Your
+            pin is shared with our address-lookup service; nothing is saved
+            until you confirm.
           </p>
-          {networkError && (
-            <p className="error-notice" role="alert">
-              {networkError}
-            </p>
-          )}
-          {networkLocation && (
-            <div className="network-location-result" role="status">
-              <span className="eyebrow">SUGGESTED CITY</span>
-              <strong>
-                {networkLocation.city}
-                {networkLocation.region &&
-                networkLocation.region.toLowerCase() !==
-                  networkLocation.city.toLowerCase()
-                  ? `, ${networkLocation.region}`
-                  : ""}
-              </strong>
-              <p>This is an approximate location. Please confirm your city.</p>
-              {networkLocation.service_city ? (
+          {role === "customer" && token && (
+            <div className="location-saved-addresses">
+              <div className="flex-row between">
+                <p className="eyebrow">SAVED ADDRESSES</p>
                 <button
-                  className="btn primary"
-                  onClick={() => selectCity(networkLocation.service_city)}
+                  className="text-link"
+                  onClick={() => {
+                    setLocationOpen(false);
+                    setAddressDraft({});
+                  }}
                 >
-                  Use {networkLocation.service_city}
+                  Add new
+                </button>
+              </div>
+              {savedAddresses.loading ? (
+                <LoadingScreen inline message="Loading your addresses…" />
+              ) : (
+                <ErrorNotice
+                  error={savedAddresses.error}
+                  onRetry={savedAddresses.reload}
+                />
+              )}
+              {(savedAddresses.data?.results || []).map((address) => (
+                <button
+                  className="location-saved-address"
+                  key={address.id}
+                  onClick={() => {
+                    saveDeliveryLocation(deliveryLocationFromAddress(address));
+                    setLocationOpen(false);
+                  }}
+                >
+                  <MapPin size={19} />
+                  <span>
+                    <strong>{address.label}</strong>
+                    <small>
+                      {[address.line1, address.line2, address.city]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </small>
+                  </span>
                   <ArrowRight size={16} />
                 </button>
-              ) : (
-                <p>
-                  No open RuchiGo restaurants are currently listed in this city.
-                  Choose an available city below to explore.
+              ))}
+              {savedAddresses.data?.count === 0 && (
+                <p className="form-help">
+                  Save your home or work address for quicker checkout.
                 </p>
+              )}
+              {savedAddresses.data?.next && (
+                <Link
+                  className="text-link"
+                  to="/addresses"
+                  onClick={() => setLocationOpen(false)}
+                >
+                  Manage all saved addresses
+                </Link>
               )}
             </div>
           )}
-          {geoMessage && (
-            <p className="form-help" role="status">
-              {geoMessage}
-            </p>
-          )}
           <label className="field mt-5">
-            <span>Search available cities</span>
+            <span>Browse restaurants by city</span>
             <input
               placeholder="Type a city…"
               value={city}
               onChange={(event) => setCity(event.target.value)}
             />
           </label>
+          <p className="form-help">
+            City selection is for browsing only. Delivery needs your full
+            address and entrance pin.
+          </p>
           <div className="city-list">
             {(data?.cities || [])
               .filter((name) => name.toLowerCase().includes(city.toLowerCase()))
@@ -411,6 +407,51 @@ export default function Navbar() {
             </button>
           </div>
         </Modal>
+      )}
+      {pickerOpen && (
+        <Suspense
+          fallback={
+            <Modal
+              title="Set your delivery location"
+              onClose={() => setPickerOpen(false)}
+            >
+              <LoadingScreen inline message="Opening your map…" />
+            </Modal>
+          }
+        >
+          <AddressLocationPicker
+            initial={location}
+            onClose={() => setPickerOpen(false)}
+            onManual={() => {
+              setPickerOpen(false);
+              setAddressDraft({});
+            }}
+            onConfirm={(next) => {
+              setPickerOpen(false);
+              if (role === "customer" && token) setAddressDraft(next);
+              else saveDeliveryLocation(next);
+            }}
+          />
+        </Suspense>
+      )}
+      {addressDraft && (
+        <Suspense
+          fallback={
+            <Modal
+              title="Add delivery details"
+              onClose={() => setAddressDraft(null)}
+            >
+              <LoadingScreen inline message="Opening address details…" />
+            </Modal>
+          }
+        >
+          <AddressForm
+            localOnly={!(role === "customer" && token)}
+            prefill={addressDraft}
+            onSaved={savedAddresses.reload}
+            onClose={() => setAddressDraft(null)}
+          />
+        </Suspense>
       )}
     </>
   );

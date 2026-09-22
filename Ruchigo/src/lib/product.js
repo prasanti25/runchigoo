@@ -38,6 +38,11 @@ export function useRemote(path, token, poll = 0) {
   const [result, setResult] = useState({ key: "", data: null, error: "" });
   const key = `${path}|${token || ""}|${version}`;
   useEffect(() => {
+    if (!path?.startsWith("/addresses/")) return;
+    window.addEventListener("ruchigo:addresses", reload);
+    return () => window.removeEventListener("ruchigo:addresses", reload);
+  }, [path, reload]);
+  useEffect(() => {
     if (!path) return;
     const controller = new AbortController();
     let inFlight = false;

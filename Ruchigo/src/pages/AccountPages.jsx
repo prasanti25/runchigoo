@@ -31,6 +31,8 @@ import {
   money,
   orderNumber,
   statusLabel,
+  saveDeliveryLocation,
+  useDeliveryLocation,
   useRemote,
 } from "../lib/product.js";
 import { AddressForm } from "./CheckoutPages.jsx";
@@ -297,6 +299,7 @@ export function WishlistPage() {
 
 export function AddressesPage() {
   const { token } = useAuth();
+  const selectedLocation = useDeliveryLocation();
   const [page, setPage] = useState(1);
   const remote = useRemote(`/addresses/?page=${page}`, token);
   const [editing, setEditing] = useState(null);
@@ -311,6 +314,8 @@ export function AddressesPage() {
         method: remove ? "DELETE" : "PATCH",
         ...(remove ? {} : { body: { is_default: true } }),
       });
+      if (remove && selectedLocation.address_id === address.id)
+        saveDeliveryLocation({});
       remote.reload();
       toast.success(remove ? "Address removed" : "Default address updated");
     } catch (error) {

@@ -56,8 +56,13 @@ Decorative photos, labels and icons are static assets, not business records.
   development default, **not** an approved commercial policy. Configured delivery
   zones can supply database-backed delivery rates. Do not use this preview for
   real commercial ordering until policies and operations are approved.
-- Gemini/IPinfo/payment/database secrets belong in server environment variables,
+- Gemini/IPinfo/LocationIQ/payment/database secrets belong in server environment variables,
   never `VITE_*`, browser responses, source control or public screenshots.
+- Optional LocationIQ reverse geocoding receives only a customer-authorized pin,
+  not their account/order or typed flat details. Normalized lookup results are
+  cached for up to 24 hours under a hashed coordinate key. Confirmed account
+  addresses remain in PostgreSQL; the selected address also persists in the
+  browser until changed or signed out. A provider lookup alone creates no address.
 
 ## Inspecting data
 
