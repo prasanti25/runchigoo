@@ -7,7 +7,12 @@
   recovery copy and retry are covered by browser checks. A locally verified
   follow-up removes the OS troubleshooting box and unproven permission-off claim.
   Denied/unavailable/timeout errors recover through the same-dialog retry;
-  manual entry remains available. This UI follow-up is not yet deployed.
+  manual entry remains available. The follow-up is deployed as runtime `f209ebc`,
+  deployment `dpl_Ago7SVJc58x64rFAH7Aa1eE3KCKd` at https://runchigoo.vercel.app.
+  Production public-only live-provider acceptance passed again, including guest
+  details and browser save/reload. Separate live smoke checks passed for denied
+  access, silent callback timeout, manual entry and absence of OS instructions.
+  No production business writes occurred.
 - `test:rider-location` passed using isolated local customer/owner/courier/order
   fixtures and real API/provider calls. Browser-controlled GPS at a public point
   reached the customer's map in **1,434 ms** and **1,453 ms** in two runs; road lookup was actual
@@ -54,6 +59,10 @@
   passed again with controlled public-landmark GPS and real address persistence.
   Lint/build and whitespace checks passed; a 454-file source/build scan found
   no configured provider-secret values.
+- The user's current address result still lacks a mapped street and cannot infer
+  a flat/floor. The latest screenshot confirms locality display, not exact street
+  coverage. Whether the pin matches the user's actual building remains a user
+  confirmation question; no neighboring road or building number was substituted.
 
 - Full current backend regression: **313 tests passed on isolated SQLite**,
   including 13 reverse-geocoding and 8 rider-location tests. The previous 292-test PostgreSQL

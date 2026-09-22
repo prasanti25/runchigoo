@@ -41,7 +41,12 @@ the definite permission-off diagnosis; the picker keeps a short error, retry and
 manual entry. All users, including guests, confirm their pin then edit delivery
 details. Missing provider streets are not invented, and flat numbers remain
 user-entered. A locality-only result no longer gets a generic warning when its
-required address fields are present. This follow-up is not yet deployed.
+required address fields are present. This follow-up is deployed at
+https://runchigoo.vercel.app, runtime `f209ebc`, deployment
+`dpl_Ago7SVJc58x64rFAH7Aa1eE3KCKd`. Public-only live acceptance passed: real
+LocationIQ lookup, desktop/mobile map, guest delivery details and browser save,
+reload persistence, denied recovery and a silent-callback deadline. No production
+business records were created.
 The user's Chrome localhost permission and global macOS Location Services were
 verified enabled; their screenshot also confirms Chrome's OS toggle is on.
 Read-only process inspection found Chrome running framework 153.0.8010.48 while
@@ -56,6 +61,10 @@ The picker and nearby search now share that method with a 15-second application
 deadline and cleanup on completion, timeout, replacement and close. No privacy
 setting was bypassed, no extension was disabled, and no IP-derived pin was used.
 Temporary diagnostics were removed; no device coordinates were recorded by them.
+The user's current lookup contains a locality but no mapped street. Exact street
+coverage is not resolved by the GPS fix; flat/floor information cannot be inferred
+from a pin. Confirmation of whether the pin itself matches the user's building
+is still needed before distinguishing device accuracy from address-data coverage.
 
 The customer rider map now has a separate one-second owned GPS polling channel,
 with rider writes limited to once per second and stale fixes labelled after
