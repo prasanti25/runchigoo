@@ -1,5 +1,23 @@
 # Product verification — 23 September 2026
 
+## Support release — production deployed and public smoke verified
+
+- Runtime `a2236cd` is on `prasanti25/runchigoo` main. Deployment
+  `dpl_Dkh32o15fXX6rPVG1sUCMLPZv27g` is READY, aliased to
+  https://runchigoo.vercel.app. Deployment URL:
+  https://runchigoo-d8hfmai9x-shxvaayys-projects.vercel.app.
+- Final full backend rerun: **342 tests passed**, 86.5s on isolated SQLite.
+  Final support browser suite passes, including invalid-link isolation and
+  lost-response retry after waiting for the request to finish. Lint/build pass.
+- Production public-only browser smoke passes at `/support?view=mine` on
+  1440/390/320px. The delivered bundle includes ownership-based viewer context,
+  quick-help requests and separate shopper/staff tabs. Guest sign-in is visible;
+  anonymous support list/detail and dispatch reads return 401. Zero browser
+  errors and zero production business writes.
+- Authenticated replies, choices, financial safeguards and staff workflows were
+  verified against the actual local API, not by sending test messages to live
+  customer tickets. No production schema migration was needed.
+
 ## Support replies and operational ownership — local release verification
 
 - Backend: **342 tests pass on isolated SQLite**, including administrator-as-

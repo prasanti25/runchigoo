@@ -12,7 +12,7 @@ historical checkpoints, not evidence of the current Vercel alias.
 
 RuchiGo now has a consistent customer experience and operational workspaces connected to its Django API: discovery → menu → cart/coupon → checkout → kitchen states → delivery confirmation → review/support. The implementation is a working product foundation, **not a completed 300-feature commercial platform**.
 
-### Support conversations and fulfilment ownership — release candidate
+### Support conversations and fulfilment ownership — deployed
 
 Support now distinguishes the requester from staff using server-derived ticket
 ownership, not their account role. Administrators shopping for themselves get
@@ -38,8 +38,12 @@ No schema migration, new provider credential or change to the Google demo.
 Verification: 342 isolated SQLite backend tests; real local support conversation,
 cancellation and dashboard-queue browser regressions; desktop/320px/390px views;
 lint/build and migration drift checks. Final support fixture: local order 52,
-ticket 55; user order 16 unchanged and no real refunds submitted. Main push and
-production deployment are pending at this checkpoint.
+ticket 55; user order 16 unchanged and no real refunds submitted. Runtime
+`a2236cd` is pushed to main and deployed at https://runchigoo.vercel.app
+(`dpl_Dkh32o15fXX6rPVG1sUCMLPZv27g`). Public-only production checks confirm the
+updated support bundle, guest sign-in flow, 1440/390/320px layout, protected
+support/dispatch endpoints and no browser errors or business writes. Authenticated
+conversations were exercised locally, not by modifying production customer tickets.
 
 ### Google rider map and public demo — deployed and verified
 
