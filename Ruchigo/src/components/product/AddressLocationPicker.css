@@ -46,33 +46,90 @@
   z-index: 500;
   top: 50%;
   left: 50%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transform: translate(-50%, -100%);
+  width: 0;
+  height: 0;
   pointer-events: none;
 }
-.address-map-center-pin span {
-  white-space: nowrap;
-  background: #263c2b;
-  color: white;
-  border-radius: 8px;
-  padding: 7px 11px;
-  margin-bottom: 5px;
-  font-size: 11px;
-  font-weight: 650;
-  box-shadow: 0 3px 12px #13210f24;
-}
-.address-map-center-pin svg {
-  filter: drop-shadow(0 3px 2px #17261238);
-}
-.address-map-center-pin i {
+.address-pin-label {
   position: absolute;
-  bottom: -3px;
-  width: 9px;
-  height: 4px;
-  background: #253e264d;
+  left: 0;
+  bottom: 70px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  background: #fffffff5;
+  color: #263c2b;
+  border: 1px solid #fff;
+  border-radius: 20px;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
+  box-shadow:
+    0 3px 6px #2434200a,
+    0 6px 18px #24342018;
+  transform: translateX(-50%);
+  transition: transform 180ms ease;
+}
+.address-pin-label i {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
+  background: #ee632d;
+  box-shadow: 0 0 0 3px #ee632d15;
+}
+.address-pin-artwork {
+  position: absolute;
+  z-index: 2;
+  left: -24px;
+  bottom: -3px; /* SVG tip at y=61 aligns with the map's exact centre. */
+  max-width: none;
+  filter: drop-shadow(0 3px 2px #5a26051c) drop-shadow(0 8px 10px #8a40142b);
+  transition: transform 180ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.address-pin-ground,
+.address-pin-shadow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.address-pin-ground {
+  width: 29px;
+  height: 15px;
+  border: 1px solid #eb6b3240;
+  background: #fff6ec9e;
+}
+.address-pin-shadow {
+  width: 15px;
+  height: 6px;
+  background: #91411e50;
+  transition:
+    width 180ms ease,
+    opacity 180ms ease;
+}
+.address-map-center-pin.is-moving .address-pin-artwork {
+  transform: translateY(-9px);
+}
+.address-map-center-pin.is-moving .address-pin-label {
+  transform: translate(-50%, -9px);
+}
+.address-map-center-pin.is-moving .address-pin-shadow {
+  width: 21px;
+  opacity: 0.55;
+}
+@media (prefers-reduced-motion: reduce) {
+  .address-map-center-pin * {
+    transition: none;
+  }
+  .address-map-center-pin.is-moving .address-pin-artwork {
+    transform: none;
+  }
+  .address-map-center-pin.is-moving .address-pin-label {
+    transform: translateX(-50%);
+  }
 }
 .address-map-expand {
   position: absolute;

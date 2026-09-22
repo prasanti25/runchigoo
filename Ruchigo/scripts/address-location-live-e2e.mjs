@@ -134,6 +134,7 @@ try {
     address.line1,
   );
   await expect(picker.locator(".leaflet-tile-loaded").first()).toBeVisible();
+  await expect(picker.locator(".address-pin-artwork")).toBeVisible();
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
     assert.ok(
@@ -145,14 +146,21 @@ try {
     });
   }
   await picker
-    .getByRole("button", { name: "Confirm location", exact: true })
+    .getByRole("button", { name: "Add delivery details", exact: true })
     .click();
   if (local) {
     const form = page.getByRole("dialog", {
       name: "Where should we bring your food?",
     });
-    await expect(form.getByLabel("House / flat number and street")).toHaveValue(
-      address.line1,
+    await expect(form.getByLabel("Street / area")).toHaveValue(address.line1);
+    await expect(form.getByLabel("House / flat / building")).toHaveValue("");
+    await form
+      .getByRole("button", { name: "Save delivery address", exact: true })
+      .click();
+    await expect(form).toBeVisible();
+    assert.equal(
+      (await api("/addresses/", { token: auth.tokens.access })).count,
+      0,
     );
     await expect(form.getByLabel("City", { exact: true })).toHaveValue(
       address.city,
@@ -163,9 +171,8 @@ try {
     await expect(form.getByLabel("Postal code")).toHaveValue(
       address.postal_code,
     );
-    await form
-      .getByLabel("House / flat number and street")
-      .fill(`QA flat, ${address.line1}`);
+    await form.getByLabel("House / flat / building").fill("QA flat");
+    await form.getByLabel("Floor (optional)").fill("2nd");
     await form.getByRole("button", { name: "Save delivery address" }).click();
     await expect(form).not.toBeVisible();
     await expect(page.locator(".location-trigger")).toContainText(
@@ -176,6 +183,7 @@ try {
     assert.equal(saved.results[0].latitude, "28.631500");
     assert.equal(saved.results[0].longitude, "77.216700");
     assert.equal(saved.results[0].line1, `QA flat, ${address.line1}`);
+    assert.ok(saved.results[0].line2.includes("Floor: 2nd"));
     await page.reload();
     await expect(page.locator(".location-trigger")).toContainText(
       `Home · QA flat, ${address.line1}`,
@@ -189,12 +197,14 @@ try {
     const form = page.getByRole("dialog", {
       name: "Where should we bring your food?",
     });
-    await expect(form.getByLabel("House / flat number and street")).toHaveValue(
-      address.line1,
-    );
+    await expect(form.getByLabel("Street / area")).toHaveValue(address.line1);
+    await expect(form.getByLabel("House / flat / building")).toHaveValue("");
     await form
-      .getByLabel("House / flat number and street")
-      .fill(`QA unit, ${address.line1}`);
+      .getByRole("button", { name: "Use this address", exact: true })
+      .click();
+    await expect(form).toBeVisible();
+    await form.getByLabel("House / flat / building").fill("QA unit");
+    await form.getByLabel("Floor (optional)").fill("Ground");
     await form
       .getByRole("button", { name: "Use this address", exact: true })
       .click();

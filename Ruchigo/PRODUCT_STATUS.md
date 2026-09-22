@@ -63,8 +63,18 @@ setting was bypassed, no extension was disabled, and no IP-derived pin was used.
 Temporary diagnostics were removed; no device coordinates were recorded by them.
 The user's current lookup contains a locality but no mapped street. Exact street
 coverage is not resolved by the GPS fix; flat/floor information cannot be inferred
-from a pin. Confirmation of whether the pin itself matches the user's building
-is still needed before distinguishing device accuracy from address-data coverage.
+from a pin. The user subsequently confirmed the pin is correct; address-data
+coverage, not pin placement, is the remaining limit for automatic street text.
+
+The next increment adds a blank required house/flat/building input, separate
+street/area and optional floor fields for new addresses. House and floor details
+are composed into the existing API address lines so saved addresses and order
+snapshots remain compatible; legacy edits preserve their existing free-form text.
+Rider directions now prefer saved restaurant/customer coordinates rather than
+re-geocoding an area label. The pin uses a custom orange vector marker, centred
+target, drag lift/settle feedback and reduced-motion support. Local browser tests,
+18 device/address unit tests, actual provider persistence and rider checks pass;
+rollout of this final doorstep/pin increment is pending.
 
 The customer rider map now has a separate one-second owned GPS polling channel,
 with rider writes limited to once per second and stale fixes labelled after

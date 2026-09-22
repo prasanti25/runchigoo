@@ -1,5 +1,31 @@
 # Product verification — 23 September 2026
 
+## Complete doorstep details and modern pin — local checks
+
+- New-address forms require a blank user-entered house/flat/building field,
+  separate from geocoded street/area; floor is optional. A locality alone cannot
+  pass the new form. House, floor and landmark persist in the existing API address
+  lines and remain compatible with order snapshots. Legacy free-form edits are
+  preserved; no schema change or backend-wide address policy change is claimed.
+- `test:location-device`: 18 tests pass, including six new address-composition,
+  whitespace, required house, optional floor, length-limit and legacy-edit checks.
+- `test:address-location` passes at 1440/768/390/320: invalid account/guest saves
+  remain open without writes, real account save/reload and guest browser persistence
+  retain house/floor/pin, and existing edit/checkout/permission flows still pass.
+- The custom orange SVG pin has a precise centre target, lift/settle drag feedback,
+  no continuous animation and reduced-motion handling. Tests verify drag state,
+  less-than-one-pixel centre alignment, touch pinch/expansion and no paid lookups
+  during map movement. Desktop and mobile screenshots were visually inspected.
+- Actual local LocationIQ acceptance passed again with controlled public-landmark
+  GPS, street auto-fill, user-entered house/floor and real API persistence.
+- Rider browser tests pass with complete house/floor text visible and both
+  directions links targeting saved coordinates, not an area-name search.
+  The two unique local fixture orders 41/42 were deleted; existing user orders
+  were not modified. Measured update delays (98/95 ms) reflect local polling phase,
+  not a millisecond GPS or production latency guarantee.
+- Full lint/build and whitespace validation passed. This final doorstep/pin
+  increment is not yet deployed.
+
 ## Delivery address selection — release checks
 
 - Approximate-network selection removed; the location UI no longer calls IPinfo.
@@ -61,8 +87,8 @@
   no configured provider-secret values.
 - The user's current address result still lacks a mapped street and cannot infer
   a flat/floor. The latest screenshot confirms locality display, not exact street
-  coverage. Whether the pin matches the user's actual building remains a user
-  confirmation question; no neighboring road or building number was substituted.
+  coverage. The user subsequently confirmed the pin is correct; no neighboring
+  road or building number was substituted.
 
 - Full current backend regression: **313 tests passed on isolated SQLite**,
   including 13 reverse-geocoding and 8 rider-location tests. The previous 292-test PostgreSQL

@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { apiRequest } from "../../lib/api.js";
 import {
   addressDraft,
+  deliveryAddressPayload,
   deliveryLocationFromAddress,
   locationPoint,
 } from "../../lib/addressLocation.js";
@@ -32,6 +33,11 @@ export default function AddressForm({
   const [error, setError] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pinUpdated, setPinUpdated] = useState(false);
+  const [house, setHouse] = useState("");
+  const [floor, setFloor] = useState("");
+  // Existing free-form addresses remain editable without guessing how to split
+  // a user's previously saved house/street/floor text.
+  const separateDetails = !initial;
   // A map lookup must never silently discard a typed flat number or landmark.
   const editedFields = useRef(new Set(initial ? ["line1", "line2"] : []));
   const change = (key, value) => {
@@ -43,11 +49,15 @@ export default function AddressForm({
     setSaving(true);
     setError("");
     try {
+      const payload = deliveryAddressPayload(
+        form,
+        separateDetails ? { house, floor } : undefined,
+      );
       const address = localOnly
-        ? form
+        ? payload
         : await apiRequest(
             initial?.id ? `/addresses/${initial.id}/` : "/addresses/",
-            { token, method: initial?.id ? "PATCH" : "POST", body: form },
+            { token, method: initial?.id ? "PATCH" : "POST", body: payload },
           );
       saveDeliveryLocation({
         ...deliveryLocationFromAddress(address),
@@ -112,7 +122,7 @@ export default function AddressForm({
             {pinUpdated
               ? "Pin updated. Your typed details were kept — please check they match this location."
               : locationPoint(form)
-                ? "Check your building pin, then add your flat, floor or landmark below."
+                ? "Your pin is selected. Add your house or flat so your rider knows the exact doorstep."
                 : "Find your address on the map. You can also enter it manually below."}
           </p>
           <p className="form-help">
@@ -134,8 +144,40 @@ export default function AddressForm({
             )}
           </select>
         </label>
+        {separateDetails && (
+          <>
+            <label className="field">
+              <span>House / flat / building</span>
+              <input
+                required
+                value={house}
+                maxLength={90}
+                placeholder="e.g. Flat 204, Rose Apartments"
+                onChange={(event) => setHouse(event.target.value)}
+              />
+              <small className="form-help">
+                Required for delivery. This cannot be detected from the map.
+              </small>
+            </label>
+            <label className="field">
+              <span>Floor (optional)</span>
+              <input
+                value={floor}
+                maxLength={40}
+                placeholder="e.g. Ground, 2nd or basement"
+                onChange={(event) => setFloor(event.target.value)}
+              />
+            </label>
+          </>
+        )}
         {[
-          ["line1", "House / flat number and street", true],
+          [
+            "line1",
+            separateDetails
+              ? "Street / area"
+              : "House / flat number and street",
+            true,
+          ],
           ["line2", "Landmark or additional details", false],
         ].map(([key, label, required]) => (
           <label className="field" key={key}>

@@ -291,7 +291,7 @@ export default function AddressLocationPicker({
             disabled={!point || resolving || locating}
             onClick={confirm}
           >
-            {address ? "Confirm location" : "Use this pin"}
+            Add delivery details
             <ArrowRight size={17} />
           </button>
           <button

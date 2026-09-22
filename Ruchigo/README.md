@@ -129,6 +129,13 @@ VPN without disabling privacy controls. `npm run test:location-device` checks
 these paths. All users confirm a pin then review editable delivery details;
 unmapped streets and flat numbers are never guessed.
 
+New-address forms require a separate house/flat/building entry and provide an
+optional floor field. These are stored in the existing address lines together
+with street/area and landmark, preserving API/order-snapshot compatibility.
+Rider directions use saved pin coordinates when available, falling back to the
+complete address only for legacy records without a pin. The custom vector marker
+stays anchored at the map centre and honours reduced-motion preferences.
+
 ## Live rider location
 
 An opted-in rider sends fresh device GPS at most once per second while the active

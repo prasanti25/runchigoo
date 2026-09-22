@@ -14,6 +14,7 @@ import { WorkspaceFrame, Metrics } from "../components/product/Workspace.jsx";
 import { EmptyState, ErrorNotice, Modal } from "../components/product/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
+import { locationPoint } from "../lib/addressLocation.js";
 import OrderOperations from "../components/product/OrderOperations.jsx";
 import DeliveryChat from "../components/product/DeliveryChat.jsx";
 import { dateTime, money, orderNumber, useRemote } from "../lib/product.js";
@@ -270,6 +271,8 @@ export function ActiveDelivery() {
         .filter(Boolean)
         .join(", ")
     : "";
+  const customerPin = locationPoint(order?.delivery_address_detail);
+  const restaurantPin = locationPoint(order?.restaurant_detail);
   return (
     <WorkspaceFrame
       type="delivery"
@@ -304,7 +307,9 @@ export function ActiveDelivery() {
                     target="_blank"
                     rel="noreferrer"
                     href={maps(
-                      `${order.restaurant_detail?.address}, ${order.restaurant_detail?.city}`,
+                      restaurantPin
+                        ? `${restaurantPin.latitude},${restaurantPin.longitude}`
+                        : `${order.restaurant_detail?.address}, ${order.restaurant_detail?.city}`,
                     )}
                   >
                     <Navigation size={16} />
@@ -322,7 +327,11 @@ export function ActiveDelivery() {
                     className="btn secondary mt-4"
                     target="_blank"
                     rel="noreferrer"
-                    href={maps(customerAddress)}
+                    href={maps(
+                      customerPin
+                        ? `${customerPin.latitude},${customerPin.longitude}`
+                        : customerAddress,
+                    )}
                   >
                     <Navigation size={16} />
                     Directions to customer

@@ -252,6 +252,19 @@ try {
   const map = picker.getByRole("region", {
     name: "Choose your delivery pin on the map",
   });
+  const pin = picker.locator(".address-map-center-pin");
+  const mapBox = await map.boundingBox();
+  await page.mouse.move(mapBox.x + 130, mapBox.y + 210);
+  await page.mouse.down();
+  await page.mouse.move(mapBox.x + 170, mapBox.y + 185, { steps: 8 });
+  await expect(pin).toHaveClass(/is-moving/);
+  await page.mouse.up();
+  await expect(pin).not.toHaveClass(/is-moving/);
+  assert.equal(
+    requests.length,
+    initialLookups,
+    "Dragging the pin must not trigger paid lookups",
+  );
   await map.click({ position: { x: 190, y: 110 } });
   await expect(
     picker.getByRole("heading", { name: "Your selected pin" }),
@@ -267,6 +280,20 @@ try {
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: width >= 768 ? 1000 : 844 });
     await noOverflow(page);
+    const alignment = await map.evaluate((element) => {
+      const canvas = element.getBoundingClientRect();
+      const marker = element.parentElement
+        .querySelector(".address-map-center-pin")
+        .getBoundingClientRect();
+      return {
+        x: Math.abs(marker.x - canvas.x - canvas.width / 2),
+        y: Math.abs(marker.y - canvas.y - canvas.height / 2),
+      };
+    });
+    assert.ok(
+      alignment.x < 1 && alignment.y < 1,
+      "Pin target must stay centred on the selected coordinates",
+    );
     await expect(
       picker.getByRole("heading", { name: "Connaught Place" }),
     ).toBeVisible();
@@ -277,18 +304,29 @@ try {
       });
   }
   await picker
-    .getByRole("button", { name: "Confirm location", exact: true })
+    .getByRole("button", { name: "Add delivery details", exact: true })
     .click();
   let form = page.getByRole("dialog", {
     name: "Where should we bring your food?",
   });
-  await expect(form.getByLabel("House / flat number and street")).toHaveValue(
+  await expect(form.getByLabel("Street / area")).toHaveValue(
     "Parliament Street",
   );
   await expect(form.getByLabel("City", { exact: true })).toHaveValue("Delhi");
-  await form
-    .getByLabel("House / flat number and street")
-    .fill("Flat 4, Parliament Street");
+  await expect(form.getByLabel("House / flat / building")).toHaveValue("");
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
+    await noOverflow(page);
+    if (width !== 320)
+      await page.screenshot({
+        path: `/private/tmp/ruchigo-delivery-details-${width}.png`,
+      });
+  }
+  await form.getByRole("button", { name: "Save delivery address" }).click();
+  await expect(form).toBeVisible();
+  assert.equal((await api("/addresses/", { token })).count, 1);
+  await form.getByLabel("House / flat / building").fill("Flat 4");
+  await form.getByLabel("Floor (optional)").fill("2nd");
   await form.getByLabel("Save as").selectOption("Work");
   await form.getByRole("button", { name: "Save delivery address" }).click();
   await expect(form).not.toBeVisible();
@@ -304,6 +342,8 @@ try {
   const saved = addresses.results.find((row) => row.label === "Work");
   assert.equal(saved.latitude, selectedPoint.latitude);
   assert.equal(saved.longitude, selectedPoint.longitude);
+  assert.equal(saved.line1, "Flat 4, Parliament Street");
+  assert.ok(saved.line2.includes("Floor: 2nd"));
   await page.reload();
   await expect(page.locator(".location-trigger")).toContainText(
     "Work · Flat 4",
@@ -322,11 +362,14 @@ try {
     picker.getByRole("heading", { name: "Connaught Place" }),
   ).toBeVisible();
   await picker
-    .getByRole("button", { name: "Confirm location", exact: true })
+    .getByRole("button", { name: "Add delivery details", exact: true })
     .click();
   form = page.getByRole("dialog", { name: "Where should we bring your food?" });
   await expect(form.getByLabel("House / flat number and street")).toHaveValue(
     "Flat 4, Parliament Street",
+  );
+  await expect(form.getByLabel("Landmark or additional details")).toHaveValue(
+    /Floor: 2nd/,
   );
   await form.getByRole("button", { name: "Save delivery address" }).click();
   await expect(form).not.toBeVisible();
@@ -398,11 +441,9 @@ try {
     "temporarily unavailable",
   );
   await picker
-    .getByRole("button", { name: "Use this pin", exact: true })
+    .getByRole("button", { name: "Add delivery details", exact: true })
     .click();
-  await expect(form.getByLabel("House / flat number and street")).toHaveValue(
-    "",
-  );
+  await expect(form.getByLabel("Street / area")).toHaveValue("");
   await expect(form.getByLabel("City", { exact: true })).toHaveValue("");
   await form.getByRole("button", { name: "Close dialog" }).click();
   responseMode = "partial";
@@ -448,7 +489,10 @@ try {
           : "too long",
     );
     await expect(
-      deniedPicker.getByRole("button", { name: "Use this pin", exact: true }),
+      deniedPicker.getByRole("button", {
+        name: "Add delivery details",
+        exact: true,
+      }),
     ).toBeDisabled();
     await noOverflow(testPage);
     await expect(deniedPicker.locator("details")).toHaveCount(0);
@@ -477,7 +521,7 @@ try {
     await expect(deniedPicker.getByRole("alert")).toHaveCount(0);
     await expect(
       deniedPicker.getByRole("button", {
-        name: "Confirm location",
+        name: "Add delivery details",
         exact: true,
       }),
     ).toBeEnabled();
@@ -488,9 +532,8 @@ try {
       name: "Where should we bring your food?",
     });
     await expect(manual).toBeVisible();
-    await manual
-      .getByLabel("House / flat number and street")
-      .fill("Manual fixture, Outer Circle");
+    await manual.getByLabel("House / flat / building").fill("Manual fixture");
+    await manual.getByLabel("Street / area").fill("Outer Circle");
     await manual.getByLabel("City", { exact: true }).fill("Delhi");
     await manual.getByLabel("State", { exact: true }).fill("Delhi");
     await manual.getByLabel("Postal code").fill("110001");
@@ -519,17 +562,26 @@ try {
     "Some address details are missing",
   );
   await guestPicker
-    .getByRole("button", { name: "Confirm location", exact: true })
+    .getByRole("button", { name: "Add delivery details", exact: true })
     .click();
   const guestForm = guestPage.getByRole("dialog", {
     name: "Where should we bring your food?",
   });
-  await expect(
-    guestForm.getByLabel("House / flat number and street"),
-  ).toHaveValue("Connaught Place");
+  await expect(guestForm.getByLabel("Street / area")).toHaveValue(
+    "Connaught Place",
+  );
   await guestForm
-    .getByLabel("House / flat number and street")
-    .fill("QA unit 4, Connaught Place");
+    .getByRole("button", { name: "Use this address", exact: true })
+    .click();
+  await expect(guestForm).toBeVisible();
+  assert.equal(
+    await guestPage.evaluate(() =>
+      localStorage.getItem("ruchigo-delivery-location"),
+    ),
+    null,
+  );
+  await guestForm.getByLabel("House / flat / building").fill("QA unit 4");
+  await guestForm.getByLabel("Floor (optional)").fill("Ground");
   await guestForm
     .getByLabel("Landmark or additional details")
     .fill("Public test landmark");
@@ -548,6 +600,8 @@ try {
   );
   assert.equal(Number(savedGuest.latitude), point.latitude);
   assert.equal(Number(savedGuest.longitude), point.longitude);
+  assert.equal(savedGuest.line1, "QA unit 4, Connaught Place");
+  assert.equal(savedGuest.line2, "Floor: Ground, Public test landmark");
   await guest.close();
   responseMode = "ready";
   // Nearby discovery must use the same bounded location acquisition.
@@ -604,6 +658,10 @@ try {
   touchPage.on("pageerror", (error) => errors.push(error.message));
   await touchPage.goto(base);
   const touchPicker = await openPicker(touchPage);
+  await expect(touchPicker.locator(".address-pin-artwork")).toHaveCSS(
+    "transition-duration",
+    "0s",
+  );
   await expect(touchPicker).toContainText("radius of about 450 m");
   await touchPicker.getByRole("button", { name: "Expand address map" }).click();
   const touchMap = touchPicker.getByRole("region");
@@ -656,6 +714,8 @@ try {
         "Same-dialog GPS retry recovery without OS troubleshooting copy",
         "Broken one-shot wrapper and silent callback deadline",
         "Guest pin confirmation opens editable delivery details",
+        "Required house/flat, optional floor and actual persisted address lines",
+        "Modern pin drag state, coordinate alignment and reduced motion",
         "Locality-only result and nearby discovery",
         "Approximate network location removed",
         "Touch pinch zoom and low accuracy warning",

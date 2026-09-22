@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { currentPosition } from "../src/lib/addressLocation.js";
+import {
+  currentPosition,
+  deliveryAddressPayload,
+} from "../src/lib/addressLocation.js";
 
 const coords = { latitude: 28.6315, longitude: 77.2167, accuracy: 18 };
 function device(t, custom) {
@@ -138,4 +141,80 @@ test("a broken cleanup wrapper does not leave the promise pending", async (t) =>
   const result = currentPosition();
   d.requests[0].ok({ coords });
   assert.deepEqual(await result, { ...coords, source: "gps" });
+});
+
+const draft = {
+  line1: "Public test area",
+  line2: "Near main gate",
+  city: "Delhi",
+  state: "Delhi",
+  postal_code: "110001",
+  latitude: "28.631500",
+  longitude: "77.216700",
+};
+test("geocoded area alone cannot complete a new delivery address", () => {
+  assert.throws(
+    () => deliveryAddressPayload(draft, { house: "", floor: "2" }),
+    /house, flat number or building/,
+  );
+  assert.throws(
+    () => deliveryAddressPayload(draft, { house: "   " }),
+    /house, flat number or building/,
+  );
+});
+test("house, street, floor and landmark are stored in rider-visible address lines", () => {
+  const address = deliveryAddressPayload(draft, {
+    house: " Flat 204 ",
+    floor: " 2nd ",
+  });
+  assert.equal(address.line1, "Flat 204, Public test area");
+  assert.equal(address.line2, "Floor: 2nd, Near main gate");
+  assert.equal(address.latitude, draft.latitude);
+  assert.equal(address.longitude, draft.longitude);
+  assert.equal(draft.line1, "Public test area");
+});
+test("optional floor is not invented and a named building is accepted", () => {
+  const address = deliveryAddressPayload(
+    { ...draft, line2: "" },
+    { house: "Public library" },
+  );
+  assert.equal(address.line1, "Public library, Public test area");
+  assert.equal(address.line2, "");
+});
+test("blank street or required address fields are rejected", () => {
+  assert.throws(
+    () => deliveryAddressPayload({ ...draft, line1: " " }, { house: "12" }),
+    /street or area/,
+  );
+  assert.throws(
+    () =>
+      deliveryAddressPayload({ ...draft, postal_code: " " }, { house: "12" }),
+    /postal code/,
+  );
+});
+test("composed lines respect database limits without truncating delivery details", () => {
+  assert.throws(
+    () =>
+      deliveryAddressPayload(
+        { ...draft, line1: "a".repeat(255) },
+        { house: "12" },
+      ),
+    /255 characters/,
+  );
+  assert.throws(
+    () =>
+      deliveryAddressPayload(
+        { ...draft, line2: "a".repeat(250) },
+        { house: "12", floor: "Ground" },
+      ),
+    /255 characters/,
+  );
+});
+test("legacy address editing preserves free-form house and floor text", () => {
+  const saved = {
+    ...draft,
+    line1: "Flat 12, Test street",
+    line2: "Floor: 2nd, Near gate",
+  };
+  assert.deepEqual(deliveryAddressPayload(saved), saved);
 });

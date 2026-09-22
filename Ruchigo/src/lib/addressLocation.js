@@ -62,6 +62,33 @@ export function deliveryLocationFromAddress(address) {
   };
 }
 
+// Keep the API's existing address lines compatible with saved addresses and
+// immutable order snapshots. New addresses require a user-entered destination;
+// geocoded locality/street alone must not become a complete delivery address.
+export function deliveryAddressPayload(form, details) {
+  const address = { ...form };
+  for (const key of ["line1", "line2", "city", "state", "postal_code"])
+    address[key] = String(form[key] || "").trim();
+  if (details) {
+    const house = String(details.house || "").trim();
+    const floor = String(details.floor || "").trim();
+    if (!house)
+      throw new Error("Add your house, flat number or building name.");
+    if (!address.line1) throw new Error("Add your street or area.");
+    address.line1 = `${house}, ${address.line1}`;
+    address.line2 = [floor ? `Floor: ${floor}` : "", address.line2]
+      .filter(Boolean)
+      .join(", ");
+  }
+  if (["line1", "city", "state", "postal_code"].some((key) => !address[key]))
+    throw new Error("Complete your address, city, state and postal code.");
+  if (address.line1.length > 255 || address.line2.length > 255)
+    throw new Error(
+      "Keep each address line within 255 characters, including your house and floor details.",
+    );
+  return address;
+}
+
 export function currentPosition({ signal } = {}) {
   return new Promise((resolve, reject) => {
     const geolocation = navigator.geolocation;

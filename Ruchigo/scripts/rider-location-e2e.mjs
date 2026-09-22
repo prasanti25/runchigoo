@@ -37,7 +37,7 @@ with transaction.atomic():
  owner=User.objects.create_user(payload['marker']+'-owner@example.test',role='restaurant')
  rider=User.objects.create_user(payload['marker']+'-rider@example.test',password=payload['password'],role='delivery',is_available=True)
  restaurant=Restaurant.objects.create(owner=owner,name='Temporary rider-location test',city='Delhi',is_approved=True,latitude='28.632000',longitude='77.217000')
- address=Address.objects.create(user=customer,line1='Local fixture only',city='Delhi',state='Delhi',postal_code='110001',latitude='28.634000',longitude='77.218000')
+ address=Address.objects.create(user=customer,line1='QA flat 204, public test locality',line2='Floor: 2nd, QA landmark',city='Delhi',state='Delhi',postal_code='110001',latitude='28.634000',longitude='77.218000')
  order=Order.objects.create(customer=customer,restaurant=restaurant,delivery_address=address,status='assigned',subtotal=100,total=100)
  delivery=DeliveryAssignment.objects.create(order=order,partner=rider)
  print(json.dumps({'order':order.pk,'delivery':delivery.pk,'customer':customer.pk,'rider':rider.pk,'owner':owner.pk,'restaurant':restaurant.pk}))`,
@@ -112,6 +112,32 @@ try {
     };
   });
   await rider.page.goto(`${base}/delivery-navigation?order=${fixture.order}`);
+  await expect(
+    rider.page.getByText(
+      /QA flat 204, public test locality, Floor: 2nd, QA landmark/,
+    ),
+  ).toBeVisible();
+  const directions = rider.page.getByRole("link", {
+    name: "Directions to customer",
+    exact: true,
+  });
+  await expect(directions).toBeVisible();
+  assert.equal(
+    new URL(await directions.getAttribute("href")).searchParams.get(
+      "destination",
+    ),
+    "28.634,77.218",
+  );
+  const pickupDirections = rider.page.getByRole("link", {
+    name: "Directions to kitchen",
+    exact: true,
+  });
+  assert.equal(
+    new URL(await pickupDirections.getAttribute("href")).searchParams.get(
+      "destination",
+    ),
+    "28.632,77.217",
+  );
   const sent = rider.page.waitForResponse(
     (response) =>
       response.url().endsWith(`/deliveries/${fixture.delivery}/`) &&
@@ -206,6 +232,7 @@ try {
   console.log(
     JSON.stringify({
       passed: [
+        "House/floor visible to rider; both directions use saved coordinates",
         "Real opt-in rider browser writes",
         "Owned lightweight GPS channel",
         "Real LocationIQ road label",
