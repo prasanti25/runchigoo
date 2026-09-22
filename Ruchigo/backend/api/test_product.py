@@ -29,6 +29,28 @@ class ProductFlowTests(APITestCase):
         self.client.post("/api/v1/cart/items/", {"menu_item": self.item.id, "quantity": 1}, format="json")
         return self.client.post("/api/v1/cart/checkout/", {"address_id": self.address.id, "payment_method": "cod", **extra}, format="json")
 
+    def test_legacy_order_upgrade_only_fills_missing_active_delivery_codes(self):
+        import importlib
+        from django.apps import apps
+        from django.db import connection
+        from types import SimpleNamespace
+
+        order = Order.objects.get(pk=self.checkout().data["id"])
+        Order.objects.filter(pk=order.pk).update(delivery_code="")
+        migration = importlib.import_module("api.migrations.0011_legacy_active_order_delivery_codes")
+        migration.populate_delivery_codes(apps, SimpleNamespace(connection=connection))
+        order.refresh_from_db()
+        self.assertEqual(len(order.delivery_code), 6)
+        self.assertTrue(order.delivery_code.isdecimal())
+        code = order.delivery_code
+        migration.populate_delivery_codes(apps, SimpleNamespace(connection=connection))
+        order.refresh_from_db()
+        self.assertEqual(order.delivery_code, code)
+        Order.objects.filter(pk=order.pk).update(status="delivered", delivery_code="")
+        migration.populate_delivery_codes(apps, SimpleNamespace(connection=connection))
+        order.refresh_from_db()
+        self.assertEqual(order.delivery_code, "")
+
     def test_checkout_is_idempotent_and_snapshots_delivery_address(self):
         key = str(uuid.uuid4())
         first = self.checkout(checkout_key=key)

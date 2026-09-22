@@ -11,3 +11,5 @@ backend/staticfiles
 node_modules
 dist
 .git
+.agents
+skills-lock.json
