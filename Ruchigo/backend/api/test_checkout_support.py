@@ -100,6 +100,68 @@ class CheckoutSupportTests(APITestCase):
         self.assertEqual(order.status_code, 201, order.data)
         self.assertEqual(Decimal(order.data["total"]), 140)
 
+    def test_saved_south_delhi_address_quotes_and_checks_out_without_rewriting_it(self):
+        self.address.city = "South Delhi"
+        self.address.line2 = "Upper ground floor, street 24"
+        self.address.latitude = None
+        self.address.longitude = None
+        self.address.save()
+        self.add()
+        quote = self.quote()
+        self.assertEqual(quote.status_code, 200, quote.data)
+        result = self.checkout(quote_token=quote.data["quote_token"])
+        self.assertEqual(result.status_code, 201, result.data)
+        self.assertEqual(Decimal(result.data["total"]), 140)
+        self.address.refresh_from_db()
+        self.assertEqual(self.address.city, "South Delhi")
+        self.assertEqual(self.address.line2, "Upper ground floor, street 24")
+
+    def test_delhi_district_aliases_match_without_accepting_neighbouring_cities(self):
+        from .serviceability import canonical_city
+        for name in ["Delhi", " SOUTH  DELHI ", "South-East Delhi", "North‑West Delhi", "Central Delhi", "NCT of Delhi", "National Capital Territory of Delhi"]:
+            self.assertEqual(canonical_city(name), "delhi", name)
+        for name in ["Noida", "Greater Noida", "Gurugram", "Faridabad", "Ghaziabad", "Delhi NCR", "South Delhi Road", "Not Delhi"]:
+            self.assertNotEqual(canonical_city(name), "delhi", name)
+
+    def test_district_alias_still_requires_pins_and_real_zone_distance(self):
+        zone = self.zone(); self.enable(); self.add()
+        self.address.city = "South Delhi"
+        self.address.save()
+        result = self.quote()
+        self.assertEqual(result.status_code, 200, result.data)
+        self.assertEqual(Decimal(result.data["delivery_fee"]), Decimal("21.12"))
+        self.address.latitude = None; self.address.longitude = None; self.address.save()
+        self.assertEqual(self.quote().status_code, 400)
+        self.address.latitude = "28.610000"; self.address.longitude = "77.200000"; self.address.save()
+        zone.radius_km = Decimal("0.10"); zone.save()
+        self.assertEqual(self.quote().status_code, 400)
+        zone.radius_km = 10; zone.max_delivery_km = Decimal("0.10"); zone.save()
+        self.assertEqual(self.quote().status_code, 400)
+        self.assertEqual(self.checkout().status_code, 400)
+        self.assertEqual(Order.objects.count(), 0)
+
+    def test_ncr_address_is_not_allowed_even_with_a_delhi_state_or_nearby_pin(self):
+        self.add()
+        for city in ["Noida", "Gurugram", "Faridabad", "Delhi NCR", "South Delhi Road"]:
+            self.address.city = city
+            self.address.save()
+            self.assertEqual(self.quote().status_code, 400, city)
+            self.assertEqual(self.checkout().status_code, 400, city)
+        self.assertEqual(Order.objects.count(), 0)
+
+    def test_discovery_matches_saved_district_city_without_widening_to_ncr(self):
+        from .product_views import eligible_items
+        result = self.client.get("/api/v1/discovery/?city=South%20Delhi")
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual([row["id"] for row in result.data["restaurants"]], [self.restaurant.pk])
+        self.assertEqual(list(eligible_items({"city": "South Delhi"}).values_list("pk", flat=True)), [self.item.pk])
+        self.restaurant.city = "South Delhi"
+        self.restaurant.save()
+        self.assertEqual(self.client.get("/api/v1/discovery/?city=Delhi").data["restaurant_count"], 1)
+        self.restaurant.city = "Noida"
+        self.restaurant.save()
+        self.assertEqual(self.client.get("/api/v1/discovery/?city=South%20Delhi").data["restaurant_count"], 0)
+
     def test_zone_distance_pricing_signed_quote_and_snapshot(self):
         self.zone(); self.enable(); self.add()
         quote = self.quote()

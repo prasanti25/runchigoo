@@ -27,6 +27,7 @@
     "test:assistant-recovery": "node scripts/assistant-recovery-e2e.mjs",
     "test:api-retry": "node scripts/api-retry-e2e.mjs",
     "test:checkout-support": "node scripts/checkout-support-e2e.mjs",
+    "test:checkout-city": "node scripts/checkout-city-e2e.mjs",
     "test:cancellations": "node scripts/cancellations-e2e.mjs",
     "test:support-conversation": "node scripts/support-conversation-e2e.mjs",
     "test:dashboard-chat": "node scripts/dashboard-chat-e2e.mjs",

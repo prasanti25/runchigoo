@@ -1,5 +1,25 @@
 # Product verification — 23 September 2026
 
+## Delhi district checkout regression — locally verified
+
+- Fixed exact-city rejection of saved `South Delhi` addresses at `Delhi`
+  kitchens. Explicit Delhi district aliases apply consistently to checkout,
+  discovery and recommendation candidates; NCR neighbours remain distinct.
+  Existing address text, delivery zones, pin requirements and distance limits
+  are unchanged. No production address/order or policy was edited.
+- Checkout shares its selected saved address with the header, hides raw request
+  field names in errors, and offers address/pin recovery for genuine failures.
+- `npm run test:checkout-city` passes against real local APIs: a ₹449 meal with
+  a saved South Delhi address returns ₹40 delivery / ₹489 total and enables
+  Place order; Noida returns 400; switching back returns 200. Same district
+  selection retains Delhi discovery results. 390/320/1440px layouts pass with
+  zero browser errors. No browser order placed; isolated fixture removed.
+- **347 backend tests pass** on isolated SQLite, including actual checkout,
+  preserved address text, alias rejection, zone-radius/trip limits and discovery.
+  Lint/build, API retry regression and diff checks pass. No migration required.
+- Deployment pending at this checkpoint; smarter support follow-ups are the
+  next requested increment, not part of this checkout fix.
+
 ## Support release — production deployed and public smoke verified
 
 - Runtime `a2236cd` is on `prasanti25/runchigoo` main. Deployment

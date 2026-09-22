@@ -21,9 +21,16 @@ function errorMessage(data) {
 
   const messages = Object.entries(data).flatMap(([field, value]) => {
     const values = Array.isArray(value) ? value : [value];
+    const label =
+      {
+        address_id: "Delivery address",
+        quote_token: "",
+        cart: "",
+        non_field_errors: "",
+      }[field] ?? field.replaceAll("_", " ");
     return values.map(
       (item) =>
-        `${field.replaceAll("_", " ")}: ${typeof item === "string" ? item : JSON.stringify(item)}`,
+        `${label ? `${label}: ` : ""}${typeof item === "string" ? item : JSON.stringify(item)}`,
     );
   });
   return messages.join(" ") || "Request failed.";

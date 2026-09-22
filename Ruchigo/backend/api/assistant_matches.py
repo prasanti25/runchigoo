@@ -5,6 +5,7 @@ from django.db.models import Q
 from .menu_options import minimum_item_price
 from .product_views import eligible_items
 from .recommendations import craving_terms
+from .serviceability import city_query
 
 
 def match_craving(items, query):
@@ -40,7 +41,7 @@ def empty_shortlist(filters):
     # really match an open, approved, in-stock menu there.
     if city and included:
         other_filters = {key: value for key, value in filters.items() if key != "city"}
-        elsewhere = match_craving(eligible_items(other_filters), query).exclude(restaurant__city__iexact=city)
+        elsewhere = match_craving(eligible_items(other_filters), query).exclude(city_query(city, "restaurant__city"))
         cities = list(elsewhere.order_by("restaurant__city").values_list("restaurant__city", flat=True).distinct()[:3])
         if cities:
             actions = [{"kind": "browse_city", "label": f"Browse {place} menu", "city": place, "message": query} for place in cities]

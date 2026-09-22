@@ -7,10 +7,12 @@ and within that zone's configured maximum kitchen-to-door distance.
 import hashlib
 import json
 import math
+import re
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.core import signing
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -19,9 +21,36 @@ from .models import AuditLog, CancellationPolicy, DeliveryPolicy, DeliveryZone
 from .permissions import IsAdmin
 
 
+CITY_ALIASES = {
+    "delhi": {
+        "delhi", "new delhi", "central delhi", "east delhi", "west delhi",
+        "north delhi", "north east delhi", "north west delhi", "south delhi",
+        "south east delhi", "south west delhi", "nct of delhi", "delhi nct",
+        "national capital territory of delhi",
+    },
+    "gurugram": {"gurgaon", "gurugram"},
+}
+
+
 def canonical_city(value):
-    value = " ".join(str(value).casefold().split())
-    return {"new delhi": "delhi", "gurgaon": "gurugram"}.get(value, value)
+    value = " ".join(re.sub(r"[-‐‑–—]", " ", str(value).casefold()).split())
+    # Geocoders and saved addresses can use Delhi's district name as the city.
+    # Use an exact allowlist, never substring/NCR matching: neighbouring cities
+    # remain distinct, and the normal pin/radius/trip checks still apply below.
+    return next((city for city, names in CITY_ALIASES.items() if value in names), value)
+
+
+def city_query(value, field="city"):
+    """Discovery must use the same city aliases as the checkout gate."""
+    city = canonical_city(value)
+    names = set(CITY_ALIASES.get(city, {city}))
+    # Stored district names may use a hyphen between compass directions.
+    names.update(name.replace("north ", "north-", 1) for name in list(names) if name.startswith(("north east", "north west")))
+    names.update(name.replace("south ", "south-", 1) for name in list(names) if name.startswith(("south east", "south west")))
+    query = Q()
+    for name in sorted(names):
+        query |= Q(**{f"{field}__iexact": name})
+    return query
 
 
 def distance_km(a_lat, a_lng, b_lat, b_lng):

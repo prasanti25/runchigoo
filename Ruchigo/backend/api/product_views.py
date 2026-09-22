@@ -17,6 +17,7 @@ from .recommendations import craving_terms, match_reasons, normalize_preferences
 from .notifications import notify, admin_ids
 from .availability import accepting_filter, in_stock_filter
 from .menu_options import minimum_item_price
+from .serviceability import city_query
 
 
 class RecommendationThrottle(SimpleRateThrottle):
@@ -63,7 +64,7 @@ def distance_expression(filters, prefix=""):
 def eligible_items(filters):
     items = MenuItem.objects.select_related("restaurant", "restaurant__owner", "category").filter(accepting_filter("restaurant__"), in_stock_filter(), is_available=True)
     if filters.get("city"):
-        items = items.filter(restaurant__city__iexact=filters["city"])
+        items = items.filter(city_query(filters["city"], "restaurant__city"))
     if filters.get("vegetarian"):
         items = items.filter(is_vegetarian=True)
     if filters.get("non_vegetarian"):

@@ -51,7 +51,9 @@ export function Bill({ children, quote, checking = false, checkout = false }) {
               : "FREE"
             : checking
               ? "Checking…"
-              : "At checkout"}
+              : checkout
+                ? "Not calculated"
+                : "At checkout"}
         </span>
       </div>
       {discount > 0 && (
@@ -214,6 +216,11 @@ export function CheckoutPage() {
     list.find((a) => a.id === deliveryLocation.address_id)?.id ||
     list.find((a) => a.is_default)?.id ||
     list[0]?.id;
+  const selectedAddress = list.find((address) => address.id === addressId);
+  useEffect(() => {
+    if (selectedAddress && deliveryLocation.address_id !== selectedAddress.id)
+      saveDeliveryLocation(deliveryLocationFromAddress(selectedAddress));
+  }, [selectedAddress, deliveryLocation.address_id]);
   const [quoteState, setQuoteState] = useState({});
   const [quoteVersion, setQuoteVersion] = useState(0);
   const quoteKey = JSON.stringify({
@@ -451,6 +458,19 @@ export function CheckoutPage() {
                     error={quoteError}
                     onRetry={() => setQuoteVersion((value) => value + 1)}
                   />
+                  {quoteError && selectedAddress && (
+                    <div className="flex-row wrap mt-3">
+                      <button
+                        className="text-link"
+                        onClick={() => setEditingAddress(selectedAddress)}
+                      >
+                        <MapPin size={16} /> Check address / pin
+                      </button>
+                      <Link className="text-link" to="/search">
+                        Browse restaurants <ArrowRight size={16} />
+                      </Link>
+                    </div>
+                  )}
                 </div>
                 <button
                   className="btn primary w-full mt-6"
