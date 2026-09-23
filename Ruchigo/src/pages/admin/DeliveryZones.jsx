@@ -6,6 +6,9 @@ import { ErrorNotice, Modal, Skeleton } from "../../components/product/UI.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { apiRequest } from "../../lib/api.js";
 import { money, useRemote } from "../../lib/product.js";
+import DeliveryPricing, {
+  ServiceCities,
+} from "../../components/product/DeliveryPricing.jsx";
 
 const blank = {
   name: "",
@@ -237,6 +240,8 @@ export default function DeliveryZones() {
           </button>
         </div>
       )}
+      <ServiceCities token={token} />
+      <DeliveryPricing token={token} />
       {editing && (
         <Modal
           title={editing.id ? "Edit delivery zone" : "Add delivery zone"}

@@ -23,6 +23,8 @@ def expire_locked_order(order, payment, now=None):
         Coupon.objects.filter(pk=order.coupon_id, usage_count__gt=0).update(usage_count=F("usage_count")-1)
     OrderEvent.objects.create(order=order, status=order.status, message="Payment time expired. Your items were released. If money was debited, contact support with this order.")
     AuditLog.objects.create(action="payment.reservation_expired", target=str(order.pk))
+    from .rewards import sync_order_rewards
+    sync_order_rewards(order)
     notify([order.customer_id], event=f"order:{order.pk}:payment_expired", title="Payment time expired",
            message="This order wasn’t sent to the kitchen. You can reorder at current prices. If money was debited, help is available from your order.",
            kind="payment", metadata={"order_id": order.pk})

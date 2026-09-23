@@ -40,7 +40,9 @@ def empty_shortlist(filters):
     # Only offer another city if the same craving AND every other restriction
     # really match an open, approved, in-stock menu there.
     if city and included:
-        other_filters = {key: value for key, value in filters.items() if key != "city"}
+        # Another-city suggestions are explicitly browsing-only. Never carry
+        # the current doorstep's delivery check into a different city's query.
+        other_filters = {key: value for key, value in filters.items() if key not in {"city", "latitude", "longitude", "radius_km", "delivery_only", "sort"}}
         elsewhere = match_craving(eligible_items(other_filters), query).exclude(city_query(city, "restaurant__city"))
         cities = list(elsewhere.order_by("restaurant__city").values_list("restaurant__city", flat=True).distinct()[:3])
         if cities:

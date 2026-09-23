@@ -15,7 +15,7 @@ from rest_framework import serializers
 from .models import *
 from .notifications import notify, admin_ids, notify_order
 from .menu_options import cart_addons, cart_unit_price, minimum_item_price
-from .availability import accepting_orders, validate_hours
+from .availability import accepting_orders, validate_hours, serialized_availability
 from .serviceability import delivery_quote, quote_fingerprint, verify_quote
 from .cancellations import cancellation_details
 from .admin_access import effective_scopes
@@ -168,7 +168,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class RestaurantSerializer(serializers.ModelSerializer):
     accepting_orders = serializers.SerializerMethodField()
     def get_accepting_orders(self, restaurant):
-        return accepting_orders(restaurant)
+        return serialized_availability(restaurant, self.context)
     def validate_opening_hours(self, value):
         return validate_hours(value)
     owner_id = serializers.PrimaryKeyRelatedField(
@@ -183,6 +183,7 @@ class RestaurantSerializer(serializers.ModelSerializer):
             "id", "owner_id", "name", "description", "phone", "email", "address",
             "city", "latitude", "longitude", "image", "is_open", "is_approved",
             "average_rating", "created_at", "updated_at", "opening_hours", "accepting_orders",
+            "scheduling_enabled", "schedule_notice_minutes", "schedule_horizon_days",
         ]
         read_only_fields = ["is_approved", "average_rating", "created_at", "updated_at"]
     def validate(self, attrs):
@@ -190,6 +191,8 @@ class RestaurantSerializer(serializers.ModelSerializer):
         user = getattr(request, "user", None)
         if user and user.is_authenticated and not (user.is_superuser or user.role == User.Role.ADMIN) and "owner" in attrs:
             raise serializers.ValidationError({"owner_id": "Restaurant accounts cannot change ownership."})
+        if attrs.get("scheduling_enabled", getattr(self.instance, "scheduling_enabled", False)) and not attrs.get("opening_hours", getattr(self.instance, "opening_hours", [])):
+            raise serializers.ValidationError({"opening_hours": "Set weekly opening hours before enabling scheduled orders."})
         return attrs
 class CategorySerializer(serializers.ModelSerializer):
     class Meta: model = Category; fields = "__all__"; read_only_fields = ["created_at", "updated_at"]
@@ -219,7 +222,7 @@ class MenuItemSerializer(serializers.ModelSerializer):
         price = minimum_item_price(item)
         return str(price) if price is not None else None
     def get_orderable(self, item):
-        return item.is_available and item.stock_quantity != 0 and accepting_orders(item.restaurant) and minimum_item_price(item) is not None
+        return item.is_available and item.stock_quantity != 0 and serialized_availability(item.restaurant, self.context) and minimum_item_price(item) is not None
     restaurant_detail = RestaurantSerializer(source="restaurant", read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
     restaurant_id = serializers.PrimaryKeyRelatedField(source="restaurant", queryset=Restaurant.objects.all(), write_only=True, required=False)
@@ -228,6 +231,8 @@ class MenuItemSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request and request.user.is_authenticated and request.user.role == User.Role.RESTAURANT and "restaurant" in attrs:
             raise serializers.ValidationError({"restaurant_id": "Restaurant accounts cannot change item ownership."})
+        if self.instance and "restaurant" in attrs and attrs["restaurant"].pk != self.instance.restaurant_id and self.instance.bogo_coupons.exists():
+            raise serializers.ValidationError({"restaurant_id": "A BOGO campaign references this dish. Keep it with its current restaurant."})
         groups = attrs.get("option_groups", getattr(self.instance, "option_groups", []))
         addons = attrs.get("add_ons", getattr(self.instance, "add_ons", []))
         group_ids = {group["id"] for group in groups}
@@ -289,7 +294,15 @@ class WishlistSerializer(serializers.ModelSerializer):
     menu_item_detail = MenuItemSerializer(source="menu_item", read_only=True)
     class Meta: model = Wishlist; fields = "__all__"; read_only_fields = ["user", "created_at", "updated_at"]
 class CouponSerializer(serializers.ModelSerializer):
+    bogo_item_name = serializers.CharField(source="bogo_item.name", read_only=True, default=None)
     class Meta: model = Coupon; fields = "__all__"; read_only_fields = ["usage_count", "created_at", "updated_at"]
+    def validate_code(self, value):
+        value = value.strip().upper()
+        if not value or not all(ch.isascii() and (ch.isalnum() or ch in "-_") for ch in value):
+            raise serializers.ValidationError("Use letters, numbers, hyphens or underscores for a coupon code.")
+        if Coupon.objects.filter(code__iexact=value).exclude(pk=getattr(self.instance, "pk", None)).exists():
+            raise serializers.ValidationError("That coupon code already exists.")
+        return value
     def validate(self, attrs):
         values = {
             "starts_at": getattr(self.instance, "starts_at", None),
@@ -304,16 +317,60 @@ class CouponSerializer(serializers.ModelSerializer):
         percent = values["discount_percent"] or Decimal("0")
         if amount < 0:
             raise serializers.ValidationError({"discount_amount": "Discount amount cannot be negative."})
-        if amount <= 0 and percent <= 0:
+        kind = attrs.get("benefit_type", getattr(self.instance, "benefit_type", Coupon.Benefit.FOOD))
+        if kind == Coupon.Benefit.FOOD and amount <= 0 and percent <= 0:
             raise serializers.ValidationError("Provide a positive discount amount or percentage.")
+        if kind != Coupon.Benefit.FOOD and (amount > 0 or percent > 0 or attrs.get("max_discount", getattr(self.instance, "max_discount", None))):
+            raise serializers.ValidationError("Delivery and BOGO coupons cannot also have an amount, percentage or maximum discount.")
+        request = self.context.get("request")
+        user = request.user if request else None
+        merchant = user and user.role == User.Role.RESTAURANT
+        restaurant = attrs.get("restaurant", getattr(self.instance, "restaurant", None))
+        if merchant:
+            restaurant = Restaurant.objects.filter(owner=user, is_approved=True).first()
+            if kind == Coupon.Benefit.DELIVERY:
+                raise serializers.ValidationError("Delivery-fee campaigns are managed by the platform.")
+        item = attrs.get("bogo_item", getattr(self.instance, "bogo_item", None))
+        if kind == Coupon.Benefit.BOGO and (not item or not restaurant or item.restaurant_id != restaurant.pk):
+            raise serializers.ValidationError({"bogo_item": "Choose a dish belonging to this coupon’s restaurant."})
+        if kind != Coupon.Benefit.BOGO:
+            attrs["bogo_item"] = None
+        if attrs.get("campaign_type", getattr(self.instance, "campaign_type", "standard")) == "new_customer":
+            attrs["first_order_only"] = True
+        if attrs.get("min_order_amount", getattr(self.instance, "min_order_amount", 0)) < 0:
+            raise serializers.ValidationError({"min_order_amount": "Minimum order cannot be negative."})
+        # Existing public banners must keep the same kitchen and fit the revised
+        # coupon window. Deactivating a coupon hides its linked banners.
+        if self.instance and self.instance.offer_banners.exists():
+            if self.instance.offer_banners.exclude(restaurant=restaurant).exists():
+                raise serializers.ValidationError("This coupon is linked to an offer. Keep its restaurant or unlink the offer first.")
+            if self.instance.offer_banners.filter(models.Q(starts_at__lt=values["starts_at"]) | models.Q(ends_at__gt=values["ends_at"])).exists():
+                raise serializers.ValidationError("Linked offers must fit inside the coupon’s dates. Update their dates first.")
         return attrs
 class OfferSerializer(serializers.ModelSerializer):
-    class Meta: model = Offer; fields = "__all__"; read_only_fields = ["created_at", "updated_at"]
+    coupon_code = serializers.SlugRelatedField(source="coupon", slug_field="code", queryset=Coupon.objects.all(), required=False, allow_null=True)
+    class Meta: model = Offer; exclude = ["coupon"]; read_only_fields = ["created_at", "updated_at"]
     def validate(self, attrs):
         starts_at = attrs.get("starts_at", getattr(self.instance, "starts_at", None))
         ends_at = attrs.get("ends_at", getattr(self.instance, "ends_at", None))
         if starts_at and ends_at and ends_at <= starts_at:
             raise serializers.ValidationError({"ends_at": "End time must be after the start time."})
+        coupon = attrs.get("coupon", getattr(self.instance, "coupon", None))
+        if coupon:
+            # Offers and their coupon are validated while writes hold the same
+            # coupon lock as checkout, so a campaign cannot drift mid-write.
+            coupon = Coupon.objects.select_for_update().get(pk=coupon.pk)
+            attrs["coupon"] = coupon
+            request = self.context.get("request")
+            restaurant = attrs.get("restaurant", getattr(self.instance, "restaurant", None))
+            if request and request.user.role == User.Role.RESTAURANT:
+                restaurant = Restaurant.objects.filter(owner=request.user, is_approved=True).first()
+                if not restaurant:
+                    raise serializers.ValidationError("An approved restaurant is needed to publish offers.")
+            if coupon.restaurant_id != getattr(restaurant, "pk", None):
+                raise serializers.ValidationError({"coupon_code": "The coupon must belong to the same restaurant or platform-wide campaign."})
+            if starts_at < coupon.starts_at or ends_at > coupon.ends_at:
+                raise serializers.ValidationError({"coupon_code": "Offer dates must be within the linked coupon’s validity."})
         return attrs
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta: model = OrderItem; exclude = ["stock_deducted"]
@@ -342,6 +399,9 @@ class OrderEventSerializer(serializers.ModelSerializer):
         fields = ["id", "status", "message", "created_at"]
 
 class OrderSerializer(serializers.ModelSerializer):
+    preparation_due = serializers.SerializerMethodField()
+    def get_preparation_due(self, order):
+        return not order.scheduled_for or order.scheduled_for <= timezone.now()
     items = OrderItemSerializer(many=True, read_only=True); payment = PaymentSerializer(read_only=True); delivery = DeliverySerializer(read_only=True); restaurant_detail = RestaurantSerializer(source="restaurant", read_only=True); customer_detail = UserSerializer(source="customer", read_only=True); delivery_address_detail = AddressSerializer(source="delivery_address", read_only=True)
     delivery_code = serializers.SerializerMethodField()
     customer_detail = serializers.SerializerMethodField()
@@ -371,7 +431,7 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_review(self, order):
         review = getattr(order, "review", None)
         return {"id": review.id, "rating": review.rating, "comment": review.comment} if review else None
-    class Meta: model = Order; fields = "__all__"; read_only_fields = ["customer", "restaurant", "number", "status", "subtotal", "delivery_fee", "discount", "total", "coupon", "created_at", "updated_at"]
+    class Meta: model = Order; exclude = ["commission_snapshot"]; read_only_fields = ["customer", "restaurant", "number", "status", "subtotal", "delivery_fee", "discount", "total", "tip_amount", "scheduled_for", "coupon", "created_at", "updated_at"]
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
@@ -403,9 +463,10 @@ class CartItemMutationSerializer(serializers.Serializer):
 
 class CouponCodeSerializer(serializers.Serializer):
     code = serializers.CharField(max_length=40, trim_whitespace=True)
+    address_id = serializers.IntegerField(required=False, min_value=1)
 
 
-def applicable_coupon(code, subtotal, *, lock=False, user=None, restaurant=None):
+def applicable_coupon(code, subtotal, *, lock=False, user=None, restaurant=None, items=None, delivery_fee=None):
     from .coupon_savings import coupon_discount, coupon_status
     queryset = Coupon.objects.filter(code__iexact=(code or "").strip())
     if lock:
@@ -413,10 +474,10 @@ def applicable_coupon(code, subtotal, *, lock=False, user=None, restaurant=None)
     coupon = queryset.first()
     if not coupon:
         raise serializers.ValidationError({"coupon_code": "We couldn’t find that coupon. Check the code and try again."})
-    eligibility = coupon_status(coupon, subtotal, user=user, restaurant=restaurant)
+    eligibility = coupon_status(coupon, subtotal, user=user, restaurant=restaurant, items=items, delivery_fee=delivery_fee)
     if not eligibility["eligible"]:
         raise serializers.ValidationError({"coupon_code": eligibility["reason"]})
-    return coupon, coupon_discount(coupon, subtotal)
+    return coupon, coupon_discount(coupon, subtotal, items=items, delivery_fee=delivery_fee)
 
 class CheckoutSerializer(serializers.Serializer):
     address_id = serializers.PrimaryKeyRelatedField(queryset=Address.objects.all(), source="address")
@@ -426,6 +487,10 @@ class CheckoutSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True, max_length=1000)
     checkout_key = serializers.UUIDField(required=False)
     quote_token = serializers.CharField(required=False, max_length=500)
+    scheduled_for = serializers.DateTimeField(required=False, allow_null=True)
+    tip_amount = serializers.DecimalField(required=False, default=Decimal(0), max_digits=8, decimal_places=2, min_value=Decimal(0), max_value=Decimal(5000))
+    reward_points = serializers.IntegerField(required=False, default=0, min_value=0, max_value=100000000)
+    reward_credits = serializers.DecimalField(required=False, default=Decimal(0), max_digits=10, decimal_places=2, min_value=Decimal(0))
     def validate_payment_method(self, value):
         from .payments import payment_enabled
         if value == "razorpay" and not payment_enabled():
@@ -464,17 +529,33 @@ class CheckoutSerializer(serializers.Serializer):
             if menu_item.stock_quantity is not None and quantity > menu_item.stock_quantity:
                 raise serializers.ValidationError({"cart": f"Only {menu_item.stock_quantity} portions of {menu_item.name} are left. Update your cart."})
         subtotal = sum((cart_unit_price(i, strict=True) * i.quantity for i in items), Decimal("0")); discount = Decimal("0"); coupon = None
-        if data.get("coupon_code"):
-            coupon, discount = applicable_coupon(data["coupon_code"], subtotal, lock=True, user=user, restaurant=restaurant)
-        discount = discount.quantize(Decimal("0.01"))
         quote = delivery_quote(restaurant, data["address"], subtotal)
+        if data.get("coupon_code"):
+            coupon, discount = applicable_coupon(data["coupon_code"], subtotal, lock=True, user=user, restaurant=restaurant, items=items, delivery_fee=Decimal(quote["delivery_fee"]))
+            from .coupon_savings import apply_coupon_quote
+            discount = apply_coupon_quote(coupon, quote, discount)
+        discount = discount.quantize(Decimal("0.01"))
+        from .checkout_options import checkout_extras
+        quote.update(checkout_extras(restaurant, data))
+        from .rewards import reward_quote, reserve_rewards
+        rewards, reward_discount, reward_account = reward_quote(user, data, subtotal-discount, lock=True)
+        if rewards:
+            quote["rewards"] = rewards
         if data.get("quote_token"):
             verify_quote(data["quote_token"], quote_fingerprint(user, data["address"], items, quote, coupon.code if coupon else "", subtotal, discount))
-        elif DeliveryPolicy.objects.filter(pk=1, enabled=True).exists():
+        elif rewards or data.get("scheduled_for") or data.get("tip_amount") or (coupon and coupon.benefit_type != Coupon.Benefit.FOOD) or DeliveryPolicy.objects.filter(pk=1, enabled=True).exists():
             raise serializers.ValidationError({"quote_token": "Review your delivery quote before placing the order."})
         fee = Decimal(quote["delivery_fee"])
         cancellation_snapshot = quote["cancellation_policy"]
-        order = Order.objects.create(customer=user, restaurant=restaurant, delivery_address=data["address"], coupon=coupon, subtotal=subtotal, delivery_fee=fee, discount=discount, total=subtotal + fee - discount, notes=data.get("notes", ""), checkout_key=data.get("checkout_key"), delivery_code=f"{secrets.randbelow(1000000):06d}", address_snapshot=dict(AddressSerializer(data["address"]).data), delivery_quote=quote)
+        tip = data.get("tip_amount", Decimal(0))
+        total = subtotal + fee - discount - reward_discount + tip
+        if data["payment_method"] == "razorpay" and total < 1:
+            raise serializers.ValidationError({"payment_method": "Choose cash on delivery for a bill below ₹1. No cash is due when the bill is zero."})
+        order = Order.objects.create(customer=user, restaurant=restaurant, delivery_address=data["address"], coupon=coupon, subtotal=subtotal, delivery_fee=fee, discount=discount, tip_amount=tip, scheduled_for=data.get("scheduled_for"), reward_discount=reward_discount, reward_snapshot=rewards, total=total, notes=data.get("notes", ""), checkout_key=data.get("checkout_key"), delivery_code=f"{secrets.randbelow(1000000):06d}", address_snapshot=dict(AddressSerializer(data["address"]).data), delivery_quote=quote)
+        reserve_rewards(reward_account, order)
+        from .merchant_finance import commission_snapshot
+        order.commission_snapshot = commission_snapshot(subtotal, discount, reward_discount, coupon)
+        order.save(update_fields=["commission_snapshot"])
         OrderItem.objects.bulk_create([OrderItem(order=order, menu_item=i.menu_item, name=i.menu_item.name, unit_price=cart_unit_price(i, strict=True), quantity=i.quantity, total_price=cart_unit_price(i, strict=True)*i.quantity, add_ons=cart_addons(i, strict=True), stock_deducted=i.menu_item.stock_quantity is not None) for i in items])
         order.cancellation_policy_snapshot = cancellation_snapshot
         order.save(update_fields=["cancellation_policy_snapshot"])

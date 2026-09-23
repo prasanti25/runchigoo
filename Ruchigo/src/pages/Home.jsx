@@ -21,13 +21,14 @@ import {
   useRemote,
 } from "../lib/product.js";
 import { categoryPhoto, getFoodFallback } from "../lib/images.js";
+import { discoveryLocation } from "../lib/discoveryLocation.js";
 
 export default function Home() {
   const navigate = useNavigate();
   const location = useDeliveryLocation();
   const [query, setQuery] = useState("");
   const { data, loading, error, reload } = useRemote(
-    discoveryPath({ city: location.city }),
+    discoveryPath(discoveryLocation(location)),
   );
   return (
     <>
@@ -142,12 +143,22 @@ export default function Home() {
             <SectionTitle
               eyebrow="YOUR NEIGHBOURHOOD, ON A PLATE"
               title={
-                location.city
-                  ? `Great food in ${location.city}`
-                  : "Kitchens worth discovering"
+                discoveryLocation(location).latitude !== undefined
+                  ? "Good food near your address"
+                  : location.city
+                    ? `Great food in ${location.city}`
+                    : "Kitchens worth discovering"
               }
               to="/search"
             />
+            {discoveryLocation(location).latitude !== undefined && (
+              <p className="muted mb-5">
+                Within 5 km of your selected pin.{" "}
+                <Link className="text-link" to="/search?area=city">
+                  Explore the city
+                </Link>
+              </p>
+            )}
             <ErrorNotice error={error} onRetry={reload} />
             {loading ? (
               <Skeleton />
@@ -160,8 +171,8 @@ export default function Home() {
             ) : (
               !error && (
                 <EmptyState
-                  title="Something delicious is on its way"
-                  description="Choose another city to discover available restaurants."
+                  title="No kitchens match this location yet"
+                  description="Try a wider search radius or check your delivery address. Availability is confirmed again at checkout."
                   to="/search"
                 />
               )

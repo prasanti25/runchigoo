@@ -150,8 +150,8 @@ export default function BusinessInsights() {
         <>
           <p className="muted">
             {data.period.start} to {data.period.end} · {data.period.timezone}.
-            Order value includes delivery fees, after discounts; it is not
-            restaurant earnings or settlement.
+            Order value includes delivery fees and tips, after discounts; it is
+            not restaurant earnings or settlement.
           </p>
           {data.truncated && (
             <p role="status" className="insight-notice">
@@ -171,6 +171,13 @@ export default function BusinessInsights() {
               ["Completed orders", data.summary.delivered],
               ["Average order value", money(data.summary.average_order_value)],
               ["Cancellation rate", `${data.summary.cancellation_rate}%`],
+              ["Ordering customers", data.summary.unique_ordering_customers],
+              [
+                "Customer retention",
+                data.summary.retention_rate === null
+                  ? "No previous cohort"
+                  : `${data.summary.retention_rate}%`,
+              ],
               [
                 "Customers ordering again in this window",
                 data.summary.repeat_customers,
@@ -182,6 +189,41 @@ export default function BusinessInsights() {
               </div>
             ))}
           </div>
+          <p className="muted mb-5">
+            Retention: {data.summary.retained_customers} of{" "}
+            {data.summary.previous_period_customers} customers with completed
+            orders in the previous period ordered again in this period.
+          </p>
+          {data.financials && (
+            <section className="panel mb-5" aria-label="Payment analytics">
+              <h3>Money behind the orders</h3>
+              <div className="insight-metrics">
+                {[
+                  ["Collected payments", data.financials.paid],
+                  ["Confirmed refunds", data.financials.refunded],
+                  ["Net collected", data.financials.net],
+                  [
+                    "Gross delivery fees",
+                    data.financials.gross_collected_delivery_fees,
+                  ],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <small>{label}</small>
+                    <strong>{money(value)}</strong>
+                  </div>
+                ))}
+              </div>
+              <p className="muted mb-3">
+                Accounted commission:{" "}
+                {data.financials.commission === null
+                  ? "Not yet accounted"
+                  : money(data.financials.commission)}{" "}
+                · {data.financials.commission_covered_orders || 0} orders
+                covered. See Earnings & settlements for the restaurant ledger.
+              </p>
+              <p className="muted">{data.financials.definition}</p>
+            </section>
+          )}
           <section className="panel report-trend">
             <div className="section-title">
               <div>

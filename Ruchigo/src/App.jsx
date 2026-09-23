@@ -31,6 +31,7 @@ const Tracking = lazy(() =>
 // Isolated, explicitly labelled read-only demo; never calls real order writes.
 const DeliveryDemo = lazy(() => import("./pages/DeliveryDemo.jsx"));
 const Profile = lazy(() => import("./pages/CustomerProfile.jsx"));
+const Rewards = lazy(() => import("./pages/RewardsPage.jsx"));
 const Orders = lazy(() =>
   import("./pages/OrderPages.jsx").then((m) => ({ default: m.OrdersPage })),
 );
@@ -255,6 +256,14 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["customer"]}>
                 <Checkout />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/rewards"
+            element={
+              <ProtectedRoute allowedRoles={["customer"]}>
+                <Rewards />
               </ProtectedRoute>
             }
           />

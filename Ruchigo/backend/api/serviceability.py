@@ -17,7 +17,7 @@ from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import AuditLog, CancellationPolicy, DeliveryPolicy, DeliveryZone
+from .models import AuditLog, CancellationPolicy, DeliveryPolicy, DeliveryZone, ServiceCity
 from .permissions import IsAdmin
 
 
@@ -53,13 +53,44 @@ def city_query(value, field="city"):
     return query
 
 
+def active_city_filter(prefix=""):
+    query = Q()
+    for name in ServiceCity.objects.filter(is_active=False).values_list("name", flat=True):
+        query &= ~city_query(name, f"{prefix}city")
+    return query
+
+
+def city_available(name):
+    return not ServiceCity.objects.filter(name__iexact=canonical_city(name), is_active=False).exists()
+
+
 def distance_km(a_lat, a_lng, b_lat, b_lng):
     lat1, lng1, lat2, lng2 = map(lambda n: math.radians(float(n)), (a_lat, a_lng, b_lat, b_lng))
     h = math.sin((lat2-lat1)/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin((lng2-lng1)/2)**2
     return Decimal(str(6371 * 2 * math.asin(math.sqrt(min(1, h)))))
 
 
+def filter_discovery_delivery(items, filters):
+    """Apply checkout geography to annotated candidates, before pagination/ranking.
+
+    Basket minimums are checked at quote time, not against a single menu item.
+    Disabled policies retain the existing same-city delivery contract.
+    """
+    if not filters.get("delivery_only"):
+        return items
+    policy = DeliveryPolicy.objects.filter(pk=1).first()
+    if not policy or not policy.enabled:
+        return items
+    coverage = Q(pk__in=[])
+    for zone in DeliveryZone.objects.filter(is_active=True).filter(city_query(filters["city"])):
+        if distance_km(zone.latitude, zone.longitude, filters["latitude"], filters["longitude"]) <= zone.radius_km:
+            coverage |= city_query(zone.city, "restaurant__city") & Q(distance_km__lte=float(zone.max_delivery_km))
+    return items.filter(coverage)
+
+
 def delivery_quote(restaurant, address, subtotal):
+    if not city_available(restaurant.city):
+        raise serializers.ValidationError({"address_id": "New orders are temporarily paused in this city. Existing orders are still being handled."})
     if canonical_city(restaurant.city) != canonical_city(address.city):
         raise serializers.ValidationError({"address_id": f"This kitchen delivers in {restaurant.city}. Choose an address there or a restaurant near your address."})
     policy = DeliveryPolicy.objects.filter(pk=1).first()
@@ -86,17 +117,26 @@ def delivery_quote(restaurant, address, subtotal):
         if zone.free_delivery_above is not None and subtotal >= zone.free_delivery_above:
             fee = Decimal(0)
         candidates.append((zone, fee.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)))
-    eligible = [(zone, fee) for zone, fee in candidates if fee is not None]
+    from .delivery_pricing import applicable_fees
+    adjustments = applicable_fees([zone.pk for zone, _ in candidates])
+    eligible = []
+    for candidate, standard in candidates:
+        if standard is None:
+            continue
+        rule = adjustments.get(candidate.pk) if standard > 0 else None
+        final = standard + Decimal(rule["fee"]) if rule else standard
+        eligible.append((candidate, final, rule))
     if not eligible:
         if candidates:
             minimum = min(zone.minimum_order for zone, _ in candidates)
             raise serializers.ValidationError({"cart": f"The minimum food subtotal for delivery here is ₹{minimum:.2f}."})
         raise serializers.ValidationError({"address_id": "This address is outside this kitchen’s delivery area. Choose a closer address or another restaurant."})
     # Overlap rule is deterministic and customer-friendly: cheapest eligible zone.
-    zone, fee = min(eligible, key=lambda row: (row[1], row[0].pk))
+    zone, fee, rule = min(eligible, key=lambda row: (row[1], row[0].pk))
     free_thresholds = [max(candidate.minimum_order, candidate.free_delivery_above) for candidate, _ in candidates if candidate.free_delivery_above is not None]
     free_thresholds.extend(candidate.minimum_order for candidate, _ in candidates if candidate.base_fee + max(Decimal(0), distance-candidate.included_km) * candidate.per_km_fee == 0)
     return {"delivery_fee": str(fee), "zone": zone.name, "zone_id": zone.pk,
+            **({"price_adjustment": rule, "standard_delivery_fee": str(fee-Decimal(rule["fee"]))} if rule else {}),
             "free_delivery_above": str(min(free_thresholds)) if free_thresholds else None,
             "zone_revision": zone.updated_at.isoformat(), "policy_revision": policy.revision,
             "distance_km": str(distance.quantize(Decimal("0.01"))), "distance_basis": "straight_line", "cancellation_policy": cancellation_snapshot}
@@ -146,6 +186,7 @@ class DeliveryZoneViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     permission_classes = [IsAdmin]
     serializer_class = DeliveryZoneSerializer
     queryset = DeliveryZone.objects.all()
+    search_fields = ["name", "city"]
     http_method_names = ["get", "post", "patch", "head", "options"]
 
     @transaction.atomic

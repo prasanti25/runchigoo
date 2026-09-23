@@ -11,6 +11,7 @@ import {
 import toast from "react-hot-toast";
 import { useAuth } from "./AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
+import { useDeliveryLocation } from "../lib/product.js";
 
 const CartContext = createContext(null);
 
@@ -35,7 +36,12 @@ export function CartProvider({ children }) {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [coupon, setCoupon] = useState(null);
-  const cartKey = JSON.stringify(cartItems);
+  const deliveryLocation = useDeliveryLocation();
+  const addressId = deliveryLocation.address_id;
+  const cartKey = JSON.stringify({
+    items: cartItems,
+    address: deliveryLocation,
+  });
   const cartScope = useRef({ key: cartKey, token });
   const couponRequest = useRef(0);
   useEffect(() => {
@@ -50,14 +56,19 @@ export function CartProvider({ children }) {
       token,
       method: "POST",
       signal: controller.signal,
-      body: { code: selectedCoupon },
+      body: {
+        code: selectedCoupon,
+        ...(addressId ? { address_id: addressId } : {}),
+      },
     })
       .then((data) => {
         if (controller.signal.aborted || operation !== couponRequest.current)
           return;
         setCoupon({
           code: data.code,
-          discount: Number(data.discount),
+          discount: Number(data.food_discount ?? data.discount),
+          saving: Number(data.discount),
+          benefit: data.benefit_type,
           key: cartKey,
           token,
         });
@@ -69,10 +80,10 @@ export function CartProvider({ children }) {
         toast.error(`${selectedCoupon} was removed: ${error.message}`);
       });
     return () => controller.abort();
-  }, [cartKey, cartItems.length, selectedCoupon, token]);
+  }, [cartKey, cartItems.length, selectedCoupon, token, addressId]);
 
   const loadCart = useCallback(async () => {
-    if (!isAuthenticated || !token || role !== "customer") {
+    if (!isAuthenticated || !token || !["customer", "admin"].includes(role)) {
       setCartItems([]);
       setCoupon(null);
       return;
@@ -100,8 +111,8 @@ export function CartProvider({ children }) {
     async (food, quantity = 1, addonIds = []) => {
       if (!isAuthenticated)
         throw new Error("Please log in to add items to your cart.");
-      if (role !== "customer")
-        throw new Error("Only customer accounts can place orders.");
+      if (!["customer", "admin"].includes(role))
+        throw new Error("Use a personal customer account to place orders.");
       const menuItemId = food.menuItemId || food.id;
       const incomingRestaurantId = food.restaurantId || food.restaurant;
       const localConflict =
@@ -212,7 +223,7 @@ export function CartProvider({ children }) {
       const data = await apiRequest("/cart/validate-coupon/", {
         token,
         method: "POST",
-        body: { code },
+        body: { code, ...(addressId ? { address_id: addressId } : {}) },
       });
       if (
         operation !== couponRequest.current ||
@@ -224,13 +235,15 @@ export function CartProvider({ children }) {
         );
       setCoupon({
         code: data.code,
-        discount: Number(data.discount || 0),
+        discount: Number(data.food_discount ?? data.discount ?? 0),
+        saving: Number(data.discount || 0),
+        benefit: data.benefit_type,
         key: cartKey,
         token,
       });
       return data;
     },
-    [token, cartKey],
+    [token, cartKey, addressId],
   );
 
   const clearCoupon = useCallback(() => {
@@ -249,6 +262,11 @@ export function CartProvider({ children }) {
       ? coupon?.discount || 0
       : 0;
   const couponChecking = Boolean(selectedCoupon && coupon?.key !== cartKey);
+  const couponSaving =
+    coupon?.token === token && coupon?.key === cartKey
+      ? coupon?.saving || 0
+      : 0;
+  const couponBenefit = selectedCoupon ? coupon?.benefit || "food" : "";
   const total = Math.max(0, itemTotal + deliveryFee - discount);
 
   const value = useMemo(
@@ -269,6 +287,8 @@ export function CartProvider({ children }) {
       deliveryFee,
       platformFee,
       discount,
+      couponSaving,
+      couponBenefit,
       total,
     }),
     [
@@ -287,6 +307,8 @@ export function CartProvider({ children }) {
       itemTotal,
       deliveryFee,
       discount,
+      couponSaving,
+      couponBenefit,
       total,
     ],
   );

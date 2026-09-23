@@ -62,7 +62,7 @@ class DeliveryChatViewSet(AdminScopeMixin, viewsets.ViewSet):
         if lock:
             orders = orders.select_for_update()
         user = self.request.user
-        if user.role == User.Role.CUSTOMER:
+        if user.role in [User.Role.CUSTOMER, User.Role.ADMIN]:
             orders = orders.filter(customer=user)
         elif user.role == User.Role.DELIVERY:
             orders = orders.filter(delivery__partner=user)

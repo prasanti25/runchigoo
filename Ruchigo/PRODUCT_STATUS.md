@@ -3,12 +3,82 @@
 Updated 23 September 2026. This compares the supplied Swiggy/Zomato-style feature list with the active code; it is not a claim of parity with either live service.
 
 Release storage/rollout notes are in [DATA_STORAGE.md](DATA_STORAGE.md). The
-292-test backend regression suite now passes on isolated PostgreSQL, including
+469-test backend regression suite now passes on isolated PostgreSQL, including
 restored-database migration rehearsal; production load/concurrency certification
 remains outstanding. Earlier local-only deployment references below are
 historical checkpoints, not evidence of the current Vercel alias.
 
 ## Outcome
+
+### Current local increment — 23 September, not pushed/deployed
+
+The latest 117-feature request is tracked individually in
+[IMPLEMENTATION_TODOS.md](IMPLEMENTATION_TODOS.md): **93 implemented, 20 partial,
+4 missing**. The complete numbered matrix remains a comparison, not a promise
+that all 300 entries or commercial operations are ready.
+
+This increment connects selected doorstep/city/zone filtering across discovery,
+search, recommendations and the personalized feed. Google forward address
+suggestions update the existing Google pin and address form; customers confirm
+missing street/flat/floor details. Precise coordinates stay out of Gemini ranking
+context. Profile analytics now show actual collected/refund-adjusted spending,
+monthly history, favourites and order frequency. Business reports add defined
+cohort retention and separate collected/refunded/net figures.
+
+Approved merchants now manage owned coupons and link offer banners to redeemable
+codes. Named festival/first-order campaigns, single-dish BOGO and platform-funded
+fee-waiver coupons share eligibility, cart display, signed quote and checkout
+validation. Extras are not free under BOGO; both portions consume stock. Coupon
+usage and stock are locked on checkout. Linked campaign changes invalidate old
+quotes. Administrators cannot silently turn a merchant offer into a global one.
+
+Kitchens can opt into scheduled **preparation starts** with configured hours,
+notice and horizon. Early cooking is blocked in the kitchen UI and API. Optional
+cash tips are policy-gated and COD-only, visible in the bill/order/rider collection
+details. Both are disabled by default, and no live policy has been enabled.
+
+Verification: **416 PostgreSQL tests including actual concurrent checkouts**,
+real local customer/merchant/admin/rider browser regressions, 1440/390/320px,
+actual configured Google geocoding/maps, lint/build, credential scan and an
+isolated 0022→0024 migration rehearsal. See [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md).
+This batch changes schema and is local/uncommitted; existing production is
+unchanged. Database/source changes are not automatically deployed by a successful
+local build.
+
+Follow-up: real promotional points/credit ledger, capped cashback, levels,
+referrals, signed redemption and confirmed-refund/cancellation reconciliation
+now connect the profile, checkout, order bill and admin policy UI. Policies stay
+disabled until commercial approval. Existing order snapshots survive policy
+changes. Refunds still go through the original payment method; promotional
+credits are not a replacement. Negative adjustment balances can result when
+already-spent rewards are reversed; no bank charge or withdrawal is implied.
+
+City availability now has audited pause/reopen controls shared by discovery,
+catalog and checkout without interrupting existing deliveries. Finite weekday
+peak pricing and fixed temporary demand fees are configurable; overlapping fees
+do not stack, the cheapest eligible adjusted zone wins, and free-delivery
+benefits still waive the full fee. Automatic demand prediction/pricing is not
+claimed. All new pricing rules remain inactive on the shared preview.
+
+Merchant finance now records pre-tax food sales, approved snapshotted commission,
+confirmed-refund adjustments and finance-confirmed external payments in a locked,
+append-only service ledger. Customer bill amounts do not change when commission
+is configured. Platform-funded discounts are separated from merchant discounts;
+delivery/tips are excluded from commission. External payment recording and
+audited corrections do not initiate or reverse bank transfers. Legacy orders
+remain outside the new ledger and coverage is explicit. Both policies stay off.
+
+Admin personal shopping no longer requires switching accounts: owned checkout,
+history, reviews, cancellation, rider chat and ETA are separate from delegated
+operations permissions. The admin overview now uses concise metrics/action
+cards and mobile order cards. Finance workspaces use separate payment, earnings
+and refund tabs; mobile has scoped Overview / Orders / More navigation.
+
+Still missing or partial beyond keys: stored-money wallets, private
+KYC/license/FSSAI workflows, automated payouts/tax accounting, automatic surge,
+route optimization, scheduled capacity/workers,
+online tip payout handling and broader audit coverage. Do not enable real
+commerce until provider, storage, commercial policy and operations gates are met.
 
 RuchiGo now has a consistent customer experience and operational workspaces connected to its Django API: discovery → menu → cart/coupon → checkout → kitchen states → delivery confirmation → review/support. The implementation is a working product foundation, **not a completed 300-feature commercial platform**.
 

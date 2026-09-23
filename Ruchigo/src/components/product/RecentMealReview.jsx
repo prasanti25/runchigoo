@@ -5,7 +5,7 @@ import OrderReview from "./OrderReview.jsx";
 
 export default function RecentMealReview() {
   const { token, user, role } = useAuth();
-  return token && role === "customer" ? (
+  return token && ["customer", "admin"].includes(role) ? (
     <Reminder key={user.id} token={token} userId={user.id} />
   ) : null;
 }
@@ -20,7 +20,7 @@ function Reminder({ token, userId }) {
       return [];
     }
   });
-  const orders = useRemote("/orders/?status=delivered", token);
+  const orders = useRemote("/orders/?view=mine&status=delivered", token);
   const order = orders.data?.results.find(
     (item) => !item.review && !dismissed.includes(item.id),
   );

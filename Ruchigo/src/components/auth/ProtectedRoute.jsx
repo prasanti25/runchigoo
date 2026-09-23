@@ -15,7 +15,13 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
+  const personalShopping =
+    role === "admin" && allowedRoles.includes("customer");
+  if (
+    allowedRoles.length > 0 &&
+    !allowedRoles.includes(role) &&
+    !personalShopping
+  ) {
     const roleHome =
       role === "admin"
         ? "/admin-dashboard"
@@ -27,7 +33,14 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
     return <Navigate to={roleHome} replace />;
   }
 
-  if (role === "admin" && !canOpenAdminRoute(user, location.pathname)) {
+  const personalSupport =
+    location.pathname === "/support" &&
+    new URLSearchParams(location.search).get("view") !== "team";
+  if (
+    role === "admin" &&
+    !personalSupport &&
+    !canOpenAdminRoute(user, location.pathname)
+  ) {
     return (
       <main className="container customer-main">
         <h1>Workspace access required</h1>

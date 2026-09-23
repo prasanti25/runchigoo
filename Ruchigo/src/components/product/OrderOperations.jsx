@@ -22,7 +22,9 @@ export default function OrderOperations({ order, onUpdated, ticketId }) {
   const active = !["awaiting_payment", "cancelled", "delivered"].includes(
     order.status,
   );
-  const staff = hasAdminScope(user, "orders") || role === "restaurant";
+  const personal = order.customer === user?.id;
+  const staff =
+    !personal && (hasAdminScope(user, "orders") || role === "restaurant");
   if (!active) return null;
   return (
     <>
@@ -35,7 +37,7 @@ export default function OrderOperations({ order, onUpdated, ticketId }) {
               A fulfilment issue needs a support decision. Preparation,
               assignment, pickup and delivery are paused.
             </p>
-            {role === "customer" && (
+            {personal && (
               <Link
                 className="text-link"
                 to={`/support?ticket=${order.fulfillment_issue}`}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import CouponSavings from "../components/product/CouponSavings.jsx";
+import RewardCheckout from "../components/product/RewardCheckout.jsx";
 import AddressForm from "../components/product/AddressForm.jsx";
 import {
   ArrowRight,
@@ -60,6 +61,33 @@ export function Bill({ children, quote, checking = false, checkout = false }) {
         <div className="bill-line">
           <span>Coupon saving</span>
           <span>−{money(discount)}</span>
+        </div>
+      )}
+      {Number(quote?.delivery_discount) > 0 && (
+        <p className="saving-line">
+          Delivery coupon saved {money(quote.delivery_discount)}. Included in
+          your free delivery above.
+        </p>
+      )}
+      {quote?.price_adjustment && Number(quote.delivery_fee) > 0 && (
+        <p className="form-help">
+          Delivery includes {money(quote.price_adjustment.fee)}{" "}
+          {quote.price_adjustment.kind === "peak"
+            ? "peak-time"
+            : "temporary demand"}{" "}
+          fee. {quote.price_adjustment.name}.
+        </p>
+      )}
+      {Number(quote?.tip_amount) > 0 && (
+        <div className="bill-line">
+          <span>Cash tip for your rider</span>
+          <span>{money(quote.tip_amount)}</span>
+        </div>
+      )}
+      {Number(quote?.reward_discount) > 0 && (
+        <div className="bill-line">
+          <span>Rewards used</span>
+          <span>−{money(quote.reward_discount)}</span>
         </div>
       )}
       <div className="bill-line bill-total">
@@ -199,13 +227,32 @@ export { default as AddressForm } from "../components/product/AddressForm.jsx";
 export function CheckoutPage() {
   const { token, user } = useAuth();
   const deliveryLocation = useDeliveryLocation();
-  const { cartItems, couponCode, loadCart } = useCart();
+  const {
+    cartItems,
+    couponCode,
+    loadCart,
+    discount: couponDiscount,
+  } = useCart();
   const navigate = useNavigate();
   const addresses = useRemote("/addresses/", token);
   const paymentOptions = useRemote("/online-payments/", token);
+  const checkoutOptions = useRemote("/checkout-options/", token);
+  const kitchen = useRemote(
+    cartItems[0]?.restaurantId
+      ? `/restaurants/${cartItems[0].restaurantId}/`
+      : null,
+  );
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [notes, setNotes] = useState("");
   const [contactless, setContactless] = useState(false);
+  const [scheduled, setScheduled] = useState("");
+  const [tip, setTip] = useState("");
+  const [rewards, setRewards] = useState({ points: 0, credits: "0" });
+  const scheduledFor =
+    scheduled && !Number.isNaN(new Date(scheduled).getTime())
+      ? new Date(scheduled).toISOString()
+      : null;
+  const tipAmount = paymentMethod === "cod" ? tip || "0" : "0";
   const [addAddress, setAddAddress] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -228,23 +275,53 @@ export function CheckoutPage() {
     items: cartItems,
     couponCode,
     quoteVersion,
+    scheduledFor,
+    tipAmount,
+    paymentMethod,
+    rewards,
   });
   useEffect(() => {
     if (!addressId || !cartItems.length) return;
     const controller = new AbortController();
-    apiRequest("/cart/quote/", {
-      token,
-      method: "POST",
-      signal: controller.signal,
-      body: { address_id: addressId, coupon_code: couponCode },
-    })
-      .then((data) => setQuoteState({ key: quoteKey, data }))
-      .catch((err) => {
-        if (err.name !== "AbortError")
-          setQuoteState({ key: quoteKey, error: err.message });
-      });
-    return () => controller.abort();
-  }, [addressId, cartItems.length, couponCode, quoteKey, token]);
+    const timer = window.setTimeout(
+      () =>
+        apiRequest("/cart/quote/", {
+          token,
+          method: "POST",
+          signal: controller.signal,
+          body: {
+            address_id: addressId,
+            coupon_code: couponCode,
+            scheduled_for: scheduledFor,
+            tip_amount: tipAmount,
+            payment_method: paymentMethod,
+            reward_points: rewards.points,
+            reward_credits: rewards.credits,
+          },
+        })
+          .then((data) => setQuoteState({ key: quoteKey, data }))
+          .catch((err) => {
+            if (err.name !== "AbortError")
+              setQuoteState({ key: quoteKey, error: err.message });
+          }),
+      250,
+    );
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    addressId,
+    cartItems.length,
+    couponCode,
+    quoteKey,
+    token,
+    scheduledFor,
+    tipAmount,
+    paymentMethod,
+    rewards.points,
+    rewards.credits,
+  ]);
   const quote = quoteState.key === quoteKey ? quoteState.data : null;
   const quoteError = quoteState.key === quoteKey ? quoteState.error : "";
   const checkingQuote = Boolean(addressId && !quote && !quoteError);
@@ -267,6 +344,10 @@ export function CheckoutPage() {
           notes: `${contactless ? "Contactless delivery requested. " : ""}${notes}`,
           checkout_key: key.current,
           quote_token: quote.quote_token,
+          scheduled_for: scheduledFor,
+          tip_amount: tipAmount,
+          reward_points: rewards.points,
+          reward_credits: rewards.credits,
         },
       });
       if (order.status === "awaiting_payment") {
@@ -389,6 +470,57 @@ export function CheckoutPage() {
                 </section>
                 <section className="panel">
                   <h2>Make it your kind of delivery</h2>
+                  {kitchen.data?.scheduling_enabled && (
+                    <div className="mt-5">
+                      <label className="field">
+                        <span>Prepare now, or schedule for later</span>
+                        <input
+                          type="datetime-local"
+                          aria-label="Scheduled preparation time"
+                          value={scheduled}
+                          onChange={(event) => setScheduled(event.target.value)}
+                        />
+                      </label>
+                      <p className="form-help">
+                        Optional. Choose when the kitchen should start
+                        preparing—not an exact delivery time. At least{" "}
+                        {kitchen.data.schedule_notice_minutes} minutes ahead,
+                        within {kitchen.data.schedule_horizon_days} days and
+                        during kitchen hours.
+                      </p>
+                      {scheduled && (
+                        <button
+                          type="button"
+                          className="text-link"
+                          onClick={() => setScheduled("")}
+                        >
+                          Order for now instead
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {checkoutOptions.data?.cash_tips_enabled &&
+                    paymentMethod === "cod" && (
+                      <label className="field mt-5">
+                        <span>
+                          Cash tip for your delivery partner (optional)
+                        </span>
+                        <input
+                          type="number"
+                          aria-label="Cash tip"
+                          min="0"
+                          max={checkoutOptions.data.max_cash_tip}
+                          step="1"
+                          value={tip}
+                          onChange={(event) => setTip(event.target.value)}
+                          placeholder="No tip"
+                        />
+                        <small className="form-help">
+                          Added to the cash total. Paid directly to your rider
+                          on delivery; not an online payout.
+                        </small>
+                      </label>
+                    )}
                   <label className="field mt-5">
                     <span>Instructions for your delivery partner</span>
                     <textarea
@@ -441,6 +573,20 @@ export function CheckoutPage() {
                   )}
                 </section>
                 <CouponSavings addressId={addressId} />
+                <RewardCheckout
+                  token={token}
+                  value={rewards}
+                  onChange={setRewards}
+                  foodAmount={
+                    Number(
+                      quote?.subtotal ??
+                        cartItems.reduce(
+                          (sum, item) => sum + item.price * item.quantity,
+                          0,
+                        ),
+                    ) - Number(quote?.discount ?? couponDiscount)
+                  }
+                />
                 <ErrorNotice error={error} />
               </div>
               <Bill quote={quote} checking={checkingQuote} checkout>

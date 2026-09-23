@@ -13,7 +13,11 @@ class IsFulfillmentActor(BasePermission):
 class IsAssignedCourierRole(IsFulfillmentActor):
     roles = [User.Role.DELIVERY]
 class IsAdmin(IsRole): roles=[User.Role.ADMIN]
-class IsCustomer(IsRole): roles=[User.Role.CUSTOMER]
+class IsCustomer(IsRole):
+    """Personal shopping access, not operational authority over other orders."""
+    roles=[User.Role.CUSTOMER, User.Role.ADMIN]
+    def has_permission(self, request, view):
+        return bool(request.user.is_authenticated and request.user.role in self.roles)
 class IsRestaurantOrAdmin(IsRole): roles=[User.Role.RESTAURANT, User.Role.ADMIN]
 class IsOwnerOrAdmin(BasePermission):
     def has_object_permission(self, request, view, obj): return request.user.is_superuser or getattr(obj, "user", getattr(obj, "customer", None)) == request.user

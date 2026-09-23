@@ -13,6 +13,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { apiRequest } from "../../lib/api.js";
 import { fetchAllPages } from "../../lib/collections.js";
 import { canOpenAdminRoute, hasAdminScope } from "../../lib/adminAccess.js";
+import AdminOverview from "./AdminOverview.jsx";
 
 const money = (value) =>
   `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -95,7 +96,7 @@ function useAnalytics() {
 
 export function AdminDashboard() {
   const { user } = useAuth();
-  if (hasAdminScope(user, "reports")) return <PlatformOverview />;
+  if (hasAdminScope(user, "reports")) return <AdminOverview />;
   const links = [
     ["/admin-orders", "Order operations"],
     ["/support", "Support conversations"],
@@ -134,88 +135,6 @@ export function AdminDashboard() {
             need.
           </p>
         </section>
-      )}
-    </AdminFrame>
-  );
-}
-
-function PlatformOverview() {
-  const { data, loading, error } = useAnalytics();
-  const totalUsers =
-    data?.users?.reduce((sum, item) => sum + item.count, 0) || 0;
-  const totalOrders =
-    data?.orders?.reduce((sum, item) => sum + item.count, 0) || 0;
-  const paid = data?.payments?.find((item) => item.status === "paid");
-  return (
-    <AdminFrame
-      title="Platform dashboard"
-      subtitle="Live platform totals and the newest orders."
-    >
-      <Notice loading={loading} error={error} />
-      {data && (
-        <>
-          <Metrics
-            entries={[
-              ["Users", totalUsers],
-              ["Restaurants", data.restaurants.total],
-              ["Orders", totalOrders],
-              ["Paid volume", money(paid?.amount)],
-            ]}
-          />
-          <div className="workspace-quicklinks">
-            <Link to="/admin-restaurants">
-              <div>
-                <strong>
-                  {data.restaurants.total - data.restaurants.approved}{" "}
-                  restaurants awaiting approval
-                </strong>
-                <span>Review restaurant profiles and catalog access.</span>
-              </div>
-            </Link>
-            <Link to="/support">
-              <div>
-                <strong>Customer & partner support</strong>
-                <span>Read requests, reply and track resolution.</span>
-              </div>
-            </Link>
-            <Link to="/admin-reviews">
-              <div>
-                <strong>Reviews & platform activity</strong>
-                <span>Moderate transparently with recorded reasons.</span>
-              </div>
-            </Link>
-          </div>
-          <section className="panel overflow-x-auto">
-            <h2 className="text-xl font-bold">Recent orders</h2>
-            <table className="mt-5 w-full min-w-[720px] text-left text-sm">
-              <thead>
-                <tr className="border-b text-gray-500">
-                  <th className="py-3">Order</th>
-                  <th>Customer</th>
-                  <th>Restaurant</th>
-                  <th>Status</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recent_orders.map((order) => (
-                  <tr key={order.id} className="border-b border-gray-100">
-                    <td className="py-4 font-medium">
-                      #{String(order.number).slice(0, 8)}
-                    </td>
-                    <td>{order.customer_detail?.email}</td>
-                    <td>{order.restaurant_detail?.name}</td>
-                    <td className="capitalize">{label(order.status)}</td>
-                    <td>{money(order.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!data.recent_orders.length && (
-              <p className="mt-5 text-gray-500">No orders yet.</p>
-            )}
-          </section>
-        </>
       )}
     </AdminFrame>
   );
@@ -641,7 +560,11 @@ export function AdminReports() {
         <>
           <Metrics
             entries={[
-              ["Active users", data.active_users],
+              ["Enabled accounts", data.active_users],
+              [
+                "Ordering customers · last 30 days",
+                data.active_ordering_customers_30d,
+              ],
               ["Approved restaurants", data.restaurants.approved],
               ["Non-cancelled order value", money(totalRevenue)],
               ["Order states", data.orders.length],

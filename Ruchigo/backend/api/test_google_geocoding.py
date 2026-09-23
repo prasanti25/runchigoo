@@ -30,6 +30,44 @@ class GoogleGeocodingTests(APITestCase):
     def setUp(self):
         cache.clear()
 
+    @patch("api.google_geocoding.urlopen")
+    def test_forward_suggestions_use_sanitized_addresses_and_valid_pins(self, provider):
+        self.provider(provider)
+        result = self.client.post("/api/v1/location/search/", {"query": "Example Lane Delhi", "consent": True}, format="json")
+        self.assertEqual(result.status_code, 200)
+        row = result.data["results"][0]
+        self.assertEqual(row["line1"], "Example Lane")
+        self.assertEqual(row["latitude"], 1)
+        self.assertEqual(result["Cache-Control"], "private, no-store")
+        self.assertNotIn("server-fixture-secret", result.content.decode())
+        self.assertNotIn("private-provider-id", result.content.decode())
+        query = parse_qs(urlsplit(provider.call_args.args[0].full_url).query)
+        self.assertEqual(query["address"], ["Example Lane Delhi"])
+        self.assertEqual(query["components"], ["country:IN"])
+
+    @patch("api.google_geocoding.urlopen")
+    def test_forward_requires_explicit_search_and_limits_input(self, provider):
+        for body in [{}, {"query":"Delhi"}, {"query":"abc", "consent":True}, {"query":"x"*241, "consent":True}]:
+            self.assertEqual(self.client.post("/api/v1/location/search/",body,format="json").status_code,400)
+        provider.assert_not_called()
+
+    @patch("api.google_geocoding.urlopen")
+    def test_forward_no_match_and_outage_are_distinct(self, provider):
+        self.provider(provider, {"status":"ZERO_RESULTS", "results":[]})
+        result = self.client.post("/api/v1/location/search/",{"query":"Unknown place", "consent":True},format="json")
+        self.assertEqual(result.status_code,200)
+        self.assertEqual(result.data["results"],[])
+        provider.side_effect = URLError("outage")
+        self.assertEqual(self.client.post("/api/v1/location/search/",{"query":"Unknown place", "consent":True},format="json").status_code,503)
+
+    @patch("api.google_geocoding.urlopen")
+    def test_forward_never_accepts_invalid_provider_coordinates(self, provider):
+        bad = copy.deepcopy(self.result)
+        bad["geometry"]["location"]["lat"] = 999
+        self.provider(provider, {"status":"OK", "results":[bad]})
+        result = self.client.post("/api/v1/location/search/",{"query":"Example Lane", "consent":True},format="json")
+        self.assertEqual(result.data["results"],[])
+
     def provider(self, mock, data=None):
         response = MagicMock()
         response.read.return_value = json.dumps(data if data is not None else {"status": "OK", "results": [self.result]}).encode()

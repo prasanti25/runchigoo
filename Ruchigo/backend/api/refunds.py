@@ -78,6 +78,10 @@ def record_provider_refund(entity, *, expected_refund_id=None):
             payment.reconciliation_required = False
             payment.save(update_fields=["status", "reconciliation_required", "updated_at"])
         record_refund_update(refund, f"A refund of ₹{refund.approved_amount:.2f} was processed to your original payment method. Your bank or payment app determines when it appears.")
+        from .rewards import sync_order_rewards
+        sync_order_rewards(order)
+        from .merchant_finance import sync_order_finance
+        sync_order_finance(order)
     elif status == "failed":
         record_refund_update(refund, "The payment provider could not process this refund. Support needs to review it; the refund is not marked complete.")
     return refund

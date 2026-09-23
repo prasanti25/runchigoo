@@ -1,5 +1,6 @@
 """Google address suggestions: server-only credential, no result cache or writes."""
 import json
+import math
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -85,3 +86,33 @@ def google_reverse_address(latitude, longitude):
         return None, "rate_limited" if error.code == 429 else "unavailable"
     except (URLError, OSError, ValueError, TypeError, KeyError):
         return None, "unavailable"
+
+
+def google_search_addresses(query):
+    """Forward address suggestions; no cached personal queries or invented pins."""
+    if not google_address_enabled():
+        return [], "unavailable"
+    parameters = urlencode({"key": settings.GOOGLE_MAPS_SERVER_API_KEY, "address": query, "language": "en", "region": "in", "components": "country:IN"})
+    try:
+        with urlopen(Request(f"https://maps.googleapis.com/maps/api/geocode/json?{parameters}", headers={"Accept": "application/json"}), timeout=8) as response:
+            data = json.loads(response.read(262144))
+        if not isinstance(data, dict):
+            return [], "unavailable"
+        if data.get("status") != "OK":
+            return [], "no_match" if data.get("status") == "ZERO_RESULTS" else "rate_limited" if data.get("status") in {"OVER_QUERY_LIMIT", "OVER_DAILY_LIMIT"} else "unavailable"
+        results = []
+        for row in data.get("results", [])[:5]:
+            try:
+                fields = google_address_fields({"results": [row]})
+                point = row["geometry"]["location"]
+                lat, lng = float(point["lat"]), float(point["lng"])
+                if not math.isfinite(lat) or not math.isfinite(lng) or not -90 <= lat <= 90 or not -180 <= lng <= 180:
+                    continue
+                results.append({**fields, "latitude": lat, "longitude": lng})
+            except (KeyError, TypeError, ValueError, OverflowError):
+                continue
+        return results, "ready" if results else "no_match"
+    except HTTPError as error:
+        return [], "rate_limited" if error.code == 429 else "unavailable"
+    except (URLError, OSError, ValueError, TypeError, KeyError):
+        return [], "unavailable"

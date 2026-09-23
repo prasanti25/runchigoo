@@ -1,5 +1,183 @@
 # Product verification — 23 September 2026
 
+## Commerce, location and analytics increment — verified locally, not deployed
+
+This working-tree increment follows `94b08fb`. It has **not been pushed or
+deployed**. Production still runs the earlier contextual-support release below.
+`IMPLEMENTATION_TODOS.md` tracks all 117 entries in the latest scoped request:
+93 implemented, 20 partial, 4 missing. These are scoped feature counts, not
+commercial launch approval or a zero-bug guarantee.
+
+### Current verification
+
+Merchant finance, admin shopping and responsive UI follow-up:
+
+- Finance unit checks: **14 passed** initially; **61 PostgreSQL tests passed**
+  across finance, actual concurrent callbacks/settlements, rewards, analytics
+  and admin scopes. The four new PostgreSQL races verify duplicate accrual,
+  concurrent account initialization, duplicate settlement debit and competing
+  settlements without overdrawing.
+- **39 additional targeted tests passed** after the final admin-shopping/ETA
+  permission corrections. These include owner-only checkout/history/reviews,
+  cancellation and rider chat, own-order ETA without reports access, denied
+  access to another customer's order, notification isolation, taste preferences
+  and existing delegated administration.
+- Final `npm run test:merchant-finance` passed against its own real SQLite DB
+  and Django backend, not mocked responses: UI policy configuration; customer
+  checkout → owning kitchen → courier pickup/OTP delivery; ₹360 merchant accrual
+  from a ₹400 fixture meal at a 10% fixture rate; ₹100 external payment record;
+  audited correction back to ₹360. The admin with **no operational scopes**
+  then shops through the actual restaurant/checkout UI, views only their own
+  orders and cancels within the permitted window. No live financial activation.
+- This browser suite also checks the empty/populated admin overview, separate
+  payment/earnings/refund tabs, mobile payment cards, mobile workspace menu,
+  restaurant-owned earnings, and desktop/390/320px overflow. **Zero page errors
+  and zero failing API responses** in the final run. Screenshots retained at
+  `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-merchant-J5MQeW`.
+- Final `npm run test:dashboard-queues` passed: paginated/searchable order queues,
+  scoped payment filters and matching counts, admin refund controls, category
+  editor, partner-only account pages and 1440/390/320px layouts. The test made
+  **zero business writes** and verified shared user order 16 remained unchanged.
+- Final lint/build, migration drift and whitespace checks pass. Migration 0027
+  was applied only to the local preview and the retained historical PostgreSQL
+  fixture. Before/after hashes of original totals, status, addresses, quote/reward
+  snapshots and stock match. Legacy orders have empty commission snapshots and
+  no invented financial entries. Shared orders 16/37 are present; accounting,
+  settlement recording, rewards and extra-fee policies remain off.
+- Private-provider scan: 568 selected source/build paths, four configured private
+  provider values, **zero matches**. Public browser-restricted Maps config is not
+  treated as a server secret. No credentials are recorded in these documents.
+- Failures corrected during verification: an obsolete admin-shopping denial
+  assertion; redundant false audience fields in delivery notifications; denied
+  public restaurant/own-order ETA lookups for delegated admin shoppers; duplicate
+  visit effects and SQLite deferred-write lock contention during cart changes.
+  SQLite development transactions now begin IMMEDIATE with a bounded timeout;
+  this is not a substitute for PostgreSQL concurrency or production load tests.
+  Browser harness cleanup and ambiguous address selectors were also corrected.
+
+**Final full rerun: 469 tests passed on isolated UTF-8 PostgreSQL, 888.9s**, including
+all ten actual threaded commerce/reward/merchant-finance races. The final own-order
+ETA permission guard was additionally covered in the 39-test targeted run and the
+successful full browser flow above. The isolated PostgreSQL cluster was stopped
+after verification; retained fixtures can be reused. Earlier failed and passing
+checkpoints do not establish a zero-bug or production-ready claim.
+
+Follow-up (rewards and city/pricing):
+
+- **Final full run: 445 tests passed on isolated UTF-8 PostgreSQL**, 472.2s,
+  including all six actual threaded races, pricing/city cases and a check that
+  city availability adds only one query for a 20-card serialized response.
+  Final lint/build, migration drift and `git diff --check` passed. Shared local
+  orders 16/37 remain present; rewards remain disabled, with no new active fee
+  rules or city overrides. The isolated PostgreSQL test cluster was stopped
+  afterwards; its databases remain available for future migration checks.
+- Private-provider scan: **616 source/build paths**, four configured private
+  provider values, no matches. Browser-restricted Maps keys are deliberately
+  public configuration, not included as server secrets. An initial broader scan
+  matched the existing development-only secret placeholder in `.env.example`;
+  that was not an exposed provider credential. Local login credentials were not
+  written to source or these documents.
+
+- **435 PostgreSQL tests passed** at the rewards checkpoint, 196.4s, including
+  six total threaded races: the preceding three commerce races plus concurrent
+  reward callbacks, competing referral qualification, and duplicate reward
+  checkout. The next full suite includes city/pricing cases and response-level
+  city-query batching; its final result is recorded above.
+- A subsequent 74-test targeted rewards/pricing/checkout/location run passed.
+  The old “loyalty not implemented” null assertion was deliberately replaced
+  with checks for a disabled programme and genuine zero opening balances.
+- `npm run test:rewards` uses a **dedicated temporary SQLite database and backend**,
+  not shared live policies. Browser API traffic is forwarded to the real backend,
+  not mocked. Admin policy configuration → customer checkout → kitchen stages →
+  rider pickup/OTP delivery → actual reward earning → next checkout redemption →
+  cancellation restoration all passed. Desktop/390/320px rewards and checkout
+  layouts, admin surcharge creation, customer fee disclosure and city pause/
+  reopen also passed, with zero browser errors. Final screenshots:
+  `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-rewards-lQ1p3k`.
+  A first pricing run found a selector/accessibility-name mismatch on the zone
+  dropdown; an explicit accessible label was added and the complete run passed.
+- Migrations **0025–0026** were rehearsed from the retained PostgreSQL historical
+  fixture. Order totals/statuses/address snapshots, menu stock and addresses were
+  unchanged. Existing orders have zero reward discount and no earning snapshot;
+  rewards do not appear retroactively. New policies/rules default inactive.
+- The requested support-admin email was absent from the shared local database.
+  Created a local-only application admin (not Django staff/superuser), with an
+  explicit full-access grant and audit entry. Real browser sign-in reached
+  `/admin-dashboard` with no browser errors. No live account/password changed.
+
+Earlier commerce/location checkpoint (prior evidence, not the follow-up count):
+
+- **416 backend tests pass on isolated UTF-8 PostgreSQL**, 130.5s. Includes
+  three real threaded checkout races: one last coupon redemption, no overselling
+  of BOGO portions, and duplicate checkout returning one order/reservation.
+  The preceding 411-test SQLite run passed; the final five additions are covered
+  by PostgreSQL. This is targeted contention coverage, not production load testing.
+- New browser suite `npm run test:location-analytics` passes against real local
+  APIs: selected-pin discovery; owner-scoped profile analytics; owned merchant
+  coupon creation; scheduled COD checkout and early-cooking rejection; merchant
+  BOGO/festival campaign and linked offer; admin delivery-fee coupon; exact signed
+  bill and apply animation; actual configured Google forward address lookup and
+  a ready Google map. Desktop/390/320px and keyboard suggestion selection pass.
+  Free-delivery coupons no longer display contradictory spend-more prompts.
+- `test:coupon-savings` passes: eligibility/search, expiry, spend thresholds,
+  server-confirmed celebration, cart revalidation, non-stacking replacement,
+  signed bill, removal, 1440/390/320px and reduced motion. No order/redemption.
+- `test:dashboard-queues` passes: real paginated orders/payment ledgers,
+  admin-only refund controls, category editor, partner accounts, three widths.
+  No business writes. `test:checkout-city` passes for Delhi/South Delhi, Noida
+  rejection, address recovery and three widths, with no orders placed.
+- `test:rider-location` passes: rider's opt-in browser GPS writes, customer-owned
+  lightweight GPS reads, real configured Google road route/map/ETA, provider
+  failure recovery, stale state and completion cleanup at three widths. The
+  controlled fixture reached the browser in 90ms in this run; this is **not**
+  a latency SLA, background GPS or evidence of a physical delivery.
+- Migrations **0023–0024** applied to local preview SQLite. An isolated PostgreSQL
+  historical-model fixture at 0022 upgraded successfully: original order/payment
+  amounts, stock, address snapshot and coupon usage survived; scheduling/tips
+  default off and existing coupons default to meal discounts. This was a
+  synthetic fixture rehearsal, not a fresh production-backup restore.
+- Lint, production build, migration drift and diff whitespace checks pass.
+  Private provider/database value scan covered five configured values across
+  593 tracked/untracked/build paths with no exposures. Credentials were not changed.
+- New fixture users, coupons, offers and orders were removed after testing;
+  existing local user orders 16 and 37 were checked unchanged by the new suite.
+  No production records, commercial settings or payments were written. The
+  isolated PostgreSQL verification server is stopped; local app servers remain.
+
+### Issues caught while checking
+
+- Browser selectors exposed missing explicit accessible names on new selects;
+  the form now provides those labels and the full rerun passes.
+- Visual review caught the free-delivery coupon/spend-more contradiction; fixed
+  with a regression assertion. Address search focus now follows the rounded field.
+- An initial PostgreSQL harness inherited SQL_ASCII from its temporary cluster,
+  failing seven Unicode JSON support fixtures. Re-run with UTF8/template0 passes
+  all 416; application text was not stripped or altered to hide the harness issue.
+- Parallel browser fixture writers contended on shared preview SQLite. The
+  address regression passed when run sequentially after the others. Run local
+  SQLite browser suites sequentially; production row locks were tested separately.
+- Initial migration fixture creation omitted historical usernames. The successful
+  rehearsal used a fresh isolated database and explicit unique fixture usernames.
+
+### Boundaries
+
+Scheduling means **preparation starts at the chosen time**, not guaranteed
+arrival. A kitchen must opt in with explicit weekly hours; currently closed
+kitchens cannot be booked through the existing cart. Capacity slots, reminders
+and durable scheduled workers remain open. Cash tips are COD-only, opt-in and
+paid directly to the rider; online payout accounting is not implemented.
+
+BOGO is one specified kitchen dish, base price only, with both portions in the
+cart and a free-portion cap. Free-delivery campaigns are platform-managed, scoped
+to a serviceable address, and do not waive food/tips or consume already-free fees.
+One coupon per order; no free gifts, cross-dish combos or discount stacking.
+
+Spending is collected payment minus confirmed refunds grouped by **order date**,
+not bank accounting. Delivery fees are gross before refund allocation. Wallet,
+loyalty/referrals/cashback, private KYC documents, commission/settlements, city
+lifecycle, surge/peak pricing and route optimization are still open. Production
+release also needs migration rehearsal/backup and approved commercial operations.
+
 ## Contextual support follow-ups — deployed and public smoke verified
 
 - Runtime `fa8e4e8` is pushed to `prasanti25/runchigoo` main. Deployment

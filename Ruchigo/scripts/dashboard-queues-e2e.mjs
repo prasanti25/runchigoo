@@ -98,10 +98,19 @@ try {
     [admin, "/admin-payments"],
     [kitchen, "/restaurant-earnings"],
   ]) {
-    await actor.page.goto(`${base}${path}`, { waitUntil: "networkidle" });
+    await actor.page.goto(`${base}${path}?tab=payments`, {
+      waitUntil: "networkidle",
+    });
     await expect(
-      actor.page.getByRole("heading", { name: "Payments", exact: true }),
+      actor.page.getByRole("heading", {
+        name:
+          actor === admin
+            ? "Payments & restaurant finance"
+            : "Earnings & payments",
+        exact: true,
+      }),
     ).toBeVisible();
+    await actor.page.getByText("Filter payments", { exact: true }).click();
     await actor.page.getByLabel("Payment status filter").selectOption("paid");
     await actor.page.getByLabel("Payment method filter").selectOption("cod");
     const ledger = await get("/payments/?status=paid&method=cod", actor.token);
@@ -112,6 +121,9 @@ try {
       `${ledger.count} matching payments`,
     );
     if (actor === admin) {
+      await actor.page
+        .getByRole("tab", { name: "Refund reviews", exact: true })
+        .click();
       await actor.page
         .getByLabel("Refund status filter")
         .selectOption("requested");

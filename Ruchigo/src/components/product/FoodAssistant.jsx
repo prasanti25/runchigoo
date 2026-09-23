@@ -13,6 +13,7 @@ import { useDeliveryLocation } from "../../lib/product.js";
 import { ErrorNotice, FoodCard } from "./UI.jsx";
 import VoiceInput from "./VoiceInput.jsx";
 import AssistantIcon from "../common/AssistantIcon.jsx";
+import { discoveryLocation } from "../../lib/discoveryLocation.js";
 
 export default function FoodAssistant({
   support = false,
@@ -20,12 +21,15 @@ export default function FoodAssistant({
   feed = false,
 }) {
   const { token } = useAuth();
-  const { city } = useDeliveryLocation();
+  const location = useDeliveryLocation();
+  const { city } = location;
+  const discovery = discoveryLocation(location);
   return (
     <Conversation
-      key={`${token || "guest"}:${city}:${orderId || "general"}:${support}`}
+      key={`${token || "guest"}:${JSON.stringify(discovery)}:${orderId || "general"}:${support}`}
       token={token}
       city={city}
+      discovery={discovery}
       support={support}
       orderId={orderId}
       feed={feed}
@@ -33,7 +37,7 @@ export default function FoodAssistant({
   );
 }
 
-function Conversation({ token, city, support, orderId, feed }) {
+function Conversation({ token, city, discovery, support, orderId, feed }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [result, setResult] = useState(null);
@@ -83,6 +87,7 @@ function Conversation({ token, city, support, orderId, feed }) {
             .slice(-6)
             .map((item) => item.text),
           preferences: {
+            ...(!support && chosenCity === (city || "") ? discovery : {}),
             city: chosenCity,
             ...(!support && conversationQuery.current
               ? { q: conversationQuery.current }

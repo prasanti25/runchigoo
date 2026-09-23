@@ -67,6 +67,9 @@ class Restaurant(TimestampedModel):
     image = models.ImageField(upload_to="restaurants/", blank=True, null=True)
     is_open = models.BooleanField(default=True)
     opening_hours = models.JSONField(default=list, blank=True)
+    scheduling_enabled = models.BooleanField(default=False)
+    schedule_notice_minutes = models.PositiveIntegerField(default=60, validators=[MinValueValidator(15), MaxValueValidator(1440)])
+    schedule_horizon_days = models.PositiveIntegerField(default=7, validators=[MinValueValidator(1), MaxValueValidator(14)])
     is_approved = models.BooleanField(default=False, db_index=True)
     average_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
     class Meta:
@@ -141,6 +144,19 @@ class Wishlist(TimestampedModel):
 
 
 class Coupon(TimestampedModel):
+    class Benefit(models.TextChoices):
+        FOOD = "food", "Meal discount"
+        DELIVERY = "free_delivery", "Free delivery"
+        BOGO = "bogo", "Buy one, get one"
+    class Campaign(models.TextChoices):
+        STANDARD = "standard", "Everyday offer"
+        FESTIVAL = "festival", "Festival campaign"
+        NEW_CUSTOMER = "new_customer", "First-order campaign"
+    benefit_type = models.CharField(max_length=20, choices=Benefit.choices, default=Benefit.FOOD)
+    campaign_type = models.CharField(max_length=20, choices=Campaign.choices, default=Campaign.STANDARD)
+    campaign_label = models.CharField(max_length=80, blank=True)
+    bogo_item = models.ForeignKey(MenuItem, on_delete=models.PROTECT, null=True, blank=True, related_name="bogo_coupons")
+    max_free_items = models.PositiveSmallIntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(20)])
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, null=True, blank=True, related_name="coupons")
     first_order_only = models.BooleanField(default=False)
     per_user_limit = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1)])
@@ -155,6 +171,7 @@ class Coupon(TimestampedModel):
     is_active = models.BooleanField(default=True)
 
 class Offer(TimestampedModel):
+    coupon = models.ForeignKey(Coupon, on_delete=models.PROTECT, null=True, blank=True, related_name="offer_banners")
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, null=True, blank=True, related_name="offers")
     title = models.CharField(max_length=150); description = models.TextField(blank=True)
     starts_at = models.DateTimeField(); ends_at = models.DateTimeField(); is_active = models.BooleanField(default=True)
@@ -178,6 +195,11 @@ class Order(TimestampedModel):
     delivery_code = models.CharField(max_length=6, blank=True)
     address_snapshot = models.JSONField(default=dict, blank=True)
     delivery_quote = models.JSONField(default=dict, blank=True)
+    scheduled_for = models.DateTimeField(null=True, blank=True, db_index=True)
+    tip_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    reward_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    reward_snapshot = models.JSONField(default=dict, blank=True)
+    commission_snapshot = models.JSONField(default=dict, blank=True)
     cancellation_policy_snapshot = models.JSONField(default=dict, blank=True)
     fulfillment_paused_at = models.DateTimeField(null=True, blank=True)
     fulfillment_issue = models.ForeignKey("SupportTicket", on_delete=models.PROTECT, null=True, blank=True, related_name="held_orders")
@@ -209,7 +231,51 @@ class Payment(TimestampedModel):
 class DeliveryPolicy(TimestampedModel):
     """Singleton. Existing rates remain in use until an admin enables zones."""
     enabled = models.BooleanField(default=False)
+    cash_tips_enabled = models.BooleanField(default=False)
+    max_cash_tip = models.DecimalField(max_digits=8, decimal_places=2, default=500, validators=[MinValueValidator(1), MaxValueValidator(5000)])
     revision = models.PositiveIntegerField(default=1)
+
+
+class RewardPolicy(TimestampedModel):
+    """Promotional credits only. No deposits, withdrawals or cash-equivalent wallet."""
+    enabled = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+    points_per_100 = models.PositiveIntegerField(default=0)
+    point_value = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    redemption_percent = models.PositiveIntegerField(default=0)
+    cashback_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    cashback_cap = models.DecimalField(max_digits=9, decimal_places=2, default=0)
+    referral_credit = models.DecimalField(max_digits=9, decimal_places=2, default=0)
+    referral_minimum = models.DecimalField(max_digits=9, decimal_places=2, default=0)
+    tiers = models.JSONField(default=list, blank=True)
+
+
+class RewardAccount(TimestampedModel):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="reward_account")
+    # Negative adjustment balances are possible when spent rewards are reversed.
+    points = models.BigIntegerField(default=0)
+    credits = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    qualifying_points = models.BigIntegerField(default=0)
+    revision = models.PositiveIntegerField(default=1)
+    referral_code = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    referred_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="referred_reward_accounts")
+    referral_order = models.OneToOneField(Order, on_delete=models.PROTECT, null=True, blank=True, related_name="referral_qualification")
+
+
+class RewardEntry(models.Model):
+    account = models.ForeignKey(RewardAccount, on_delete=models.PROTECT, related_name="entries")
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name="reward_entries")
+    kind = models.CharField(max_length=20, choices=[("redeem", "Used at checkout"), ("restore", "Returned rewards"), ("earn", "Order rewards"), ("referral", "Referral reward")])
+    points = models.BigIntegerField(default=0)
+    credits = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    qualifying_points = models.BigIntegerField(default=0)
+    event_key = models.CharField(max_length=160, unique=True)
+    note = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-id"]
+        indexes = [models.Index(fields=["account", "order", "kind"], name="reward_reconcile_idx")]
 
 
 class CancellationPolicy(TimestampedModel):
@@ -234,6 +300,32 @@ class DeliveryZone(TimestampedModel):
     class Meta:
         ordering = ["city", "id"]
         constraints = [models.UniqueConstraint(fields=["city", "name"], name="unique_delivery_zone_name")]
+
+class DeliveryPricingRule(TimestampedModel):
+    zone = models.ForeignKey(DeliveryZone, on_delete=models.PROTECT, related_name="pricing_rules")
+    name = models.CharField(max_length=80)
+    kind = models.CharField(max_length=10, choices=[("surge", "Temporary demand fee"), ("peak", "Scheduled peak fee")])
+    additional_fee = models.DecimalField(max_digits=7, decimal_places=2, validators=[MinValueValidator(Decimal("0.01")), MaxValueValidator(500)])
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    weekdays = models.JSONField(default=list, blank=True)
+    start_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ServiceCity(TimestampedModel):
+    name = models.CharField(max_length=100, unique=True)
+    is_active = models.BooleanField(default=True)
+    revision = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ["name"]
+
 
 class DeliveryAssignment(TimestampedModel):
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="delivery")
@@ -383,3 +475,57 @@ class SavedRestaurant(TimestampedModel):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user", "restaurant"], name="unique_saved_restaurant")]
+
+
+class CommissionPolicy(TimestampedModel):
+    enabled = models.BooleanField(default=False)
+    percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    settlement_recording_enabled = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+
+
+class MerchantAccount(TimestampedModel):
+    restaurant = models.OneToOneField(Restaurant, on_delete=models.PROTECT, related_name="merchant_account")
+    balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    revision = models.PositiveIntegerField(default=1)
+
+
+class MerchantSettlement(models.Model):
+    account = models.ForeignKey(MerchantAccount, on_delete=models.PROTECT, related_name="settlements")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    reference = models.CharField(max_length=120, unique=True)
+    client_id = models.UUIDField(unique=True)
+    paid_at = models.DateTimeField()
+    note = models.CharField(max_length=500)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reversed_at = models.DateTimeField(null=True, blank=True)
+    reversal_note = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ["-id"]
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name="merchant_settlement_positive")]
+
+
+class MerchantEntry(models.Model):
+    """Service-owned append-only ledger. No API to edit or delete entries."""
+    account = models.ForeignKey(MerchantAccount, on_delete=models.PROTECT, related_name="entries")
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, null=True, blank=True, related_name="merchant_entries")
+    settlement = models.ForeignKey(MerchantSettlement, on_delete=models.PROTECT, null=True, blank=True)
+    kind = models.CharField(max_length=20, choices=[("accrual", "Order accrual / refund adjustment"), ("settlement", "External payment recorded"), ("correction", "Settlement record corrected")])
+    amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    merchant_sales = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    commission = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    platform_promotion = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    delivery_collected = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    tip_collected = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    payment_collected = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    rounding_adjustment = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    event_key = models.CharField(max_length=120, unique=True)
+    note = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-id"]
+        indexes = [models.Index(fields=["account", "order", "kind"], name="merchant_reconcile_idx")]
+        constraints = [models.UniqueConstraint(fields=["settlement", "kind"], name="merchant_settlement_entry_once")]

@@ -343,3 +343,69 @@
     margin-bottom: 16px;
   }
 }
+.address-search {
+  margin-bottom: 20px;
+}
+.address-search > label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 9px;
+}
+.address-search-input {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 0 13px;
+  border: 1px solid #dfe5da;
+  border-radius: 13px;
+  background: #fff;
+}
+.address-search-input input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  min-height: 48px;
+  font-size: 13px;
+  outline: none;
+}
+.address-search-input:focus-within {
+  border-color: #ef652b;
+  box-shadow: 0 0 0 3px #ef652b20;
+}
+.address-search ul {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+  border: 1px solid #dfe5da;
+  border-radius: 13px;
+  max-height: 240px;
+  overflow: auto;
+}
+.address-search li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #edf0e9;
+}
+.address-search li[aria-selected="true"],
+.address-search li:hover {
+  background: #f3f6ee;
+}
+.address-search li svg {
+  flex-shrink: 0;
+}
+.address-search li strong,
+.address-search li small {
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.address-search li small {
+  color: #687867;
+  font-size: 11px;
+  margin-top: 5px;
+}

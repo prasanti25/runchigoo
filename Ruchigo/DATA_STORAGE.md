@@ -2,6 +2,24 @@
 
 ## Live application
 
+Local increment note (23 September): migrations 0023–0027 are **not applied to
+production**. They add restaurant schedule settings, order preparation time/cash
+tip, optional tip-policy fields, coupon benefit/campaign rules and a redeemable
+coupon link on offers. Orders keep the applied coupon rule/version in their
+delivery quote snapshot. Existing totals and discount codes are preserved by
+defaults. Analytics query owned/scoped order/payment/refund records; there is no
+separate hard-coded spending balance. Rewards use `api_rewardaccount`,
+`api_rewardentry` and `api_rewardpolicy`, with order-level redemption/rule
+snapshots and transaction-locked balances. This is promotional credit, not a
+bank/deposit wallet. `api_servicecity` holds city availability overrides;
+`api_deliverypricingrule` holds finite, explicitly enabled pricing windows.
+Merchant finance adds `api_commissionpolicy`, `api_merchantaccount`,
+`api_merchantentry` and `api_merchantsettlement`, plus private order commission
+snapshots. External settlement records are finance attestations, not provider
+transfers. Ledger corrections preserve the original record; there is no
+balance-edit/delete API. New accounting remains disabled on the shared preview.
+See IMPLEMENTATION_TODOS.md for remaining KYC, payout and tax-accounting work.
+
 The Vercel deployment runs the React frontend and Django API. The API connects
 to **Neon PostgreSQL** through server-only `DATABASE_URL` / `POSTGRES_URL`.
 Vercel is the application host; it is not where database rows are stored.

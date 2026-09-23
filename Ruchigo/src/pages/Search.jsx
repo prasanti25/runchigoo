@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
 import VoiceInput from "../components/product/VoiceInput.jsx";
-import { currentPosition } from "../lib/addressLocation.js";
+import { currentPosition, locationPoint } from "../lib/addressLocation.js";
 import {
   EmptyState,
   ErrorNotice,
@@ -37,13 +37,12 @@ export default function SearchPage() {
   const [locationError, setLocationError] = useState("");
   const locationRequest = useRef(null);
   useEffect(() => () => locationRequest.current?.abort(), []);
+  const hasCoordinates = Boolean(locationPoint(location));
   const nearby =
-    Boolean(params.get("radius_km")) || params.get("sort") === "distance";
-  const hasCoordinates =
-    Number.isFinite(Number(location.latitude)) &&
-    Number.isFinite(Number(location.longitude)) &&
-    location.latitude != null &&
-    location.longitude != null;
+    params.get("area") !== "city" &&
+    (hasCoordinates ||
+      Boolean(params.get("radius_km")) ||
+      params.get("sort") === "distance");
   const setInput = (value) =>
     setParams(
       (current) => {
@@ -59,7 +58,7 @@ export default function SearchPage() {
     return () => clearTimeout(timer);
   }, [input]);
   const filters = {
-    city: nearby ? undefined : location.city,
+    city: location.city,
     q: query,
     category: params.get("category"),
     vegetarian: params.get("vegetarian"),
@@ -70,12 +69,13 @@ export default function SearchPage() {
     bestseller: params.get("bestseller"),
     ...(nearby && hasCoordinates
       ? {
-          latitude: Number(location.latitude).toFixed(3),
-          longitude: Number(location.longitude).toFixed(3),
+          latitude: Number(location.latitude).toFixed(6),
+          longitude: Number(location.longitude).toFixed(6),
           radius_km: params.get("radius_km") || 5,
+          ...(location.city ? { delivery_only: true } : {}),
         }
       : {}),
-    sort: params.get("sort") || "recommended",
+    sort: params.get("sort") || (nearby ? "distance" : "recommended"),
     page: params.get("page") || 1,
   };
   const { data, loading, error, reload } = useRemote(
@@ -99,6 +99,7 @@ export default function SearchPage() {
         const next = new URLSearchParams(current);
         next.set("radius_km", "5");
         next.set("sort", "distance");
+        next.delete("area");
         next.delete("page");
         return next;
       });
@@ -115,8 +116,8 @@ export default function SearchPage() {
       if (controller.signal.aborted) return;
       saveDeliveryLocation({
         ...location,
-        latitude: Number(position.latitude.toFixed(3)),
-        longitude: Number(position.longitude.toFixed(3)),
+        latitude: Number(position.latitude.toFixed(6)),
+        longitude: Number(position.longitude.toFixed(6)),
       });
       activate();
     } catch (error) {
@@ -190,6 +191,7 @@ export default function SearchPage() {
                   setParams((current) => {
                     const next = new URLSearchParams(current);
                     next.delete("radius_km");
+                    next.set("area", "city");
                     if (next.get("sort") === "distance") next.delete("sort");
                     next.delete("page");
                     return next;

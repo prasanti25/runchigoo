@@ -14,6 +14,11 @@ from .cancellations import CancellationPolicyViewSet
 from .order_operations import OrderOperationsViewSet
 from .delivery_chat import DeliveryChatViewSet
 from .admin_access import AdminAccessViewSet
+from .customer_insights import CustomerInsightsViewSet
+from .checkout_options import CheckoutOptionsViewSet
+from .reward_views import RewardsViewSet, RewardPolicyViewSet
+from .delivery_pricing import DeliveryPricingViewSet, ServiceCityViewSet
+from .merchant_views import CommissionPolicyViewSet, MerchantFinanceViewSet
 
 router = DefaultRouter()
 router.register("auth", AuthViewSet, basename="auth")
@@ -48,4 +53,12 @@ router.register("cancellation-policy", CancellationPolicyViewSet, basename="canc
 router.register("order-operations", OrderOperationsViewSet, basename="order-operations")
 router.register("delivery-chat", DeliveryChatViewSet, basename="delivery-chat")
 router.register("admin-access", AdminAccessViewSet, basename="admin-access")
+router.register("customer-insights", CustomerInsightsViewSet, basename="customer-insights")
+router.register("checkout-options", CheckoutOptionsViewSet, basename="checkout-options")
+router.register("rewards", RewardsViewSet, basename="rewards")
+router.register("reward-policy", RewardPolicyViewSet, basename="reward-policy")
+router.register("delivery-pricing", DeliveryPricingViewSet, basename="delivery-pricing")
+router.register("service-cities", ServiceCityViewSet, basename="service-city")
+router.register("commission-policy", CommissionPolicyViewSet, basename="commission-policy")
+router.register("merchant-finance", MerchantFinanceViewSet, basename="merchant-finance")
 urlpatterns = [path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"), path("", include(router.urls))]

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { couponTitle, couponBenefitTerms } from "../lib/couponLabels.js";
 import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import { Link } from "react-router-dom";
 import {
@@ -610,13 +611,12 @@ export function OffersPage() {
                 <span className="eyebrow">
                   <Tag size={15} /> {coupon.restaurant_name || "ACROSS RUCHIGO"}
                 </span>
-                <h2 className="mt-4">
-                  {Number(coupon.discount_amount) > 0
-                    ? money(coupon.discount_amount)
-                    : `${coupon.discount_percent}%`}{" "}
-                  off
-                </h2>
+                <h2 className="mt-4">{couponTitle(coupon)}</h2>
                 <p className="muted mt-3">{coupon.description}</p>
+                <p className="form-help">{couponBenefitTerms(coupon)}</p>
+                {coupon.campaign_label && (
+                  <p className="eyebrow">{coupon.campaign_label}</p>
+                )}
                 <p className="form-help">
                   Min. order {money(coupon.min_order_amount)}
                   {coupon.max_discount
@@ -673,6 +673,15 @@ export function OffersPage() {
                 <h2>{offer.title}</h2>
                 <p className="muted">{offer.description}</p>
                 <small>Valid until {dateTime(offer.ends_at)}</small>
+                {offer.coupon_code && (
+                  <button
+                    className="coupon-code"
+                    onClick={() => copy(offer.coupon_code)}
+                    aria-label={`Copy coupon ${offer.coupon_code}`}
+                  >
+                    Use {offer.coupon_code} · Copy code
+                  </button>
+                )}
                 <Link
                   to={
                     offer.restaurant

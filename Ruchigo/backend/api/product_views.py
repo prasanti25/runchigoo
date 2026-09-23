@@ -17,7 +17,7 @@ from .recommendations import craving_terms, match_reasons, normalize_preferences
 from .notifications import notify, admin_ids
 from .availability import accepting_filter, in_stock_filter
 from .menu_options import minimum_item_price
-from .serviceability import city_query
+from .serviceability import city_query, filter_discovery_delivery
 
 
 class RecommendationThrottle(SimpleRateThrottle):
@@ -42,6 +42,7 @@ class DiscoveryQuery(serializers.Serializer):
     latitude = serializers.FloatField(required=False, min_value=-90, max_value=90)
     longitude = serializers.FloatField(required=False, min_value=-180, max_value=180)
     radius_km = serializers.FloatField(required=False, min_value=1, max_value=50)
+    delivery_only = serializers.BooleanField(default=False)
     sort = serializers.ChoiceField(required=False, choices=["recommended", "rating", "price", "fastest", "distance"])
     page = serializers.IntegerField(default=1, min_value=1, max_value=1000)
 
@@ -51,6 +52,8 @@ class DiscoveryQuery(serializers.Serializer):
                 raise serializers.ValidationError({key: "Enter a finite number."})
         if ("latitude" in attrs) != ("longitude" in attrs) or ((attrs.get("radius_km") or attrs.get("sort") == "distance") and "latitude" not in attrs):
             raise serializers.ValidationError("Choose a location to find nearby restaurants.")
+        if attrs.get("delivery_only") and ("latitude" not in attrs or not attrs.get("city", "").strip()):
+            raise serializers.ValidationError("Choose a delivery pin and city to check restaurants for this address.")
         return attrs
 
 
@@ -89,6 +92,7 @@ def eligible_items(filters):
         items = items.filter(restaurant__latitude__isnull=False, restaurant__longitude__isnull=False).annotate(distance_km=distance_expression(filters, "restaurant__"))
         if filters.get("radius_km"):
             items = items.filter(distance_km__lte=filters["radius_km"])
+        items = filter_discovery_delivery(items, filters)
     excluded_options = []
     for item in items.exclude(option_groups=[]):
         minimum = minimum_item_price(item)
@@ -143,7 +147,7 @@ class DiscoveryViewSet(AdminScopeMixin, viewsets.ViewSet):
         eligible = match_craving(eligible, filters.get("q", ""))
         items = list(eligible.order_by("-is_bestseller", "id")[:40])
         history = set()
-        if request.user.is_authenticated and request.user.role == User.Role.CUSTOMER:
+        if request.user.is_authenticated and request.user.role in [User.Role.CUSTOMER, User.Role.ADMIN]:
             from .models import TasteProfile
             profile = TasteProfile.objects.filter(user=request.user).first()
             if not profile or profile.use_order_history:

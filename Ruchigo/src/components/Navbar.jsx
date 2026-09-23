@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   ArrowRight,
   Bell,
@@ -31,6 +31,8 @@ import AssistantIcon from "./common/AssistantIcon.jsx";
 import UserAvatar from "./common/UserAvatar.jsx";
 import NotificationBell from "./common/NotificationBell.jsx";
 import { canOpenAdminRoute } from "../lib/adminAccess.js";
+import { workspaceMenus } from "../lib/workspaceNavigation.js";
+import "./WorkspaceMobileNav.css";
 
 const AddressLocationPicker = lazy(
   () => import("./product/AddressLocationPicker.jsx"),
@@ -41,7 +43,8 @@ export default function Navbar() {
   const { user, role, token, isAuthenticated, logout } = useAuth();
   const { cartItems } = useCart();
   const location = useDeliveryLocation();
-  const navigate = useNavigate();
+  const route = useLocation();
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [addressDraft, setAddressDraft] = useState(null);
@@ -49,11 +52,23 @@ export default function Navbar() {
   const [city, setCity] = useState("");
   const { data } = useRemote(locationOpen ? "/discovery/" : null);
   const savedAddresses = useRemote(
-    locationOpen && token && role === "customer" ? "/addresses/" : null,
+    locationOpen && token && ["customer", "admin"].includes(role)
+      ? "/addresses/"
+      : null,
     token,
   );
   const count = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const partner = isAuthenticated && role !== "customer";
+  const workspaceMode =
+    partner &&
+    (role !== "admin" ||
+      route.pathname.startsWith("/admin-") ||
+      route.pathname === "/settings" ||
+      (route.pathname === "/support" &&
+        new URLSearchParams(route.search).get("view") === "team"));
+  const workspaceLinks = (workspaceMenus[role] || []).filter(
+    ([path]) => role !== "admin" || canOpenAdminRoute(user, `/admin-${path}`),
+  );
   const dashboard = partner ? `/${role}-dashboard` : "/profile";
   const selectCity = (name) => {
     saveDeliveryLocation({ city: name, label: name || "Explore all cities" });
@@ -121,7 +136,7 @@ export default function Navbar() {
           </nav>
           <div className="header-actions">
             <NotificationBell />
-            {!partner && (
+            {(!partner || role === "admin") && (
               <Link
                 to="/cart"
                 className="header-cart"
@@ -174,7 +189,13 @@ export default function Navbar() {
                     ShoppingBag,
                   ],
                   ["/notifications", "Notifications", Bell],
-                  ...(!partner
+                  ...(role === "admin"
+                    ? [
+                        ["/orders", "Your personal orders", ShoppingBag],
+                        ["/rewards", "Your rewards", Tag],
+                      ]
+                    : []),
+                  ...(!partner || role === "admin"
                     ? [
                         ["/wishlist", "Saved dishes", Heart],
                         ["/addresses", "Delivery addresses", MapPin],
@@ -218,7 +239,7 @@ export default function Navbar() {
           </div>
         </>
       )}
-      {!partner && (
+      {!workspaceMode && (
         <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
           {[
             ["/", "Home", Compass],
@@ -242,60 +263,57 @@ export default function Navbar() {
           </button>
         </nav>
       )}
-      {partner && (
-        <div className="partner-mobile-bar">
-          <Menu size={18} />
-          <select
-            aria-label="Partner navigation"
-            value=""
-            onChange={(event) => navigate(event.target.value)}
+      {workspaceMode && (
+        <nav
+          className="workspace-mobile-actions"
+          aria-label="Workspace shortcuts"
+        >
+          {workspaceLinks
+            .filter(([path]) => ["dashboard", "orders"].includes(path))
+            .map(([path, label, Icon]) => (
+              <NavLink key={path} to={`/${role}-${path}`}>
+                <Icon size={21} />
+                <span>
+                  {label === "Live orders" || label === "Delivery requests"
+                    ? "Orders"
+                    : label}
+                </span>
+              </NavLink>
+            ))}
+          <button
+            aria-haspopup="dialog"
+            aria-expanded={workspaceOpen}
+            onClick={() => setWorkspaceOpen(true)}
           >
-            <option value="">Navigate workspace</option>
-            {[
-              "dashboard",
-              ...(role === "admin"
-                ? [
-                    "users",
-                    "restaurants",
-                    "delivery-partners",
-                    "partner-accounts",
-                    "orders",
-                    "payments",
-                    "offers",
-                    "catalog",
-                    "delivery-zones",
-                    "order-policy",
-                    "reports",
-                    "reviews",
-                    "activity",
-                    "profile",
-                    "access",
-                  ]
-                : role === "restaurant"
-                  ? [
-                      "menu",
-                      "orders",
-                      "earnings",
-                      "analytics",
-                      "profile",
-                      "offers",
-                    ]
-                  : ["orders", "navigation", "earnings", "profile"]),
-            ]
-              .filter(
-                (page) =>
-                  role !== "admin" || canOpenAdminRoute(user, `/admin-${page}`),
-              )
-              .map((page) => (
-                <option key={page} value={`/${role}-${page}`}>
-                  {page.replaceAll("-", " ")}
-                </option>
-              ))}
+            <Menu size={21} />
+            <span>More</span>
+          </button>
+        </nav>
+      )}
+      {workspaceOpen && (
+        <Modal title="Your workspace" onClose={() => setWorkspaceOpen(false)}>
+          <nav className="workspace-mobile-menu" aria-label="All workspaces">
+            {workspaceLinks.map(([path, label, Icon]) => (
+              <NavLink
+                key={path}
+                to={`/${role}-${path}`}
+                onClick={() => setWorkspaceOpen(false)}
+              >
+                <Icon size={20} />
+                <span>{label}</span>
+              </NavLink>
+            ))}
             {(role !== "admin" || canOpenAdminRoute(user, "/support")) && (
-              <option value="/support">Support</option>
+              <Link
+                to={role === "admin" ? "/support?view=team" : "/support"}
+                onClick={() => setWorkspaceOpen(false)}
+              >
+                <HelpCircle size={20} />
+                <span>Support inbox</span>
+              </Link>
             )}
-          </select>
-        </div>
+          </nav>
+        </Modal>
       )}
       {locationOpen && (
         <Modal
@@ -314,7 +332,7 @@ export default function Navbar() {
             pin is shared with our address-lookup service; nothing is saved
             until you confirm.
           </p>
-          {role === "customer" && token && (
+          {["customer", "admin"].includes(role) && token && (
             <div className="location-saved-addresses">
               <div className="flex-row between">
                 <p className="eyebrow">SAVED ADDRESSES</p>
@@ -445,7 +463,7 @@ export default function Navbar() {
           }
         >
           <AddressForm
-            localOnly={!(role === "customer" && token)}
+            localOnly={!(["customer", "admin"].includes(role) && token)}
             prefill={addressDraft}
             onSaved={savedAddresses.reload}
             onClose={() => setAddressDraft(null)}

@@ -8,9 +8,13 @@ from .models import DeliveryAssignment, Notification, Order, User
 
 def notify(user_ids, *, event, title, message, kind="general", metadata=None):
     ids = set(user_ids) - {None}
+    metadata = dict(metadata or {})
+    customer_id = Order.objects.filter(pk=metadata["order_id"]).values_list("customer_id", flat=True).first() if isinstance(metadata.get("order_id"), int) else None
+    from .models import SupportTicket
+    ticket_user = SupportTicket.objects.filter(pk=metadata["ticket_id"]).values_list("user_id", flat=True).first() if isinstance(metadata.get("ticket_id"), int) else None
     Notification.objects.bulk_create([
         Notification(user_id=user_id, event_key=event, title=title, message=message,
-                     kind=kind, metadata=metadata or {}) for user_id in ids
+                     kind=kind, metadata={**metadata, **({"personal_order": True} if customer_id == user_id else {}), **({"personal_ticket": True} if ticket_user == user_id else {})}) for user_id in ids
     ], ignore_conflicts=True, batch_size=250)
 
 

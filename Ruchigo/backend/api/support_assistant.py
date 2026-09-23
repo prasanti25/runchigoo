@@ -162,6 +162,11 @@ def answer(ticket, topic, order):
     if topic == "status" and order:
         if order.fulfillment_paused_at:
             return "Your order is on hold because a fulfilment issue needs a support decision. Preparation and pickup cannot progress until the hold is lifted. Updates will appear here.", actions
+        if order.scheduled_for and order.status in [Order.Status.PENDING, Order.Status.CONFIRMED]:
+            from django.utils import timezone
+            if order.scheduled_for > timezone.now():
+                scheduled = timezone.localtime(order.scheduled_for).strftime("%d %b at %I:%M %p %Z")
+                return f"This is a scheduled order. Preparation is scheduled to start on {scheduled}; that is not the delivery arrival time. " + ("The restaurant still needs to accept it." if order.status == Order.Status.PENDING else "The restaurant has accepted it. Cooking cannot start before that time."), actions
         facts = {
             "pending": "The restaurant hasn’t accepted your order yet. We’ll show the next update when the kitchen confirms it.",
             "confirmed": "The restaurant accepted your order. Cooking has not been marked as started yet.",

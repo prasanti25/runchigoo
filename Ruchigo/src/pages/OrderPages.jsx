@@ -50,7 +50,7 @@ export function OrdersPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const { data, loading, error, reload } = useRemote(
-    `/orders/?page=${page}`,
+    `/orders/?view=mine&page=${page}`,
     token,
     15000,
   );
@@ -132,6 +132,11 @@ export function OrdersPage() {
                   </span>
                 </div>
                 <div className="order-items-summary">
+                  {order.scheduled_for && (
+                    <p className="saving-line">
+                      Preparation scheduled for {dateTime(order.scheduled_for)}
+                    </p>
+                  )}
                   {order.items.map((item) => (
                     <span key={item.id} className="block">
                       {item.quantity} × {item.name}
@@ -220,7 +225,7 @@ export function TrackingPage() {
   const { token, user } = useAuth();
   const [paying, setPaying] = useState(false);
   const { data, loading, error, reload } = useRemote(
-    id ? `/orders/${id}/` : "/orders/",
+    id ? `/orders/${id}/?view=mine` : "/orders/?view=mine",
     token,
     10000,
   );
@@ -450,10 +455,29 @@ export function TrackingPage() {
                       <span>Delivery</span>
                       <span>{money(order.delivery_fee)}</span>
                     </div>
+                    {order.scheduled_for && (
+                      <p className="form-help">
+                        Preparation scheduled for{" "}
+                        {dateTime(order.scheduled_for)}. Delivery follows
+                        preparation and pickup.
+                      </p>
+                    )}
+                    {Number(order.tip_amount) > 0 && (
+                      <div className="bill-line">
+                        <span>Cash tip for rider</span>
+                        <span>{money(order.tip_amount)}</span>
+                      </div>
+                    )}
                     {Number(order.discount) > 0 && (
                       <div className="bill-line">
                         <span>Discount</span>
                         <span>−{money(order.discount)}</span>
+                      </div>
+                    )}
+                    {Number(order.reward_discount) > 0 && (
+                      <div className="bill-line">
+                        <span>Rewards used</span>
+                        <span>−{money(order.reward_discount)}</span>
                       </div>
                     )}
                     <div className="bill-line bill-total">
@@ -469,7 +493,7 @@ export function TrackingPage() {
                   </section>
                 </div>
                 <aside>
-                  {user?.role === "customer" && order.delivery && (
+                  {user?.id === order.customer && order.delivery && (
                     <DeliveryChat key={order.id} order={order} />
                   )}
                   <section className="panel">

@@ -79,6 +79,10 @@ def record_captured(provider_order, payment_id, amount, currency):
         notify_order(order)
     notify_payment(order)
     AuditLog.objects.create(actor=order.customer, action="payment.captured", target=str(payment.id))
+    from .rewards import sync_order_rewards
+    sync_order_rewards(order)
+    from .merchant_finance import sync_order_finance
+    sync_order_finance(order)
     return order
 
 

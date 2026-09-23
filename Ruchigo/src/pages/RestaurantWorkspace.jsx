@@ -567,6 +567,16 @@ export function KitchenOrders() {
             <p className="muted mt-3">
               {order.customer_detail?.first_name || "Customer"}
             </p>
+            {order.scheduled_for && (
+              <p className="saving-line">
+                Preparation scheduled: {dateTime(order.scheduled_for)}
+                {["pending", "confirmed"].includes(order.status)
+                  ? order.preparation_due
+                    ? " · Due now"
+                    : " · Don’t start cooking yet"
+                  : ""}
+              </p>
+            )}
             <div className="order-items-summary">
               {order.items.map((item) => (
                 <p key={item.id}>
@@ -591,7 +601,10 @@ export function KitchenOrders() {
               <div className="flex-row mt-5">
                 <button
                   className="btn primary grow"
-                  disabled={busy === order.id}
+                  disabled={
+                    busy === order.id ||
+                    (order.status === "confirmed" && !order.preparation_due)
+                  }
                   onClick={() => update(order, next[order.status][0])}
                 >
                   <Check size={16} />
@@ -788,6 +801,55 @@ function ProfileEditor({ existing, token, user, onSaved }) {
           value={form.opening_hours || []}
           onChange={(opening_hours) => setForm({ ...form, opening_hours })}
         />
+        <label className="check-label mt-5">
+          <input
+            type="checkbox"
+            checked={Boolean(form.scheduling_enabled)}
+            onChange={(event) =>
+              setForm({ ...form, scheduling_enabled: event.target.checked })
+            }
+          />
+          Accept scheduled preparation orders
+        </label>
+        {form.scheduling_enabled && (
+          <div className="form-grid mt-5">
+            <label className="field">
+              <span>Minimum advance notice (minutes)</span>
+              <input
+                type="number"
+                min="15"
+                max="1440"
+                value={form.schedule_notice_minutes ?? 60}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    schedule_notice_minutes: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <label className="field">
+              <span>Booking window (days)</span>
+              <input
+                type="number"
+                min="1"
+                max="14"
+                value={form.schedule_horizon_days ?? 7}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    schedule_horizon_days: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <p className="form-help">
+              Weekly hours are required. Future orders reserve menu stock
+              immediately. You can accept ahead, but preparation unlocks only at
+              the chosen time.
+            </p>
+          </div>
+        )}
         <ErrorNotice error={error} />
         <button className="btn primary" disabled={busy}>
           {busy ? "Saving…" : "Save restaurant profile"}

@@ -19,6 +19,7 @@ import LoadingScreen from "../common/LoadingScreen.jsx";
 import { ErrorNotice, Modal } from "./UI.jsx";
 import AddressMap from "./AddressMap.jsx";
 import GoogleAddressMap from "./GoogleAddressMap.jsx";
+import AddressSearch from "./AddressSearch.jsx";
 import "./AddressLocationPicker.css";
 
 export default function AddressLocationPicker({
@@ -200,6 +201,24 @@ export default function AddressLocationPicker({
       <p className="address-picker-intro">
         A good meal starts at the right doorstep.
       </p>
+      <AddressSearch
+        onChoose={(selected) => {
+          gpsVersion.current.value++;
+          gpsRequest.current?.abort();
+          request.current?.abort();
+          const next = {
+            latitude: selected.latitude,
+            longitude: selected.longitude,
+            source: "search",
+          };
+          setPoint(next);
+          setResult({ key: pointKey(next), address: selected });
+          setLocating(false);
+          setResolving(false);
+          setLookupError("");
+          setError("");
+        }}
+      />
       <div className="address-picker-layout">
         <div className="address-picker-map-column">
           {!point ? (

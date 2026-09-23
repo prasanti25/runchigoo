@@ -47,8 +47,8 @@ export function RestaurantPage() {
   const restaurant = useRemote(`/restaurants/${id}/`);
   const categories = useRemote(`/categories/?restaurant=${id}`);
   const reviewable = useRemote(
-    token && role === "customer"
-      ? `/orders/?restaurant=${id}&status=delivered`
+    token && ["customer", "admin"].includes(role)
+      ? `/orders/?view=mine&restaurant=${id}&status=delivered`
       : null,
     token,
   );

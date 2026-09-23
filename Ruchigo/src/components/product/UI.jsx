@@ -182,7 +182,7 @@ export function AddButton({ item }) {
       navigate("/login", { state: { from: { pathname: location.pathname } } });
       return;
     }
-    if (role !== "customer") {
+    if (!["customer", "admin"].includes(role)) {
       toast.error("Sign in as a customer to order food.");
       return;
     }
@@ -342,7 +342,7 @@ function AddOnPicker({ item, onClose }) {
             });
             return;
           }
-          if (role !== "customer") {
+          if (!["customer", "admin"].includes(role)) {
             setError("Sign in as a customer to order food.");
             return;
           }

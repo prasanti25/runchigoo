@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { couponTitle } from "../../lib/couponLabels.js";
 import { Link } from "react-router-dom";
 import { Heart, SlidersHorizontal, Tag } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { apiRequest } from "../../lib/api.js";
 import { money, useDeliveryLocation, useRemote } from "../../lib/product.js";
+import { discoveryLocation } from "../../lib/discoveryLocation.js";
 import {
   ErrorNotice,
   FoodCard,
@@ -15,15 +17,15 @@ import {
 
 export function PersonalizedFeed({ compact = false }) {
   const { token, role } = useAuth();
-  const { city } = useDeliveryLocation();
+  const location = useDeliveryLocation();
   const feed = useRemote(
-    !compact || (token && role === "customer")
-      ? `/intelligence/feed/?city=${encodeURIComponent(city || "")}`
+    !compact || (token && ["customer", "admin"].includes(role))
+      ? `/intelligence/feed/?${new URLSearchParams(discoveryLocation(location))}`
       : null,
     token,
   );
   const data = feed.data;
-  if (compact && (!token || role !== "customer")) return null;
+  if (compact && (!token || !["customer", "admin"].includes(role))) return null;
   return (
     <section className="personalized-feed">
       <SectionTitle
@@ -127,11 +129,7 @@ export function PersonalizedFeed({ compact = false }) {
                       <article className="personalized-coupon" key={coupon.id}>
                         <Tag size={22} />
                         <p className="eyebrow">{coupon.match_reason}</p>
-                        <h3>
-                          {coupon.discount_amount
-                            ? `${money(coupon.discount_amount)} off`
-                            : `${Number(coupon.discount_percent)}% off`}
-                        </h3>
+                        <h3>{couponTitle(coupon)}</h3>
                         <p>{coupon.restaurant_name}</p>
                         <small>
                           Min. order {money(coupon.min_order_amount)}
@@ -177,21 +175,30 @@ export function PersonalizedFeed({ compact = false }) {
 export function RestaurantAffinity({ restaurantId }) {
   const { token, role } = useAuth();
   const saved = useRemote(
-    token && role === "customer" ? "/intelligence/saved/" : null,
+    token && ["customer", "admin"].includes(role)
+      ? "/intelligence/saved/"
+      : null,
     token,
   );
   const [busy, setBusy] = useState(false);
   const selected = saved.data?.restaurant_ids?.includes(Number(restaurantId));
   useEffect(() => {
-    if (!token || role !== "customer") return;
+    if (!token || !["customer", "admin"].includes(role)) return;
     const controller = new AbortController();
-    apiRequest("/intelligence/visits/", {
-      token,
-      method: "POST",
-      body: { restaurant_id: restaurantId },
-      signal: controller.signal,
-    }).catch(() => {});
-    return () => controller.abort();
+    const timer = window.setTimeout(
+      () =>
+        apiRequest("/intelligence/visits/", {
+          token,
+          method: "POST",
+          body: { restaurant_id: restaurantId },
+          signal: controller.signal,
+        }).catch(() => {}),
+      0,
+    );
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [restaurantId, token, role]);
   if (!token)
     return (
@@ -199,7 +206,7 @@ export function RestaurantAffinity({ restaurantId }) {
         <Heart size={16} /> Save restaurant
       </Link>
     );
-  if (role !== "customer") return null;
+  if (!["customer", "admin"].includes(role)) return null;
   return (
     <div>
       <button
@@ -237,10 +244,12 @@ export function RestaurantAffinity({ restaurantId }) {
 export function TastePreferences() {
   const { token, role } = useAuth();
   const preferences = useRemote(
-    token && role === "customer" ? "/intelligence/preferences/" : null,
+    token && ["customer", "admin"].includes(role)
+      ? "/intelligence/preferences/"
+      : null,
     token,
   );
-  if (!token || role !== "customer")
+  if (!token || !["customer", "admin"].includes(role))
     return (
       <div className="panel">
         <h2>Your taste, remembered.</h2>

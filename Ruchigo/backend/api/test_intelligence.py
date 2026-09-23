@@ -56,11 +56,16 @@ class IntelligenceTests(APITestCase):
         self.assertFalse(TasteProfile.objects.filter(user=self.customer).exists())
         self.assertFalse(RestaurantVisit.objects.filter(user=self.customer).exists())
 
-    def test_mutation_permissions_require_customer(self):
-        for user, expected in [(None, 401), (self.owner, 403), (self.admin, 403)]:
+    def test_mutation_permissions_require_personal_shopping_account(self):
+        for user, expected in [(None, 401), (self.owner, 403)]:
             self.client.force_authenticate(user)
             self.assertEqual(self.client.patch("/api/v1/intelligence/preferences/", {}, format="json").status_code, expected)
             self.assertEqual(self.client.post("/api/v1/intelligence/saved/", {"restaurant_id": self.restaurant.pk}).status_code, expected)
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self.client.patch("/api/v1/intelligence/preferences/", {"budget": 250}, format="json").status_code, 200)
+        self.assertEqual(self.client.post("/api/v1/intelligence/saved/", {"restaurant_id": self.restaurant.pk}).status_code, 204)
+        self.assertEqual(TasteProfile.objects.get(user=self.admin).budget, 250)
+        self.assertTrue(SavedRestaurant.objects.filter(user=self.admin, restaurant=self.restaurant).exists())
 
     def test_saving_is_idempotent_and_scoped(self):
         for _ in range(2):

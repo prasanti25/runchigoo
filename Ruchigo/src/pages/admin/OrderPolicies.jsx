@@ -5,6 +5,8 @@ import { ErrorNotice, Modal, Skeleton } from "../../components/product/UI.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { apiRequest } from "../../lib/api.js";
 import { useRemote } from "../../lib/product.js";
+import CashTipPolicy from "../../components/product/CashTipPolicy.jsx";
+import RewardPolicy from "../../components/product/RewardPolicy.jsx";
 
 export default function OrderPolicies() {
   const { token } = useAuth();
@@ -12,7 +14,7 @@ export default function OrderPolicies() {
   return (
     <WorkspaceFrame
       type="admin"
-      title="Order cancellation policy"
+      title="Order policies"
       description="Clear cancellation cutoffs and explicit refund authorization. Existing orders retain their checkout-time policy."
     >
       <ErrorNotice error={policy.error} onRetry={policy.reload} />
@@ -28,6 +30,8 @@ export default function OrderPolicies() {
           />
         )
       )}
+      <CashTipPolicy token={token} />
+      <RewardPolicy token={token} />
     </WorkspaceFrame>
   );
 }

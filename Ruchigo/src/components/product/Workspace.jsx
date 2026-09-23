@@ -1,65 +1,13 @@
 import { Link, NavLink } from "react-router-dom";
-import {
-  BarChart3,
-  Bell,
-  Bike,
-  CreditCard,
-  LayoutDashboard,
-  LifeBuoy,
-  ListChecks,
-  MessageSquare,
-  LogOut,
-  MapPin,
-  Settings,
-  ShoppingBag,
-  Store,
-  Tag,
-  Users,
-  Utensils,
-} from "lucide-react";
+import { Bell, LifeBuoy, LogOut, Settings } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Navbar from "../Navbar.jsx";
 import BrandLogo from "../common/BrandLogo.jsx";
 import NotificationBell from "../common/NotificationBell.jsx";
 import UserAvatar from "../common/UserAvatar.jsx";
 import { canOpenAdminRoute } from "../../lib/adminAccess.js";
+import { workspaceMenus as menus } from "../../lib/workspaceNavigation.js";
 
-const menus = {
-  restaurant: [
-    ["dashboard", "Overview", LayoutDashboard],
-    ["orders", "Live orders", ShoppingBag],
-    ["menu", "Your menu", Utensils],
-    ["profile", "Restaurant profile", Store],
-    ["offers", "Offers", Tag],
-    ["earnings", "Payments", CreditCard],
-    ["analytics", "Analytics", BarChart3],
-  ],
-  delivery: [
-    ["dashboard", "Overview", LayoutDashboard],
-    ["orders", "Delivery requests", ShoppingBag],
-    ["navigation", "Active delivery", MapPin],
-    ["earnings", "Delivery history", CreditCard],
-    ["profile", "My profile", Bike],
-  ],
-  admin: [
-    ["dashboard", "Overview", LayoutDashboard],
-    ["orders", "Orders", ShoppingBag],
-    ["restaurants", "Restaurants", Store],
-    ["delivery-partners", "Delivery partners", Bike],
-    ["partner-accounts", "Partner account access", Users],
-    ["users", "People", Users],
-    ["payments", "Payments", CreditCard],
-    ["delivery-zones", "Delivery areas", MapPin],
-    ["order-policy", "Order policy", ListChecks],
-    ["offers", "Offers & coupons", Tag],
-    ["catalog", "Food categories", Utensils],
-    ["reports", "Analytics", BarChart3],
-    ["reviews", "Review moderation", MessageSquare],
-    ["activity", "Activity log", ListChecks],
-    ["profile", "My profile", Settings],
-    ["access", "Team access", Users],
-  ],
-};
 export function WorkspaceNav({ type }) {
   const { user, logout } = useAuth();
   return (

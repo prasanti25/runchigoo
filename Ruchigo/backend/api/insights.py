@@ -93,6 +93,22 @@ def operational_report(orders, today, start=None, end=None):
     previous_end = start-timedelta(days=1)
     previous_start = start-timedelta(days=(end-start).days+1)
     previous = window_summary(report_window(orders, previous_start, previous_end))
+    previous_customers = report_window(orders, previous_start, previous_end).filter(status=Order.Status.DELIVERED).values("customer_id").distinct()
+    prior_count = previous_customers.count()
+    retained = completed.filter(customer_id__in=previous_customers).values("customer_id").distinct().count()
+    summary["unique_ordering_customers"] = current.values("customer_id").distinct().count()
+    summary["retained_customers"] = retained
+    summary["previous_period_customers"] = prior_count
+    summary["retention_rate"] = round(retained/prior_count*100, 1) if prior_count else None
+    from .customer_insights import spending
+    financials = spending(current)
+    financials["gross_collected_delivery_fees"] = str(completed.filter(payment__status__in=[Payment.Status.PAID, Payment.Status.REFUNDED]).aggregate(amount=Sum("delivery_fee"))["amount"] or Decimal(0))
+    from .merchant_finance import totals as merchant_totals
+    from .models import MerchantEntry
+    merchant_rows = MerchantEntry.objects.filter(order__in=current, kind="accrual")
+    financials["commission"] = str(merchant_totals(merchant_rows)["commission"]) if merchant_rows.exists() else None
+    financials["commission_covered_orders"] = merchant_rows.values("order_id").distinct().count()
+    financials["definition"] = "Collected payments and confirmed refunds for orders placed in this reporting window. Delivery fees are gross, before refund allocation. Commission covers only orders with approved accounting snapshots, net of confirmed refunds; it is pre-tax, not platform profit or bank remittance."
     changes = {}
     for key in ["orders", "delivered", "gross_order_value", "average_order_value"]:
         before, after = Decimal(str(previous[key])), Decimal(str(summary[key]))
@@ -118,6 +134,7 @@ def operational_report(orders, today, start=None, end=None):
     return {
         "period": {"start": start.isoformat(), "end": end.isoformat(), "timezone": str(timezone.get_current_timezone())},
         "summary": summary,
+        "financials": financials,
         "comparison": {"start": previous_start.isoformat(), "end": previous_end.isoformat(), "summary": previous, "change_percent": changes},
         "daily": daily_report(current, start, end),
         "peak_hours": list(completed.annotate(hour=ExtractHour("created_at")).values("hour").annotate(orders=Count("id")).order_by("-orders", "hour")[:5]),
@@ -129,6 +146,8 @@ def operational_report(orders, today, start=None, end=None):
 
 
 def delivery_estimate(order):
+    if order.scheduled_for and order.scheduled_for > timezone.now() and order.status in [Order.Status.PENDING, Order.Status.CONFIRMED]:
+        return {"status": "scheduled", "scheduled_for": order.scheduled_for.isoformat()}
     if order.status in [Order.Status.DELIVERED, Order.Status.CANCELLED, Order.Status.AWAITING_PAYMENT]:
         return {"status": "not_applicable"}
     candidates = DeliveryAssignment.objects.filter(order__restaurant=order.restaurant, order__status=Order.Status.DELIVERED, delivered_at__gte=timezone.now()-timezone.timedelta(days=60), pickup_at__isnull=False).select_related("order").order_by("-delivered_at")[:100]

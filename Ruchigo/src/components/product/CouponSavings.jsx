@@ -16,15 +16,10 @@ import {
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useCart } from "../../context/CartContext.jsx";
 import { money, useRemote } from "../../lib/product.js";
+import { couponTitle, couponBenefitTerms } from "../../lib/couponLabels.js";
 import LoadingScreen from "../common/LoadingScreen.jsx";
 import { ErrorNotice, Modal } from "./UI.jsx";
 import "./CouponSavings.css";
-
-function offerTitle(offer) {
-  if (Number(offer.discount_amount) > 0)
-    return `${money(Math.min(Number(offer.discount_amount), Number(offer.max_discount) || Infinity))} off your meal`;
-  return `${Number(offer.discount_percent)}% off${offer.max_discount ? ` up to ${money(offer.max_discount)}` : " your meal"}`;
-}
 
 function Progress({ current, target, label }) {
   const value = Math.min(
@@ -56,7 +51,7 @@ function CouponCard({ offer, selected, busy, onApply }) {
           <Tag size={21} strokeWidth={1.6} />
         </span>
         <div>
-          <h3>{offerTitle(offer)}</h3>
+          <h3>{couponTitle(offer)}</h3>
           <p>{offer.restaurant_name || "On this restaurant’s menu"}</p>
         </div>
       </div>
@@ -102,6 +97,12 @@ function CouponCard({ offer, selected, busy, onApply }) {
         <summary>Offer details</summary>
         <div>
           {offer.description && <p>{offer.description}</p>}
+          <p>{couponBenefitTerms(offer)}</p>
+          {offer.bogo_item && (
+            <Link to={`/food-details/${offer.bogo_item}`} className="text-link">
+              View {offer.bogo_item_name || "offer dish"}
+            </Link>
+          )}
           <ul>
             <li>
               Minimum food subtotal: {money(offer.min_order_amount)}. Add-ons
@@ -138,8 +139,8 @@ function CouponCard({ offer, selected, busy, onApply }) {
               .
             </li>
             <li>
-              One coupon per order. Savings cannot exceed the food subtotal.
-              Eligibility is checked again at checkout.
+              One coupon per order. Eligibility and the final saving are checked
+              again at checkout.
             </li>
           </ul>
         </div>
@@ -153,7 +154,8 @@ export default function CouponSavings({ addressId = null }) {
   const {
     cartItems,
     couponCode,
-    discount,
+    couponSaving: discount,
+    couponBenefit,
     couponChecking,
     applyCoupon,
     clearCoupon,
@@ -200,6 +202,9 @@ export default function CouponSavings({ addressId = null }) {
   const eligible = rows.filter((row) => row.eligible);
   const unavailable = rows.filter((row) => !row.eligible);
   const delivery = data?.delivery;
+  const deliveryWaived = Boolean(
+    couponCode && !couponChecking && couponBenefit === "free_delivery",
+  );
   const next = data?.next_coupon;
   const menu = `/restaurant/${cartItems[0]?.restaurantId}`;
   const close = () => {
@@ -299,28 +304,32 @@ export default function CouponSavings({ addressId = null }) {
         />
         {delivery && (
           <div
-            className={`savings-milestone ${delivery.status === "free" ? "is-complete" : ""}`}
+            className={`savings-milestone ${deliveryWaived || delivery.status === "free" ? "is-complete" : ""}`}
           >
             <Bike size={22} strokeWidth={1.6} />
             <div>
               <strong>
-                {delivery.status === "free"
-                  ? delivery.is_estimate
-                    ? "Your food subtotal qualifies for free delivery"
-                    : "Free delivery unlocked"
-                  : delivery.status === "progress"
-                    ? `Add ${money(delivery.remaining)} more for free delivery`
-                    : delivery.status === "standard"
-                      ? "Delivery checked at checkout"
-                      : "Check your delivery address"}
+                {deliveryWaived
+                  ? "Free delivery with your coupon"
+                  : delivery.status === "free"
+                    ? delivery.is_estimate
+                      ? "Your food subtotal qualifies for free delivery"
+                      : "Free delivery unlocked"
+                    : delivery.status === "progress"
+                      ? `Add ${money(delivery.remaining)} more for free delivery`
+                      : delivery.status === "standard"
+                        ? "Delivery checked at checkout"
+                        : "Check your delivery address"}
               </strong>
               <p>
-                {delivery.reason ||
-                  (delivery.is_estimate
-                    ? `Based on your ${delivery.address_label.toLowerCase()} address. Confirmed at checkout.`
-                    : "For your selected address, before coupon savings.")}
+                {deliveryWaived
+                  ? `${couponCode} waives the fee for this address. Final eligibility is checked at checkout.`
+                  : delivery.reason ||
+                    (delivery.is_estimate
+                      ? `Based on your ${delivery.address_label.toLowerCase()} address. Confirmed at checkout.`
+                      : "For your selected address, before coupon savings.")}
               </p>
-              {delivery.status === "progress" && (
+              {!deliveryWaived && delivery.status === "progress" && (
                 <Progress
                   current={data.subtotal}
                   target={delivery.threshold}
@@ -328,7 +337,9 @@ export default function CouponSavings({ addressId = null }) {
                 />
               )}
             </div>
-            {delivery.status === "free" && <Check size={17} />}
+            {(deliveryWaived || delivery.status === "free") && (
+              <Check size={17} />
+            )}
           </div>
         )}
         {next && (!couponCode || Number(next.unlock_discount) > discount) && (

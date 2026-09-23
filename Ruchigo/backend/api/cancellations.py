@@ -107,6 +107,8 @@ def cancel_customer_order(order_id, customer, data):
     OrderEvent.objects.create(order=order, status=order.status, message="Cancelled by you before cooking started." if policy.cutoff == "preparation" else "Cancelled by you before restaurant acceptance.")
     AuditLog.objects.create(actor=customer, action="order.customer_cancelled", target=str(order.pk), metadata={"reason": data["reason"], "note": data.get("note", ""), "policy_revision": policy.revision, "refund_request_id": refund_id})
     notify_order(order)
+    from .rewards import sync_order_rewards
+    sync_order_rewards(order)
     return order, refund_id
 
 

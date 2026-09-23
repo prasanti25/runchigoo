@@ -40,6 +40,13 @@ const sections = [
             references and order-status events.
           </li>
           <li>
+            <strong>Rewards, when enabled:</strong> points and
+            promotional-credit balances, order-linked earning/redemption/refund
+            adjustments, referral codes and linked referrer accounts, and
+            qualifying-point levels. Referral activity does not reveal the other
+            customer’s order or payment details.
+          </li>
+          <li>
             <strong>Restaurant and delivery activity:</strong> restaurant
             profiles, menus, availability, assignments, pickup / delivery
             timestamps and coordinates shared by a delivery partner.
@@ -189,9 +196,11 @@ const sections = [
           in this browser. Signing out clears that browser selection. Choosing
           Save delivery address stores the details in your signed-in account.
           You can enter an address or choose a city manually; location capture
-          is not a guarantee that an address is serviceable. Selecting Near me
-          sends approximate coordinates to RuchiGo to filter mapped restaurants
-          by straight-line distance, not driving distance.
+          is not a guarantee that an address is serviceable. When a pin is
+          selected, browsing and recommendations send that pin to RuchiGo to
+          filter nearby mapped restaurants and check configured delivery zones.
+          Browsing distances use straight-line distance, not driving distance.
+          The precise pin is not sent to Gemini for food recommendations.
         </p>
         <p>
           Choosing Use my current location opens the address map and sends the
@@ -204,6 +213,15 @@ const sections = [
           cached by the lookup endpoint. Confirm the address before saving; GPS
           cannot reliably identify a flat, floor or exact entrance. You can keep
           a pin and fill in missing details if lookup is unavailable.
+        </p>
+        <p>
+          When you type at least four characters into address search, the app
+          sends the search text through RuchiGo to Google to find matching
+          addresses. This lookup is not cached by the app. Enter a street,
+          building or area rather than private instructions; add your flat,
+          floor and delivery instructions in the separate address fields.
+          Selecting a suggestion moves the pin but does not save your address
+          until you confirm it.
         </p>
         <p>
           When Google address lookup is enabled, the address selector uses a

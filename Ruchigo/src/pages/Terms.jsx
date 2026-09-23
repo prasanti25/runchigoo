@@ -87,9 +87,9 @@ const sections = [
           if needed.
         </p>
         <p>
-          Only use options offered in the current app. Scheduled ordering, paid
-          add-ons and other future features are not included merely because they
-          appear on a product roadmap.
+          Only use options offered by the selected kitchen. A scheduled time
+          means preparation starts at that time, not a guaranteed arrival slot.
+          Required choices and paid extras are included in the reviewed bill.
         </p>
       </>
     ),
@@ -105,6 +105,13 @@ const sections = [
           promotional message does not itself apply a discount.
         </p>
         <p>
+          Where configured, a delivery fee can include a disclosed scheduled
+          peak-time or temporary demand fee. Fees are rechecked before placing
+          the order; placed orders retain their agreed bill. Eligible free
+          delivery includes any such delivery adjustment. Optional cash tips are
+          shown separately and do not earn rewards.
+        </p>
+        <p>
           Coupon codes are checked against the current cart and again at
           checkout. They may have a restaurant restriction, minimum order,
           expiry, total usage cap, first-order condition, per-customer limit or
@@ -115,6 +122,37 @@ const sections = [
           The order receipt is not represented as a GST tax invoice. Tax
           invoicing, commission and any additional fee policies must be
           confirmed before commercial launch.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "rewards",
+    title: "Points, promotional credits and referrals",
+    content: (
+      <>
+        <p>
+          When rewards are enabled, the Rewards page and checkout show the
+          current earning rules, point value and redemption limit. RuchiGo
+          credits are promotional discounts, not deposited money. They cannot be
+          topped up, transferred or withdrawn. Combined points and credits apply
+          only to eligible food after coupons, not delivery charges or tips.
+        </p>
+        <p>
+          Eligible rewards are recorded after delivery and collected payment.
+          Order cancellations return reserved rewards; provider-confirmed
+          refunds proportionally adjust redemptions and earnings. If refunded
+          rewards were already spent, future earnings cover the adjustment
+          balance. This does not charge your bank account or replace an
+          original-method payment refund.
+        </p>
+        <p>
+          A referral must be linked before the new customer places an order.
+          Both accounts receive the configured credit once, after the first
+          qualifying delivered and paid order. Self-referrals and referral
+          cycles are not allowed. A refund can reverse the bonus and does not
+          allow it to be claimed again. Displayed loyalty levels describe
+          qualifying points, not additional unlisted benefits.
         </p>
       </>
     ),

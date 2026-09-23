@@ -22,7 +22,7 @@ from .serializers import *
 from .notifications import notify, admin_ids, notify_order, notify_payment
 from .menu_options import selected_addons, configuration_key, cart_unit_price
 from .availability import accepting_orders, check_cart_stock, restore_order_stock
-from .serviceability import delivery_quote, quote_fingerprint, sign_quote
+from .serviceability import delivery_quote, quote_fingerprint, sign_quote, active_city_filter
 from .payment_expiry import expire_unpaid_orders
 from .cancellations import CancellationInput, cancel_customer_order
 from .order_operations import require_active_fulfillment
@@ -185,7 +185,7 @@ class RestaurantViewSet(AdminScopeMixin, viewsets.ModelViewSet):
                 return qs
             if user.is_authenticated and user.role == User.Role.RESTAURANT:
                 return qs.filter(owner=user)
-            return qs.filter(is_approved=True, owner__is_active=True)
+            return qs.filter(active_city_filter(), is_approved=True, owner__is_active=True)
         return qs if self.request.user.is_superuser or self.request.user.role == User.Role.ADMIN else qs.filter(owner=self.request.user)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAdmin])
@@ -217,6 +217,16 @@ class CategoryViewSet(AdminScopeMixin, viewsets.ModelViewSet):
 class MenuItemViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     queryset=MenuItem.objects.select_related("restaurant", "restaurant__owner", "category").all(); serializer_class=MenuItemSerializer; filterset_fields=["restaurant", "category", "is_available", "is_vegetarian"]; search_fields=["name", "description"]; ordering_fields=["price", "created_at", "name"]
     def get_permissions(self): return [permissions.AllowAny()] if self.action in ["list", "retrieve"] else [IsRestaurantOrAdmin()]
+    @action(detail=False, methods=["get"])
+    def lookup(self, request):
+        rows = self.paginate_queryset(self.filter_queryset(self.get_queryset().order_by("name", "id")))
+        return self.get_paginated_response([{"id":row.pk,"name":row.name,"price":str(row.price),"restaurant":row.restaurant_id} for row in rows])
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise serializers.ValidationError("This dish has order history or a BOGO campaign. Mark it unavailable instead of deleting it.")
     @transaction.atomic
     def perform_update(self, serializer):
         locked = MenuItem.objects.select_for_update().get(pk=serializer.instance.pk)
@@ -244,7 +254,7 @@ class MenuItemViewSet(AdminScopeMixin, viewsets.ModelViewSet):
             return qs
         if user.is_authenticated and user.role == User.Role.RESTAURANT:
             return qs.filter(restaurant__owner=user)
-        return qs.filter(is_available=True, restaurant__is_approved=True, restaurant__owner__is_active=True)
+        return qs.filter(active_city_filter("restaurant__"), is_available=True, restaurant__is_approved=True, restaurant__owner__is_active=True)
 
 class OwnedViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     permission_classes=[permissions.IsAuthenticated]
@@ -310,7 +320,7 @@ class NotificationViewSet(OwnedViewSet):
             if "*" not in scopes:
                 for scope, kinds in [("support", ["support"]), ("finance", ["refund", "payment"]), ("orders", ["order", "delivery"])]:
                     if scope not in scopes:
-                        qs = qs.exclude(kind__in=kinds)
+                        qs = qs.exclude(Q(kind__in=kinds) & ~Q(metadata__personal_order=True) & ~Q(metadata__personal_ticket=True))
                 if "partners" not in scopes:
                     qs = qs.exclude(Q(metadata__has_key="approval_role") | Q(metadata__has_key="restaurant_approval"))
         return qs
@@ -400,9 +410,17 @@ class CartViewSet(AdminScopeMixin, viewsets.ViewSet):
         if not items:
             raise serializers.ValidationError({"cart": "Cart is empty."})
         subtotal = sum((cart_unit_price(item, strict=True) * item.quantity for item in items), Decimal("0"))
-        coupon, discount = applicable_coupon(payload.validated_data["code"], subtotal, user=request.user, restaurant=cart.restaurant)
-        # Applying a coupon validates food savings, not a delivery-address quote.
-        response = Response({"code": coupon.code, "subtotal": subtotal, "discount": discount, "food_total": subtotal-discount})
+        from .cart_savings import savings_address
+        address = savings_address(request.user, payload.validated_data.get("address_id"))
+        fee = None
+        if address:
+            try:
+                fee = Decimal(delivery_quote(cart.restaurant, address, subtotal)["delivery_fee"])
+            except serializers.ValidationError:
+                pass  # Food coupons can still be explored before a valid address.
+        coupon, discount = applicable_coupon(payload.validated_data["code"], subtotal, user=request.user, restaurant=cart.restaurant, items=items, delivery_fee=fee)
+        food_discount = Decimal(0) if coupon.benefit_type == Coupon.Benefit.DELIVERY else discount
+        response = Response({"code": coupon.code, "benefit_type": coupon.benefit_type, "subtotal": subtotal, "discount": discount, "food_discount": food_discount, "food_total": subtotal-food_discount})
         response["Cache-Control"] = "private, no-store"
         return response
     @action(detail=False, methods=["get"])
@@ -428,13 +446,21 @@ class CartViewSet(AdminScopeMixin, viewsets.ViewSet):
                 raise serializers.ValidationError({"cart": f"Not enough portions of {item.menu_item.name} are available. Update your bag."})
         subtotal = sum((cart_unit_price(item, strict=True) * item.quantity for item in items), Decimal("0"))
         coupon, discount = None, Decimal("0")
-        if payload.validated_data.get("coupon_code"):
-            coupon, discount = applicable_coupon(payload.validated_data["coupon_code"], subtotal, user=request.user, restaurant=restaurant)
-        discount = discount.quantize(Decimal("0.01"))
         quote = delivery_quote(restaurant, address, subtotal)
+        if payload.validated_data.get("coupon_code"):
+            coupon, discount = applicable_coupon(payload.validated_data["coupon_code"], subtotal, user=request.user, restaurant=restaurant, items=items, delivery_fee=Decimal(quote["delivery_fee"]))
+            from .coupon_savings import apply_coupon_quote
+            discount = apply_coupon_quote(coupon, quote, discount)
+        discount = discount.quantize(Decimal("0.01"))
+        from .checkout_options import checkout_extras
+        quote.update(checkout_extras(restaurant, payload.validated_data))
+        from .rewards import reward_quote
+        rewards, reward_discount, _ = reward_quote(request.user, payload.validated_data, subtotal-discount)
+        if rewards:
+            quote["rewards"] = rewards
         fingerprint = quote_fingerprint(request.user, address, items, quote, coupon.code if coupon else "", subtotal, discount)
-        return Response({**quote, "serviceable": True, "subtotal": subtotal, "discount": discount,
-                         "total": subtotal + Decimal(quote["delivery_fee"]) - discount, "quote_token": sign_quote(fingerprint), "valid_for_seconds": 600})
+        return Response({**quote, "serviceable": True, "subtotal": subtotal, "discount": discount, "reward_discount": reward_discount,
+                         "total": subtotal + Decimal(quote["delivery_fee"]) - discount - reward_discount + payload.validated_data.get("tip_amount", Decimal(0)), "quote_token": sign_quote(fingerprint), "valid_for_seconds": 600})
     @action(detail=False, methods=["post"])
     def checkout(self, request):
         cart = Cart.objects.filter(user=request.user).first()
@@ -449,7 +475,8 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
     ordering_fields = ["created_at", "total"]
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False): return Order.objects.none()
-        if self.request.user.role == User.Role.CUSTOMER and self.action in ["list", "retrieve"]:
+        personal = self.request.query_params.get("view") == "mine" or self.action in {"cancel", "reorder"}
+        if (self.request.user.role == User.Role.CUSTOMER or personal) and self.action in ["list", "retrieve"]:
             expire_unpaid_orders(customer_id=self.request.user.pk)
         user=self.request.user
         if self.action in {"live_location", "rider_place"}:
@@ -462,6 +489,8 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
             if user.role == User.Role.DELIVERY:
                 return qs.filter(delivery__partner=user)
             return qs.none()
+        if personal:
+            return qs.filter(customer=user)
         if user.is_superuser or user.role==User.Role.ADMIN: return qs
         if user.role==User.Role.RESTAURANT: return qs.filter(restaurant__owner=user).exclude(status=Order.Status.AWAITING_PAYMENT)
         if user.role==User.Role.DELIVERY:
@@ -599,6 +628,8 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
         if new == order.status:
             return Response(self.get_serializer(order).data)
         require_active_fulfillment(order)
+        if new == Order.Status.PREPARING and order.scheduled_for and order.scheduled_for > timezone.now():
+            raise serializers.ValidationError("This order is scheduled for later. Cooking can start at the selected preparation time.")
         if order.status in [Order.Status.CANCELLED, Order.Status.DELIVERED]:
             raise serializers.ValidationError("Completed or cancelled orders cannot be reopened.")
         if order.status == Order.Status.AWAITING_PAYMENT:
@@ -658,6 +689,11 @@ class OrderViewSet(AdminScopeMixin, viewsets.ReadOnlyModelViewSet):
                 order.payment.status = Payment.Status.PAID
                 order.payment.save(update_fields=["status", "updated_at"])
                 notify_payment(order)
+        if new in [Order.Status.DELIVERED, Order.Status.CANCELLED]:
+            from .rewards import sync_order_rewards
+            sync_order_rewards(order)
+            from .merchant_finance import sync_order_finance
+            sync_order_finance(order)
         notify_order(order)
         return Response(OrderSerializer(order).data)
 
@@ -858,12 +894,57 @@ class UserManagementViewSet(AdminScopeMixin, viewsets.ModelViewSet):
         return Response({"detail": "User restored successfully."})
 
 class CouponViewSet(AdminScopeMixin, viewsets.ModelViewSet):
-    queryset=Coupon.objects.order_by("-created_at"); serializer_class=CouponSerializer; permission_classes=[IsAdmin]; lookup_field="code"
+    queryset=Coupon.objects.order_by("-created_at"); serializer_class=CouponSerializer; permission_classes=[IsRestaurantOrAdmin]; lookup_field="code"
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.action in ["update", "partial_update"]:
+            queryset = queryset.select_for_update()
+        search = self.request.query_params.get("q", "")[:80]
+        if search:
+            queryset = queryset.filter(Q(code__icontains=search) | Q(description__icontains=search))
+        if self.action == "available" or self.request.user.role == User.Role.ADMIN:
+            return queryset
+        return queryset.filter(restaurant__owner=self.request.user)
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
+    def save_coupon(self, serializer, event):
+        if self.request.user.role == User.Role.RESTAURANT:
+            restaurant = Restaurant.objects.filter(owner=self.request.user, is_approved=True).first()
+            if not restaurant:
+                raise serializers.ValidationError("An approved restaurant is needed to manage coupons.")
+            supplied = serializer.validated_data.get("restaurant", restaurant)
+            if supplied != restaurant:
+                raise serializers.ValidationError({"restaurant": "Coupons must belong to your own restaurant."})
+            coupon = serializer.save(restaurant=restaurant)
+        else:
+            coupon = serializer.save()
+        AuditLog.objects.create(actor=self.request.user, action=event, target=str(coupon.pk), metadata={"restaurant_id": coupon.restaurant_id, "code": coupon.code})
+
+    @transaction.atomic
+    def perform_create(self, serializer):
+        self.save_coupon(serializer, "coupon.created")
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        serializer.instance = Coupon.objects.select_for_update().get(pk=serializer.instance.pk)
+        self.save_coupon(serializer, "coupon.updated")
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        coupon = Coupon.objects.select_for_update().get(pk=instance.pk)
+        if Order.objects.filter(coupon=coupon).exists() or coupon.offer_banners.exists():
+            raise serializers.ValidationError("This coupon has order history or linked offers. Deactivate it instead of deleting it.")
+        AuditLog.objects.create(actor=self.request.user, action="coupon.deleted", target=str(coupon.pk), metadata={"code": coupon.code})
+        coupon.delete()
 
     @action(detail=False, methods=["get"], permission_classes=[permissions.AllowAny])
     def available(self, request):
         now = timezone.now()
-        coupons = self.get_queryset().select_related("restaurant").filter(
+        coupons = self.get_queryset().select_related("restaurant", "bogo_item").filter(
             is_active=True, starts_at__lte=now, ends_at__gt=now,
         ).filter(Q(usage_limit__isnull=True) | Q(usage_count__lt=F("usage_limit"))).filter(
             Q(restaurant__isnull=True) | Q(restaurant__is_approved=True, restaurant__is_open=True, restaurant__owner__is_active=True)
@@ -879,17 +960,21 @@ class CouponViewSet(AdminScopeMixin, viewsets.ModelViewSet):
             "id": coupon.id, "code": coupon.code, "description": coupon.description,
             "restaurant": coupon.restaurant_id, "restaurant_name": coupon.restaurant.name if coupon.restaurant else None,
             "discount_percent": coupon.discount_percent, "discount_amount": coupon.discount_amount,
+            "benefit_type": coupon.benefit_type, "campaign_type": coupon.campaign_type, "campaign_label": coupon.campaign_label,
+            "bogo_item": coupon.bogo_item_id, "bogo_item_name": coupon.bogo_item.name if coupon.bogo_item_id else None, "max_free_items": coupon.max_free_items,
             "min_order_amount": coupon.min_order_amount, "max_discount": coupon.max_discount,
             "first_order_only": coupon.first_order_only, "per_user_limit": coupon.per_user_limit,
             "ends_at": coupon.ends_at,
         } for coupon in (page if page is not None else coupons)]
         return self.get_paginated_response(data) if page is not None else Response(data)
 class OfferViewSet(AdminScopeMixin, viewsets.ModelViewSet):
-    queryset=Offer.objects.order_by("-created_at"); serializer_class=OfferSerializer
+    queryset=Offer.objects.select_related("coupon").order_by("-created_at"); serializer_class=OfferSerializer
     def get_permissions(self):
         return [permissions.AllowAny()] if self.action in ["list", "retrieve"] else [IsRestaurantOrAdmin()]
     def get_queryset(self):
         qs = super().get_queryset()
+        if self.action in ["update", "partial_update"]:
+            qs = qs.select_for_update(of=("self",))
         user = self.request.user
         if user.is_authenticated and (user.is_superuser or user.role == User.Role.ADMIN):
             return qs
@@ -897,20 +982,38 @@ class OfferViewSet(AdminScopeMixin, viewsets.ModelViewSet):
             return qs.filter(restaurant__owner=user)
         now = timezone.now()
         return qs.filter(is_active=True, starts_at__lte=now, ends_at__gt=now).filter(
-            Q(restaurant__isnull=True) | Q(restaurant__is_approved=True, restaurant__is_open=True)
-        )
+            Q(restaurant__isnull=True) | Q(restaurant__is_approved=True, restaurant__is_open=True, restaurant__owner__is_active=True)
+        ).filter(Q(coupon__isnull=True) | (Q(coupon__is_active=True, coupon__starts_at__lte=now, coupon__ends_at__gt=now) & (Q(coupon__usage_limit__isnull=True) | Q(coupon__usage_count__lt=F("coupon__usage_limit")))))
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
     def perform_create(self, serializer):
         if self.request.user.is_superuser or self.request.user.role == User.Role.ADMIN:
             if "restaurant" not in serializer.validated_data:
                 raise serializers.ValidationError({"restaurant": "Choose a restaurant."})
-            serializer.save()
+            offer = serializer.save()
         else:
-            serializer.save(restaurant=self.request.user.restaurant)
+            restaurant = Restaurant.objects.filter(owner=self.request.user, is_approved=True).first()
+            if not restaurant:
+                raise serializers.ValidationError("An approved restaurant is needed to publish offers.")
+            offer = serializer.save(restaurant=restaurant)
+        AuditLog.objects.create(actor=self.request.user, action="offer.created", target=str(offer.pk), metadata={"coupon_id": offer.coupon_id})
     def perform_update(self, serializer):
         if self.request.user.is_superuser or self.request.user.role == User.Role.ADMIN:
-            serializer.save()
+            offer = serializer.save()
         else:
-            serializer.save(restaurant=self.request.user.restaurant)
+            restaurant = Restaurant.objects.filter(owner=self.request.user, is_approved=True).first()
+            if not restaurant:
+                raise serializers.ValidationError("An approved restaurant is needed to publish offers.")
+            offer = serializer.save(restaurant=restaurant)
+        AuditLog.objects.create(actor=self.request.user, action="offer.updated", target=str(offer.pk), metadata={"coupon_id": offer.coupon_id})
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        AuditLog.objects.create(actor=self.request.user, action="offer.deleted", target=str(instance.pk))
+        instance.delete()
 class DeliveryViewSet(AdminScopeMixin, viewsets.ModelViewSet):
     queryset=DeliveryAssignment.objects.select_related("order").order_by("-created_at"); serializer_class=DeliverySerializer; permission_classes=[IsAssignedCourierRole]
     http_method_names=["get", "patch", "head", "options"]
@@ -930,6 +1033,7 @@ class AnalyticsViewSet(AdminScopeMixin, viewsets.ViewSet):
         return Response({
             "users": User.objects.values("role").annotate(count=Count("id")).order_by("role"),
             "active_users": User.objects.filter(is_active=True).count(),
+            "active_ordering_customers_30d": Order.objects.filter(created_at__gte=timezone.now()-timedelta(days=30)).values("customer_id").distinct().count(),
             "orders": Order.objects.values("status").annotate(count=Count("id"), revenue=Sum("total")).order_by("status"),
             "restaurants": {
                 "total": Restaurant.objects.count(),

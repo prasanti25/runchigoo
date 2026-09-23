@@ -25,7 +25,11 @@ def validate_hours(hours):
     return result
 
 
-def accepting_orders(restaurant, at=None):
+def accepting_orders(restaurant, at=None, *, paused_cities=None):
+    from .serviceability import city_available, canonical_city
+    city_open = city_available(restaurant.city) if paused_cities is None else canonical_city(restaurant.city) not in paused_cities
+    if not city_open:
+        return False
     if not restaurant.is_open or not restaurant.is_approved or not restaurant.owner.is_active:
         return False
     if not restaurant.opening_hours:
@@ -35,11 +39,21 @@ def accepting_orders(restaurant, at=None):
     return not row["closed"] and row["open"] <= now.strftime("%H:%M") < row["close"]
 
 
+def serialized_availability(restaurant, context):
+    """One fresh city snapshot per serialized response, never a global TTL."""
+    from .models import ServiceCity
+    from .serviceability import canonical_city
+    if "_paused_cities" not in context:
+        context["_paused_cities"] = {canonical_city(name) for name in ServiceCity.objects.filter(is_active=False).values_list("name",flat=True)}
+    return accepting_orders(restaurant, paused_cities=context["_paused_cities"])
+
+
 def accepting_filter(prefix=""):
+    from .serviceability import active_city_filter
     now = timezone.localtime()
     day = f"{prefix}opening_hours__{now.weekday()}"
     schedule = Q(**{f"{prefix}opening_hours": []}) | Q(**{f"{day}__closed": False, f"{day}__open__lte": now.strftime("%H:%M"), f"{day}__close__gt": now.strftime("%H:%M")})
-    return Q(**{f"{prefix}is_open": True, f"{prefix}is_approved": True, f"{prefix}owner__is_active": True}) & schedule
+    return Q(**{f"{prefix}is_open": True, f"{prefix}is_approved": True, f"{prefix}owner__is_active": True}) & schedule & active_city_filter(prefix)
 
 
 def in_stock_filter(prefix=""):

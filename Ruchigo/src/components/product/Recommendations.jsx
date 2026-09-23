@@ -6,11 +6,14 @@ import { apiRequest } from "../../lib/api.js";
 import { useDeliveryLocation } from "../../lib/product.js";
 import { EmptyState, ErrorNotice, FoodCard, Skeleton } from "./UI.jsx";
 import VoiceInput from "./VoiceInput.jsx";
+import { discoveryLocation } from "../../lib/discoveryLocation.js";
 
 const preferenceKey = (value) =>
   JSON.stringify([
     value.q,
     value.city,
+    value.latitude,
+    value.longitude,
     value.vegetarian,
     String(value.budget || ""),
     String(value.max_prep || ""),
@@ -18,7 +21,8 @@ const preferenceKey = (value) =>
 
 export default function Recommendations() {
   const { token } = useAuth();
-  const { city } = useDeliveryLocation();
+  const location = useDeliveryLocation();
+  const { city } = location;
   const [query, setQuery] = useState("");
   const [vegetarian, setVegetarian] = useState(false);
   const [budget, setBudget] = useState("");
@@ -30,7 +34,7 @@ export default function Recommendations() {
   const [error, setError] = useState("");
   const currentPreferences = {
     q: query.trim(),
-    city: city || "",
+    ...discoveryLocation(location),
     vegetarian,
     ...(budget ? { budget } : {}),
     ...(maxPrep ? { max_prep: maxPrep } : {}),

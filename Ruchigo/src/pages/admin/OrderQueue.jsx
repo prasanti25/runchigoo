@@ -177,6 +177,11 @@ export default function OrderQueue() {
                 <div>
                   <p className="eyebrow">#{orderNumber(order)}</p>
                   <h3>{order.restaurant_detail?.name}</h3>
+                  {order.scheduled_for && (
+                    <p className="saving-line">
+                      Scheduled preparation: {dateTime(order.scheduled_for)}
+                    </p>
+                  )}
                   <p className="muted">
                     {dateTime(order.created_at)} ·{" "}
                     {order.items.reduce((sum, item) => sum + item.quantity, 0)}{" "}

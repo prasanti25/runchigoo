@@ -52,6 +52,24 @@ class AdminScopeMixin:
         if "*" in scopes:
             return
         basename, action = getattr(self, "basename", None), getattr(self, "action", None)
+        if basename == "online-payment":
+            # Verification already requires order__customer=request.user.
+            return
+        if basename == "delivery-chat":
+            # Participants are checked against the customer's own order.
+            return
+        if basename == "insights" and action == "eta":
+            from .models import Order
+            order_id = request.query_params.get("order")
+            if str(order_id).isdigit() and Order.objects.filter(pk=order_id, customer=user).exists():
+                return
+        if basename == "order":
+            from .models import Order
+            if request.query_params.get("view") == "mine" and action in {"list", "retrieve", "summary", "live_location", "rider_place", "road_route"}:
+                return
+            pk = self.kwargs.get("pk")
+            if action in {"retrieve", "live_location", "rider_place", "road_route", "cancel", "reorder"} and str(pk).isdigit() and Order.objects.filter(pk=pk, customer=user).exists():
+                return
         if basename == "support":
             # Shopping support remains available to delegated admins, but never
             # grants access to another customer's conversation or the team inbox.
@@ -63,7 +81,11 @@ class AdminScopeMixin:
                 return
         # Self-service and public catalog discovery retain their existing
         # ownership permissions. Unknown/new endpoints fail closed for delegates.
-        if basename in {"auth", "notification", "address", "wishlist", "cart", "review", "location", "discovery", "restaurant-review", "intelligence"}:
+        if basename == "rewards":
+            return
+        if basename == "checkout-options" and request.method in permissions.SAFE_METHODS:
+            return
+        if basename in {"auth", "notification", "address", "wishlist", "cart", "review", "location", "discovery", "restaurant-review", "intelligence", "customer-insights"}:
             return
         required = {
             "user-management": {"people"}, "restaurant": {"partners", "catalog"},
@@ -75,6 +97,10 @@ class AdminScopeMixin:
             "delivery-policy": {"policies"}, "delivery-zone": {"policies"},
             "cancellation-policy": {"policies"}, "refund-request": {"finance"},
             "order-operations": {"orders"},
+            "checkout-options": {"policies"},
+            "reward-policy": {"policies"},
+            "commission-policy": {"finance"}, "merchant-finance": {"finance"},
+            "delivery-pricing": {"policies"}, "service-city": {"policies"},
         }.get(basename, set())
         if basename == "user-management" and action in {"list", "retrieve", "summary", "approve", "block", "unblock"}:
             # Partner approval cannot grant general account-management power.
@@ -84,6 +110,8 @@ class AdminScopeMixin:
             required = {"partners"}
         if basename == "restaurant" and action == "lookup":
             required = {"partners", "catalog", "promotions"}
+        if basename == "menuitem" and action == "lookup":
+            required = {"catalog", "promotions"}
         if basename == "category" and request.method not in permissions.SAFE_METHODS:
             required = {"catalog"}
         if basename == "order" and action in {"list", "retrieve", "summary"}:

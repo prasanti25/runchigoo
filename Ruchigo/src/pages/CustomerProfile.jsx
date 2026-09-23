@@ -18,10 +18,12 @@ import {
   ShoppingBag,
   Tag,
   User,
+  Wallet,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Navbar from "../components/Navbar.jsx";
 import ProfilePhoto from "../components/common/ProfilePhoto.jsx";
+import CustomerInsights from "../components/product/CustomerInsights.jsx";
 import {
   EmptyState,
   ErrorNotice,
@@ -43,6 +45,7 @@ const groups = [
       ["/for-you?tab=picks", "Saved restaurants & recent visits", Heart],
       ["/for-you?tab=taste", "Food preferences", Settings],
       ["/offers", "Offers & coupons", Tag],
+      ["/rewards", "Rewards & credits", Wallet],
     ],
   ],
   [
@@ -178,6 +181,7 @@ export default function CustomerProfile() {
                   saved.reload();
                 }}
               />
+              <CustomerInsights />
               <section className="profile-section">
                 <div className="profile-section-title">
                   <h2>Recent orders</h2>

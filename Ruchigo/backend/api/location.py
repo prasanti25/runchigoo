@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.cache import cache
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
@@ -20,6 +20,13 @@ class LocationThrottle(SimpleRateThrottle):
 
     def get_cache_key(self, request, view):
         return self.cache_format % {"scope": "ip-location", "ident": request.META.get("REMOTE_ADDR", "unknown")}
+
+
+class AddressSearchThrottle(LocationThrottle):
+    rate = "30/min"
+    def get_cache_key(self, request, view):
+        identity = f"user:{request.user.pk}" if request.user.is_authenticated else self.get_ident(request)
+        return self.cache_format % {"scope": "address-search", "ident": identity}
 
 
 def client_address(request):
@@ -42,8 +49,22 @@ class LocationViewSet(AdminScopeMixin, viewsets.ViewSet):
 
     def finalize_response(self, request, response, *args, **kwargs):
         response = super().finalize_response(request, response, *args, **kwargs)
-        if self.action in {"reverse", "demo_route"}:
+        if self.action in {"reverse", "demo_route", "search"}:
             response["Cache-Control"] = "private, no-store"
+        return response
+
+    @action(detail=False, methods=["post"], throttle_classes=[AddressSearchThrottle])
+    def search(self, request):
+        from .google_geocoding import google_search_addresses
+        query = serializers.CharField(min_length=4, max_length=240, trim_whitespace=True).run_validation(request.data.get("query"))
+        if request.data.get("consent") is not True:
+            raise serializers.ValidationError("Choose to search for a delivery address first.")
+        results, result = google_search_addresses(query)
+        if result in {"ready", "no_match"}:
+            return Response({"results": results, "status": result})
+        response = Response({"results": [], "detail": "Address suggestions are temporarily unavailable. You can use the map pin or enter your address manually."}, status=429 if result == "rate_limited" else 503)
+        if result == "rate_limited":
+            response["Retry-After"] = "5"
         return response
 
     @action(detail=False, methods=["post"], throttle_classes=[LocationThrottle])

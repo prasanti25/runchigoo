@@ -1,15 +1,15 @@
 # RuchiGo: numbered feature coverage
 
-Updated 22 September 2026. This tracks **all 300 numbered entries** supplied by the user, including duplicates. Truncated labels have been normalized; #62 is explicitly inferred as UPI. These counts describe checklist coverage, **not 300 unique features, commercial readiness or Swiggy/Zomato parity**.
+Updated 23 September 2026. This tracks **all 300 numbered entries** supplied by the user, including duplicates. Truncated labels have been normalized; #62 is explicitly inferred as UPI. These counts describe checklist coverage, **not 300 unique features, commercial readiness or Swiggy/Zomato parity**.
 
 ## Current implementation, including this local development pass
 
-- Implemented: **145**
-- Missing: **74**
-- Partial: **76**
+- Implemented: **175**
+- Missing: **54**
+- Partial: **66**
 - Provider-gated: **5**
 
-**155 entries are not fully implemented** (partial + provider-gated + missing). “Implemented” means an active scoped implementation, not proof of production operation at scale. This pass is local and not yet pushed/deployed; the previous Vercel release does not contain these new additions.
+**125 entries are not fully implemented** (partial + provider-gated + missing). “Implemented” means an active scoped implementation, not proof of production operation at scale. This pass is local and not yet pushed/deployed; the previous Vercel release does not contain these new additions.
 
 ## Delivery priorities
 
@@ -29,7 +29,7 @@ Updated 22 September 2026. This tracks **all 300 numbered entries** supplied by 
 | 4 | Email login | Implemented | Active implementation; see product status and verification boundaries. |
 | 5 | User profile | Implemented | Active implementation; see product status and verification boundaries. |
 | 6 | Multiple delivery addresses | Implemented | Active implementation; see product status and verification boundaries. |
-| 7 | Current-location detection | Implemented | Foreground browser permission / approximate city confirmation, not background tracking. |
+| 7 | Current-location detection | Implemented | Foreground browser GPS with user-confirmed map pin/address. Flat/floor details remain user-confirmed; no background customer tracking. |
 | 8 | Saved addresses | Implemented | Active implementation; see product status and verification boundaries. |
 | 9 | Manage payment methods | Missing | Not implemented in the active product. |
 | 10 | Order history | Implemented | Active implementation; see product status and verification boundaries. |
@@ -74,12 +74,12 @@ Updated 22 September 2026. This tracks **all 300 numbered entries** supplied by 
 | 49 | Update quantity | Implemented | Active implementation; see product status and verification boundaries. |
 | 50 | Food customization | Implemented | Required/optional groups, single-choice radio controls and priced extras. Selections are revalidated at checkout. |
 | 51 | Apply coupon | Implemented | Active implementation; see product status and verification boundaries. |
-| 52 | Apply restaurant offer | Partial | Offers displayed; coupon discount engine separate. |
-| 53 | Loyalty points redemption | Missing | Not implemented in the active product. |
-| 54 | Wallet balance | Missing | Not implemented in the active product. |
+| 52 | Apply restaurant offer | Implemented | Restaurant offer banners link to an owned redeemable coupon, matching scope/date window; checkout applies the actual rule and snapshots it. |
+| 53 | Loyalty points redemption | Implemented | Signed checkout redemption from a locked account ledger; food-only cap after coupons, no fees/tips; cancellation/confirmed-refund restoration and replay protection. |
+| 54 | Wallet balance | Partial | Database-backed promotional credit balance and history. Not a stored-money wallet: deposits, withdrawals, transfers and bank-wallet provider integration are not implemented. |
 | 55 | Delivery instructions | Implemented | Active implementation; see product status and verification boundaries. |
-| 56 | Schedule order | Missing | Not implemented in the active product. |
-| 57 | Tip delivery partner | Missing | Not implemented in the active product. |
+| 56 | Schedule order | Partial | Merchant-opt-in scheduled preparation start, explicit hours/notice/horizon, signed quote, stock reservation, due-state kitchen guard and cancellation release. Arrival slots, capacity and durable reminder workers remain pending. |
+| 57 | Tip delivery partner | Partial | Admin-opt-in cash-on-delivery tips in signed totals and rider collection details. Disabled by default; online tip payout/earnings ledger is not implemented. |
 | 58 | Contactless delivery | Implemented | Active implementation; see product status and verification boundaries. |
 | 59 | Order confirmation | Implemented | Active implementation; see product status and verification boundaries. |
 | 60 | Order cancellation | Partial | History/tracking meal summary, explicit reason/confirmation, locked cooking cutoff, snapshotted policy and opt-in prepaid refunds. Kitchen issue/hold and separate admin cancellation/full-refund approval now work. Collected-cash exceptions, approved commercial policy and live provider certification remain required. |
@@ -116,7 +116,7 @@ Updated 22 September 2026. This tracks **all 300 numbered entries** supplied by 
 | 91 | Restaurant profile management | Implemented | Active implementation; see product status and verification boundaries. |
 | 92 | Menu management | Implemented | Active implementation; see product status and verification boundaries. |
 | 93 | Food-item management | Implemented | Active implementation; see product status and verification boundaries. |
-| 94 | Category management | Partial | Assign existing categories; category-admin UI incomplete. |
+| 94 | Category management | Implemented | Restaurants assign existing categories; full category creation/edit/activation is in the scoped admin catalog workspace. |
 | 95 | Pricing management | Implemented | Active implementation; see product status and verification boundaries. |
 | 96 | Inventory management | Partial | Tracked portions, checkout locks, configuration checks, audited adjustments, one-time restock and 15-minute unpaid expiry. Production expiry scheduler, external sync and stock-by-variant remain outstanding. |
 | 97 | Stock availability | Implemented | Active implementation; see product status and verification boundaries. |
@@ -124,13 +124,13 @@ Updated 22 September 2026. This tracks **all 300 numbered entries** supplied by 
 | 99 | Order preparation status | Implemented | Active implementation; see product status and verification boundaries. |
 | 100 | Estimated preparation time | Implemented | Active implementation; see product status and verification boundaries. |
 | 101 | Offers management | Implemented | Active implementation; see product status and verification boundaries. |
-| 102 | Coupon management | Partial | Admin coupon tools; complete restaurant coupon workspace absent. |
+| 102 | Coupon management | Implemented | Approved restaurants create/edit/deactivate their own coupons; admin manages platform campaigns. Ownership, audits and history-protected deletion. |
 | 103 | Restaurant analytics | Implemented | Active implementation; see product status and verification boundaries. |
-| 104 | Sales reports | Partial | 28-day reports; full export / accounting not implemented. |
+| 104 | Sales reports | Partial | Date-filtered reports, exact daily table and CSV; not settlement or bank accounting. |
 | 105 | Customer reviews | Implemented | Active implementation; see product status and verification boundaries. |
 | 106 | Rating management | Partial | Calculated verified-order ratings, not merchant-editable scores. |
-| 107 | Restaurant earnings | Partial | Gross order/payment totals, not net earnings or payouts. |
-| 108 | Settlement tracking | Missing | Not implemented in the active product. |
+| 107 | Restaurant earnings | Implemented | Owner-scoped pre-tax food earnings less snapshotted commission, confirmed-refund adjustments and external settlement records. Legacy coverage is explicit; not bank statements or automated payouts. |
+| 108 | Settlement tracking | Implemented | Finance-confirmed external payment records, normalized unique references, idempotency/revision checks, balance locking and append-only corrections. Recording does not transfer money. |
 | 109 | Peak-hour analytics | Implemented | Active implementation; see product status and verification boundaries. |
 | 110 | Best-selling food analytics | Implemented | Active implementation; see product status and verification boundaries. |
 | 111 | Delivery partner registration | Implemented | Active implementation; see product status and verification boundaries. |
@@ -166,11 +166,11 @@ Updated 22 September 2026. This tracks **all 300 numbered entries** supplied by 
 | 141 | KYC verification | Missing | Not implemented in the active product. |
 | 142 | Restaurant approval / rejection | Implemented | Active implementation; see product status and verification boundaries. |
 | 143 | Delivery partner approval / rejection | Implemented | Active implementation; see product status and verification boundaries. |
-| 144 | Food category management | Partial | Backend CRUD / category assignment; full admin category management UX absent. |
-| 145 | City management | Partial | City-labelled delivery zones with normalized aliases; no separate city lifecycle/master administration. |
+| 144 | Food category management | Implemented | Scoped admin catalog editor for category creation/edit/activation; restaurant menu category assignment. |
+| 145 | City management | Implemented | Audited city pause/reopen with normalized aliases, revision checks, catalog/discovery/checkout enforcement and preserved active orders. No destructive city renaming or migration of existing addresses. |
 | 146 | Service-area management | Implemented | Audited admin creation/edit/activation of circular service areas; explicit policy enablement. |
 | 147 | Delivery-zone management | Implemented | Admin workspace, radius/trip limits, base/per-km pricing, minimum subtotal and free-delivery threshold. No polygon or traffic-based zones. |
-| 148 | Commission management | Missing | Not implemented in the active product. |
+| 148 | Commission management | Implemented | Disabled-by-default, revisioned food-only rate; finance and policy scopes, reason and explicit funding-convention approval. New-order snapshots only; no silent backfill. |
 | 149 | Coupon management | Implemented | Active implementation; see product status and verification boundaries. |
 | 150 | Offer management | Implemented | Active implementation; see product status and verification boundaries. |
 | 151 | Order management | Implemented | Active implementation; see product status and verification boundaries. |
@@ -186,16 +186,16 @@ Updated 22 September 2026. This tracks **all 300 numbered entries** supplied by 
 | 161 | Audit logs | Partial | Includes account changes and admin grants, fulfilment and financial events; comprehensive access/export/configuration audit coverage remains pending. |
 | 162 | Promo codes | Implemented | Active implementation; see product status and verification boundaries. |
 | 163 | Restaurant-specific coupons | Implemented | Active implementation; see product status and verification boundaries. |
-| 164 | New-user offers | Partial | First-order eligibility; no separate new-user campaign segmentation. |
+| 164 | New-user offers | Implemented | Explicit first-order campaign type enforces first non-cancelled order eligibility. No separate signup-age segmentation. |
 | 165 | First-order discount | Implemented | Active implementation; see product status and verification boundaries. |
-| 166 | Festival offers | Partial | Scheduled dated offers; no festival campaign tooling. |
-| 167 | Referral rewards | Missing | Not implemented in the active product. |
-| 168 | Loyalty points | Missing | Not implemented in the active product. |
-| 169 | Loyalty levels | Missing | Not implemented in the active product. |
-| 170 | Reward redemption | Missing | Not implemented in the active product. |
-| 171 | Cashback | Missing | Not implemented in the active product. |
-| 172 | Free-delivery offers | Partial | Fixed free-delivery threshold, not configurable coupon campaign. |
-| 173 | Buy-one-get-one offers | Missing | Not implemented in the active product. |
+| 166 | Festival offers | Implemented | Named festival campaigns with dated validity, usage controls and actual coupon benefits; no automatically invented festival discounts. |
+| 167 | Referral rewards | Implemented | Referral binding before first order; no self-referral/cycles; one qualifying delivered/paid order rewards both accounts, with refund reversals and concurrent qualification protection. Policy disabled by default. |
+| 168 | Loyalty points | Implemented | Order-snapshotted earn rules, locked balances, append-only service ledger, delivered/collected-payment eligibility, refund adjustments and idempotent reconciliation. |
+| 169 | Loyalty levels | Implemented | Admin-configured level names and increasing net-earned-point thresholds; customer progress display. Recognition only, not unconfigured tier perks. |
+| 170 | Reward redemption | Implemented | Points and promotional credits share an explicit food-only redemption cap; server-signed bill, locked checkout debit, cancellation return and proportional confirmed-refund adjustments. |
+| 171 | Cashback | Implemented | Capped cashback as promotional RuchiGo credits after paid delivery, recalculated on confirmed refunds. No cash transfer or withdrawal; approved policy required. |
+| 172 | Free-delivery offers | Implemented | Platform-managed free-delivery coupon waives only the quoted serviceable delivery fee. Already-free orders cannot waste redemption; UI hides contradictory spend-more prompts. |
+| 173 | Buy-one-get-one offers | Implemented | Restaurant-owned single-dish BOGO; both portions must be in the cart, configurable free-portion cap, base price only, extras charged, stock and concurrent redemption checked. |
 | 174 | Personalized offers | Implemented | Ranks eligible coupons using account history / saved kitchens; never creates discounts. |
 | 175 | AI food recommendations | Implemented | Server-side live Gemini ranking restricted to real eligible menu IDs. |
 | 176 | Personalized restaurant recommendations | Implemented | History, saved kitchens and category preferences; deterministic ranking, not a separate AI restaurant model. |
@@ -232,29 +232,29 @@ Updated 22 September 2026. This tracks **all 300 numbered entries** supplied by 
 | 207 | Dining digital payment | Missing | Not implemented in the active product. |
 | 208 | Event / dining discovery | Missing | Not implemented in the active product. |
 | 209 | GPS location | Implemented | Foreground browser location permission. |
-| 210 | Google Maps integration | Partial | External Google directions. In-app map now uses Leaflet/configurable OSM tiles, not Google Maps SDK / routing. |
-| 211 | Address autocomplete | Missing | Not implemented in the active product. |
+| 210 | Google Maps integration | Implemented | Configured Google Maps SDK for address selection and live rider display; actual provider road routes, user controls and attribution. Not a guarantee of GPS accuracy or exact ETA. |
+| 211 | Address autocomplete | Implemented | Debounced Google forward address suggestions with keyboard selection, map pin and address autofill. Uses Geocoding, not Places Autocomplete; flat/floor remain user-confirmed. |
 | 212 | Delivery radius | Implemented | Admin-set zone radius and maximum kitchen-to-customer distance checked against saved pins; straight-line basis. |
 | 213 | Delivery zones | Implemented | Multiple active circular zones, cheapest eligible overlap, missing-pin/out-of-zone checkout rejection when explicitly enabled. |
-| 214 | Distance calculation | Partial | Straight-line distance. |
+| 214 | Distance calculation | Partial | Straight-line discovery/fee distance plus configured provider road-route display. No traffic-aware fee basis or multi-stop optimizer. |
 | 215 | Delivery-fee calculation | Implemented | Server-authoritative base plus extra-distance fee, free threshold, minimum subtotal and signed 10-minute quotes; no silent stale-price acceptance. |
-| 216 | Surge pricing | Missing | Not implemented in the active product. |
-| 217 | Peak-hour pricing | Missing | Not implemented in the active product. |
+| 216 | Surge pricing | Partial | Audited fixed temporary demand-fee windows, expiring within 24 hours; no stacking, cheapest final eligible zone, signed quotes and preserved free-delivery benefits. Automatic demand-triggered surge is not implemented. |
+| 217 | Peak-hour pricing | Implemented | Opt-in weekday/India-time peak-fee schedules within finite date windows; explicit checkout disclosure, revision checks, no stacking and original order snapshots preserved. |
 | 218 | Route optimization | Missing | Not implemented in the active product. |
 | 219 | Multiple service areas | Implemented | Multiple administrable circular zones across city-labelled service areas; baseline same-city check always enforced. |
-| 220 | Location-based restaurant filtering | Implemented | City and mapped-restaurant discovery filters. |
+| 220 | Location-based restaurant filtering | Implemented | Selected city/pin drives home, search, feed and recommendations; default 5 km browsing, 2/5/10 km controls, nearest sorting and checkout-zone parity before pagination. |
 | 221 | Customer total orders | Implemented | Active implementation; see product status and verification boundaries. |
-| 222 | Customer total spending | Partial | Order totals are not audited customer spending/refund-adjusted accounting. |
+| 222 | Customer total spending | Implemented | Owner-scoped collected payments minus confirmed refunds; excludes unpaid orders, supports legacy full refunds. Grouped by order date, not a bank statement. |
 | 223 | Favorite restaurants | Implemented | Active implementation; see product status and verification boundaries. |
 | 224 | Favorite food | Implemented | Explicitly saved dishes. |
-| 225 | Monthly spending | Missing | Not implemented in the active product. |
-| 226 | Customer loyalty points | Missing | Not implemented in the active product. |
-| 227 | Order frequency | Partial | Order history plus repeat counts, no complete customer frequency dashboard. |
-| 228 | Restaurant total sales | Partial | Gross completed-order value, not reconciled restaurant revenue. |
+| 225 | Monthly spending | Implemented | Twelve calendar-month spending/order rows including zero months, with selected-period and lifetime profile summaries. |
+| 226 | Customer loyalty points | Implemented | Customer profile/rewards pages read owned ledger-backed points, credit balance, levels and paginated activity; no invented balance. |
+| 227 | Order frequency | Implemented | Owner-scoped period counts and orders/week; month, 30-day and 90-day UI controls and validated date windows. |
+| 228 | Restaurant total sales | Implemented | Ledger-backed merchant food sales for delivered/collected snapshotted orders, net of merchant discounts and proportional confirmed refunds. Pre-tax; legacy/unreconciled coverage shown separately. |
 | 229 | Restaurant total orders | Implemented | Active implementation; see product status and verification boundaries. |
 | 230 | Average order value | Implemented | Active implementation; see product status and verification boundaries. |
 | 231 | Best-selling items | Implemented | Active implementation; see product status and verification boundaries. |
-| 232 | Customer retention | Partial | Repeat/returning customer counts, not cohort retention rates. |
+| 232 | Customer retention | Implemented | Previous equal-period completed-order cohort retention with numerator/denominator, zero-cohort handling and restaurant scope isolation. |
 | 233 | Cancellation rate | Implemented | Active implementation; see product status and verification boundaries. |
 | 234 | Revenue trends | Partial | Date-filtered daily gross completed-order value chart, exact table and CSV. Not reconciled net restaurant revenue or settlement accounting. |
 | 235 | Admin total users | Implemented | Active implementation; see product status and verification boundaries. |
@@ -262,11 +262,11 @@ Updated 22 September 2026. This tracks **all 300 numbered entries** supplied by 
 | 237 | Admin total delivery partners | Implemented | Active implementation; see product status and verification boundaries. |
 | 238 | Admin total orders | Implemented | Active implementation; see product status and verification boundaries. |
 | 239 | Gross revenue | Partial | Order value, not recognized platform revenue. |
-| 240 | Platform commission | Missing | Not implemented in the active product. |
-| 241 | Delivery revenue | Partial | Fees stored per order; no dedicated delivery revenue reporting. |
+| 240 | Platform commission | Implemented | Actual ledger commission in reports and finance UI, net of confirmed refunds, with explicit accounted-order coverage. Excludes delivery/tips; not profit or tax accounting. |
+| 241 | Delivery revenue | Partial | Explicit gross collected delivery fees on completed orders, separate from collected/refunded/net payments. Refund allocation, rider payouts and recognized delivery revenue remain pending. |
 | 242 | Cancellation rate | Implemented | Active implementation; see product status and verification boundaries. |
 | 243 | Refund amount | Implemented | Admin API/UI sum verified processed refund amounts, including partial refunds, separately from requested/approved amounts. |
-| 244 | Active users | Partial | Enabled user counts, not engagement-defined active users. |
+| 244 | Active users | Partial | Enabled accounts clearly labelled; separate distinct ordering customers over 30 days. Not general session/engagement-based active users. |
 | 245 | Order growth | Implemented | Selected date window versus equal preceding window, with absolute counts and growth percentage; no percentage invented when the preceding count is zero. |
 | 246 | City-wise performance | Implemented | Completed-order count/value by city in role-scoped analytics. |
 | 247 | Order confirmation notification | Implemented | Active implementation; see product status and verification boundaries. |
@@ -300,12 +300,12 @@ Updated 22 September 2026. This tracks **all 300 numbered entries** supplied by 
 | 275 | Support ticket tracking | Implemented | Active implementation; see product status and verification boundaries. |
 | 276 | Multi-vendor marketplace | Implemented | Many restaurant catalog, one restaurant per cart. |
 | 277 | AI food recommendation engine | Implemented | Active implementation; see product status and verification boundaries. |
-| 278 | Referral program | Missing | Not implemented in the active product. |
-| 279 | Loyalty wallet | Missing | Not implemented in the active product. |
-| 280 | Dynamic delivery pricing | Partial | Configurable distance-based zone pricing; demand/surge/peak multipliers are not implemented or automatically enabled. |
+| 278 | Referral program | Implemented | Same scoped referral workflow as #167: persistent pre-order binding, one qualifying delivery, both-account credit and confirmed-refund reversal. |
+| 279 | Loyalty wallet | Implemented | Promotional loyalty wallet: points and non-cash credits, owned history, signed redemption and refund/cancellation adjustments. No bank deposits or withdrawals. |
+| 280 | Dynamic delivery pricing | Partial | Distance-based zone fees plus finite scheduled peak and manual demand-fee windows. Cheapest eligible adjusted zone wins; automatic demand optimization remains pending. |
 | 281 | Real-time delivery tracking | Partial | Polling statuses and foreground partner GPS. |
 | 282 | Restaurant inventory synchronization | Missing | Not implemented in the active product. |
-| 283 | AI customer support | Partial | Persisted ticket assistance, bounded Gemini classification, actual order/refund facts, request-bound typing, team handoff and safe reply retries. Team involvement stops automation; no autonomous refunds/cancellation. |
+| 283 | AI customer support | Partial | Persisted contextual support with Gemini topic classification, real order/payment facts, typing/retry recovery and same-ticket issue intake. Queued customer text continues; disputes and actual refunds remain verification/policy gated. |
 | 284 | Voice ordering | Partial | Voice-to-text, not hands-free ordering/checkout. |
 | 285 | Multi-language support | Partial | Hindi/Hinglish food intent and browser voice locale; no complete app localization. |
 | 286 | Subscription / membership | Missing | Not implemented in the active product. |
@@ -329,4 +329,5 @@ Updated 22 September 2026. This tracks **all 300 numbered entries** supplied by 
 - Core ordering and operational capabilities: `PRODUCT_STATUS.md`, `backend/api/test_product.py`.
 - This pass: `backend/api/test_intelligence.py`, `backend/api/intelligence.py`, `backend/api/insights.py`.
 - Client: `FoodAssistant.jsx`, `PersonalizedFeed.jsx`, `BusinessInsights.jsx`, `VoiceInput.jsx` under `src/components/product/`.
+- Commerce/location/analytics increment: `IMPLEMENTATION_TODOS.md`, `test_checkout_extras.py`, `test_coupon_benefits.py`, `test_commerce_concurrency.py`, `test_location_analytics.py`, `test_merchant_coupons.py`, and `scripts/location-analytics-e2e.mjs`.
 - Do not count preserved, disconnected legacy mock dashboards as implemented AI, payouts, KYC or analytics.

@@ -161,5 +161,7 @@ class OrderOperationsViewSet(AdminScopeMixin, viewsets.GenericViewSet):
             refund.save()
             record_refund_update(refund, f"Support cancelled this order and approved ₹{payment.amount:.2f} back to the original payment method. Refund submission and provider confirmation are still pending.", request.user)
         operation_event(order, request.user, "order.support_cancelled", f"Support cancelled this order. {data['note']}", ticket)
+        from .rewards import sync_order_rewards
+        sync_order_rewards(order)
         notify_order(order)
         return Response(self.get_serializer(order).data)

@@ -39,7 +39,7 @@ export default function DeliveryChat({ order }) {
   ].sort((a, b) => a.id - b.id);
   const last = messages.at(-1)?.id;
   const next = older.key === key ? older.next : remote.data?.next_before;
-  const customer = role === "customer";
+  const customer = ["customer", "admin"].includes(role);
   const title = customer ? "Message your delivery partner" : "Message customer";
   function toggle(value) {
     const updated = new URLSearchParams(params);

@@ -53,7 +53,7 @@ def taste_defaults(user):
 
 
 def order_signals(user, enabled=True):
-    if not user.is_authenticated or user.role != User.Role.CUSTOMER or not enabled:
+    if not user.is_authenticated or user.role not in [User.Role.CUSTOMER, User.Role.ADMIN] or not enabled:
         return [], Counter(), Counter()
     rows = list(OrderItem.objects.filter(order__customer=user, order__status=Order.Status.DELIVERED).order_by("-order__created_at").values_list("menu_item_id", "order__restaurant_id", "menu_item__category__name")[:100])
     return [row[0] for row in rows], Counter(row[1] for row in rows), Counter((row[2] or "").lower() for row in rows)
@@ -178,11 +178,11 @@ class IntelligenceViewSet(AdminScopeMixin, viewsets.ViewSet):
         visited = list(RestaurantVisit.objects.filter(user=request.user, visited_at__gte=timezone.now()-timezone.timedelta(days=90)).values_list("restaurant_id", flat=True)[:20]) if request.user.is_authenticated else []
         recent_items = sorted((item for item in menu if item.id in history), key=lambda item: history.index(item.id))[:6]
         now = timezone.now()
-        coupons = Coupon.objects.filter(is_active=True, starts_at__lte=now, ends_at__gt=now).filter(Q(restaurant__isnull=True) | Q(restaurant_id__in=restaurant_ids)).select_related("restaurant").order_by("ends_at", "id")[:100]
+        coupons = Coupon.objects.filter(is_active=True, starts_at__lte=now, ends_at__gt=now).filter(Q(restaurant__isnull=True) | Q(restaurant_id__in=restaurant_ids)).select_related("restaurant", "bogo_item").order_by("ends_at", "id")[:100]
         orders = Order.objects.filter(customer=request.user).exclude(status=Order.Status.CANCELLED) if request.user.is_authenticated else Order.objects.none()
         used = Counter(orders.exclude(coupon=None).values_list("coupon_id", flat=True))
         has_orders = orders.exists()
-        eligible_coupons = [c for c in coupons if (c.usage_limit is None or c.usage_count < c.usage_limit) and (not c.first_order_only or (request.user.is_authenticated and not has_orders)) and (not c.per_user_limit or (request.user.is_authenticated and used[c.pk] < c.per_user_limit)) and (c.discount_amount or c.discount_percent)]
+        eligible_coupons = [c for c in coupons if (c.usage_limit is None or c.usage_count < c.usage_limit) and (not c.first_order_only or (request.user.is_authenticated and not has_orders)) and (not c.per_user_limit or (request.user.is_authenticated and used[c.pk] < c.per_user_limit)) and (c.benefit_type != Coupon.Benefit.FOOD or c.discount_amount or c.discount_percent)]
         eligible_coupons.sort(key=lambda c: (c.restaurant_id in saved, restaurant_history[c.restaurant_id], -c.min_order_amount), reverse=True)
         coupon_rows = []
         for coupon in eligible_coupons[:6]:
@@ -209,7 +209,7 @@ class IntelligenceViewSet(AdminScopeMixin, viewsets.ViewSet):
         topic = support_topic(message)
         order = None
         if data.get("order_id"):
-            if not request.user.is_authenticated or request.user.role != User.Role.CUSTOMER:
+            if not request.user.is_authenticated or request.user.role not in [User.Role.CUSTOMER, User.Role.ADMIN]:
                 return Response({"detail": "Sign in as the customer to get help with this order."}, status=403)
             order = Order.objects.filter(customer=request.user, pk=data["order_id"]).first()
             if not order:
@@ -240,7 +240,7 @@ class IntelligenceViewSet(AdminScopeMixin, viewsets.ViewSet):
                 eligibility = cancellation_details(order)
                 reply = f"{eligibility['message']} I haven’t cancelled the order or issued a refund."
                 links.insert(0, {"label": "Check cancellation" if eligibility["allowed"] else "View order details", "to": f"/tracking/{order.pk}"})
-            if topic == "status" and request.user.is_authenticated and request.user.role == User.Role.CUSTOMER:
+            if topic == "status" and request.user.is_authenticated and request.user.role in [User.Role.CUSTOMER, User.Role.ADMIN]:
                 orders = Order.objects.filter(customer=request.user)
                 order = order or orders.exclude(status__in=[Order.Status.CANCELLED, Order.Status.DELIVERED]).first()
                 if order:

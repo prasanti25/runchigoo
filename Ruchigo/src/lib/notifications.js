@@ -1,6 +1,8 @@
 // Resolve only known internal destinations; never navigate to arbitrary payload URLs.
 export function notificationTarget(notification, role) {
   const meta = notification.metadata || {};
+  if (notification.kind === "loyalty" && ["customer", "admin"].includes(role))
+    return "/rewards";
   const positiveId = (value) =>
     Number.isSafeInteger(Number(value)) && Number(value) > 0;
   if (
@@ -15,6 +17,8 @@ export function notificationTarget(notification, role) {
   if (role === "admin" && meta.restaurant_approval) return "/admin-restaurants";
   if (role === "delivery" && meta.available_delivery) return "/delivery-orders";
   if (positiveId(meta.order_id)) {
+    if (role === "admin" && meta.personal_order)
+      return `/tracking/${Number(meta.order_id)}${meta.delivery_chat ? "?chat=1" : ""}`;
     if (meta.delivery_chat && role === "delivery")
       return `/delivery-navigation?order=${Number(meta.order_id)}&chat=1`;
     if (meta.delivery_chat && role === "customer")

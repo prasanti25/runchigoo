@@ -411,7 +411,7 @@ export function ActiveDelivery() {
             <section className="panel">
               <h2>
                 {order.payment?.method === "cod"
-                  ? `Collect ${money(order.total)}`
+                  ? `Collect ${money(order.total)}${Number(order.tip_amount) > 0 ? ` · includes ${money(order.tip_amount)} cash tip for you` : ""}`
                   : "Payment recorded online"}
               </h2>
               <p className="muted mt-3">

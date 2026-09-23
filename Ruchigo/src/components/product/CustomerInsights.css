@@ -1,0 +1,105 @@
+.shopping-period {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.shopping-period button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #e3e8df;
+  border-radius: 24px;
+  font-size: 12px;
+}
+.shopping-period button[aria-pressed="true"] {
+  background: #223a2d;
+  color: #fff;
+  border-color: #223a2d;
+}
+.shopping-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.shopping-stats > div {
+  background: #f7f9f5;
+  border: 1px solid #e9ede5;
+  border-radius: 16px;
+  padding: 18px;
+  min-width: 0;
+}
+.shopping-stats span {
+  display: block;
+  color: #687867;
+  font-size: 11px;
+}
+.shopping-stats strong {
+  display: block;
+  font-size: clamp(19px, 2vw, 26px);
+  margin-top: 9px;
+  overflow-wrap: anywhere;
+}
+.shopping-months,
+.shopping-definition {
+  margin: 20px 0;
+  border-top: 1px solid #e9ede5;
+  padding-top: 16px;
+}
+.shopping-insights summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 32px;
+}
+.shopping-month-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.shopping-month-grid > div {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #e9ede5;
+  border-radius: 12px;
+  font-size: 12px;
+}
+.shopping-month-grid small {
+  color: #687867;
+}
+.shopping-favourites {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin: 24px 0;
+}
+.shopping-favourites h3 {
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+.shopping-favourites a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid #edf0e9;
+  font-size: 13px;
+}
+@media (max-width: 700px) {
+  .shopping-stats,
+  .shopping-month-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .shopping-stats > div {
+    padding: 14px;
+  }
+}
+@media (max-width: 380px) {
+  .shopping-favourites {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
