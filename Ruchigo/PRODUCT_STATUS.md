@@ -46,7 +46,7 @@ updated support bundle, guest sign-in flow, 1440/390/320px layout, protected
 support/dispatch endpoints and no browser errors or business writes. Authenticated
 conversations were exercised locally, not by modifying production customer tickets.
 
-### Contextual support follow-ups — release verification
+### Contextual support follow-ups — deployed and verified
 
 The supplied account's latest ticket was inspected read-only. It was resolved,
 had a queued-review flag, and concerned a cancelled COD order without a recorded
@@ -75,7 +75,11 @@ food disputes and refund approval still require verification and authorized
 policy; this is not a claim of universally humanless support.
 
 No schema changes, live customer test messages or real refund submissions are
-part of this increment. See `VERIFICATION_REPORT.md` for final checks/deployment.
+part of this increment. Runtime `fa8e4e8` is pushed to main and deployed at
+https://runchigoo.vercel.app, deployment `dpl_GrbbxbFRDdQCYUCT1MSUXmKsN8VF`.
+The full 360-test backend run, final 45-test support run, real local browser
+conversation and public-only live privacy/bundle/layout checks pass.
+See `VERIFICATION_REPORT.md` for test scope and retained local fixtures.
 
 ### Delhi district checkout — deployed
 

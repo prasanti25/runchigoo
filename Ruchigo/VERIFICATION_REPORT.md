@@ -1,6 +1,16 @@
 # Product verification — 23 September 2026
 
-## Contextual support follow-ups — verified release candidate
+## Contextual support follow-ups — deployed and public smoke verified
+
+- Runtime `fa8e4e8` is pushed to `prasanti25/runchigoo` main. Deployment
+  `dpl_GrbbxbFRDdQCYUCT1MSUXmKsN8VF` is READY and aliased to
+  https://runchigoo.vercel.app. Deployment URL:
+  https://runchigoo-77ad8f77t-shxvaayys-projects.vercel.app.
+- Public-only production browser checks pass: updated
+  `SupportPage-C65b6jGZ.js` contains same-ticket issue actions; guest sign-in
+  works at 1440/390/320px with no overflow/browser errors. Anonymous support
+  list, ticket and issue-endpoint reads return 401. Delhi/South Delhi public
+  discovery remains consistent; Noida remains distinct. Zero business writes.
 
 - Inspected only the supplied account's latest production ticket/order/payment
   using a read-only database session. No historical messages, author labels,
@@ -34,8 +44,8 @@
   The pre-existing local Django key is an example placeholder, not a production
   credential; use a unique secret in production. No new schema/provider
   configuration is needed.
-  Production verification will stay public/read-only; authenticated actions
-  are exercised on local fixtures rather than live customer conversations.
+  Production verification stayed public/read-only; authenticated actions were
+  exercised on local fixtures rather than live customer conversations.
 - Routine self-service is automatic, not universal dispute adjudication.
   Payment discrepancies and financial decisions remain verification/policy
   gated, and refund requested/approved/processing/processed are distinct states.
