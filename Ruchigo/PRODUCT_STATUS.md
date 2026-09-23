@@ -12,6 +12,11 @@ historical checkpoints, not evidence of the current Vercel alias.
 
 ### Restaurant and delivery workspaces — desktop/mobile refresh
 
+Live runtime `748aeb5`, deployment `dpl_CectrctZgsZToJs1LrtzkZrch9Pe`, at
+https://runchigoo.vercel.app. The stale-prone main-branch alias was also aligned.
+All 135 public HTML/JavaScript/CSS files match the tested local production build.
+Public catalog APIs respond successfully; account APIs retain authentication.
+
 The restaurant and delivery roles now use the same console-level design system
 as admin, with their own navigation and operational priorities. All 18 active
 partner/shared page combinations are covered, not only the landing dashboards.
@@ -22,7 +27,7 @@ records are preserved. See [PARTNER_WORKSPACES.md](PARTNER_WORKSPACES.md) for th
 page matrix, test scope and unchanged provider/feature boundaries. This does
 not mark the wider product matrix or real commercial operations complete.
 
-### Production release — 23 September
+### Previous admin production release — 23 September
 
 Runtime `477963e` is live at https://runchigoo.vercel.app, deployment
 `dpl_ELq971mHuhvTSTm6x1XTgJdWgHbb`. The production, project and main-branch

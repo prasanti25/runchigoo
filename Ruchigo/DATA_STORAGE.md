@@ -2,8 +2,10 @@
 
 ## Live application
 
-Live release (23 September): runtime `477963e` is deployed and promoted at
-https://runchigoo.vercel.app, deployment `dpl_ELq971mHuhvTSTm6x1XTgJdWgHbb`.
+Live release (23 September): runtime `748aeb5` is deployed at
+https://runchigoo.vercel.app, deployment `dpl_CectrctZgsZToJs1LrtzkZrch9Pe`.
+The restaurant/delivery UI update made no schema or production-data changes.
+The preceding admin release `477963e` completed the migration rollout below.
 Migrations 0023–0027 are **applied to production**, after backup and an isolated
 restore/rehearsal. Original columns and rows in all 33 existing application
 tables were preserved. No accounts were reset or business records seeded.

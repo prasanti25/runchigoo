@@ -1,5 +1,27 @@
 # Product verification — 23 September 2026
 
+## Partner console production release — latest live checkpoint
+
+- Runtime `748aeb5621c9837bf9fd7724cf73dc78da18ede0` is pushed to main and
+  directly deployed to the linked Vercel project. Deployment
+  `dpl_CectrctZgsZToJs1LrtzkZrch9Pe` is READY at
+  `https://runchigoo-n89zg895r-shxvaayys-projects.vercel.app`, with public
+  `runchigoo.vercel.app` and main-branch aliases updated.
+- All **135** public HTML/JavaScript/CSS files match local production artifacts
+  by SHA-256; zero mismatches. New entry: `/assets/index-Kp3H-h_L.js`.
+  Restaurant, delivery and admin page URLs return 200. Public restaurant/menu
+  APIs return 200; unauthenticated users API returns 401.
+- No production password/session was obtained to perform an authenticated
+  partner-browser journey. The full authenticated 18-page/six-width sweep ran
+  both on the development server and the compiled frontend with local data;
+  production verification is deployed-file parity plus public HTTP/API checks.
+- 23 staged release files and 135 built files were checked against 14 configured
+  local private values: zero findings. Source publication and Vercel deployment
+  are recorded separately; Git auto-deploy repository alignment remains pending
+  the user's choice. No production keys, policies, database rows or schema were
+  modified for this UI release. The temporary build-preview server was stopped;
+  regular local frontend/backend servers remain available.
+
 ## Restaurant and delivery console refresh — local verification
 
 - All 18 partner/shared role-page combinations pass at 1440, 1280, 1024, 768,
@@ -36,10 +58,10 @@
   GPS, payment-provider or production-admin authentication certification.
 - Scope and activation boundaries: [PARTNER_WORKSPACES.md](PARTNER_WORKSPACES.md).
   No new schema migration, shared account reset/seed, policy activation, real
-  transfer or refund. Earlier production deployment evidence below refers to
-  the preceding admin release until this increment is deployed and verified.
+  transfer or refund. The live checkpoint above verifies this increment;
+  earlier production deployment evidence below refers to the preceding admin release.
 
-## Production promotion and live asset verification — latest release
+## Previous admin production promotion and live asset verification
 
 - Runtime `477963e2963a10b218e7af91134a55679759c582`, deployment
   `dpl_ELq971mHuhvTSTm6x1XTgJdWgHbb`, built successfully and was promoted to

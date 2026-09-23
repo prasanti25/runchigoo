@@ -1,5 +1,10 @@
 # Partner workspace refresh — 23 September 2026
 
+Live runtime: `748aeb5`, deployment `dpl_CectrctZgsZToJs1LrtzkZrch9Pe`.
+Open https://runchigoo.vercel.app/restaurant-dashboard or
+https://runchigoo.vercel.app/delivery-dashboard with the corresponding role.
+Public deployed artifacts match the tested production build (135/135 files).
+
 Scope: apply the admin console's desktop/mobile design quality to every active
 restaurant and delivery workspace, including shared account and support pages.
 This is not a claim that all features in the wider 300-item product matrix exist.
