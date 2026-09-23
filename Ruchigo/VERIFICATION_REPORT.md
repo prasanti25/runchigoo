@@ -1,6 +1,17 @@
 # Product verification — 23 September 2026
 
-## Account approval fix — verified locally, awaiting promotion
+## Account approval fix — latest live checkpoint
+
+- Runtime `a4f6d63430dfb71f3395e482ed384de7f6bb22d2` was pushed to main and
+  directly deployed as `dpl_4EGVt5HkdopLzSuHDAwaj5k5CYbR`, READY at
+  `https://runchigoo-gt03xwsv5-shxvaayys-projects.vercel.app`.
+  Public `runchigoo.vercel.app` and main-branch aliases point to this release.
+- All **136** public HTML/JS/CSS files match the tested production build by
+  SHA-256 with zero mismatches. Entry bundle: `/assets/index-BbiH-Uw_.js`.
+  All three admin account routes plus restaurant/delivery dashboards return 200;
+  public restaurant/menu APIs return 200 and unauthenticated users API returns
+  401. No authenticated production session was used; no real account was
+  approved, blocked, seeded or password-reset during verification.
 
 - Replaced the missing first-approval action in People/partner access with a
   visible, confirmed **Approve** action; pending and blocked accounts now have
@@ -22,8 +33,11 @@
   approval test. Lint, build and whitespace checks passed.
 - 15 changed/new release files and 136 built HTML/JS/CSS files were checked
   against 13 configured private values with no findings. The report itself is
-  documentation only. Production verification must be recorded after promotion;
-  these are not authenticated live-account tests or a load certification.
+  documentation only. Production verification is deployed-asset parity and
+  public HTTP/API checks, not authenticated live-account testing or a load
+  certification. The temporary compiled preview was stopped; normal local
+  frontend/backend remain on 5173/8000. Git/Vercel repository alignment has
+  not been changed; the release used a direct deployment.
 
 ## Partner console production release — previous live checkpoint
 

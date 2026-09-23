@@ -1,9 +1,11 @@
 # Partner workspace refresh — 23 September 2026
 
-Live runtime: `748aeb5`, deployment `dpl_CectrctZgsZToJs1LrtzkZrch9Pe`.
+Live runtime: `a4f6d63`, deployment `dpl_4EGVt5HkdopLzSuHDAwaj5k5CYbR`.
 Open https://runchigoo.vercel.app/restaurant-dashboard or
 https://runchigoo.vercel.app/delivery-dashboard with the corresponding role.
-Public deployed artifacts match the tested production build (135/135 files).
+Public deployed artifacts match the tested production build (136/136 files).
+The follow-up account-approval correction is documented in `ACCOUNT_APPROVAL.md`;
+it makes new partner approval visible and separates it from blocked access.
 
 Scope: apply the admin console's desktop/mobile design quality to every active
 restaurant and delivery workspace, including shared account and support pages.
