@@ -1,5 +1,37 @@
 # Product verification — 23 September 2026
 
+## Production promotion and live asset verification — latest release
+
+- Runtime `477963e2963a10b218e7af91134a55679759c582`, deployment
+  `dpl_ELq971mHuhvTSTm6x1XTgJdWgHbb`, built successfully and was promoted to
+  https://runchigoo.vercel.app. The project alias also points to this deployment.
+  The stale `runchigoo-git-main-shxvaayys-projects.vercel.app` alias was separately
+  reassigned to the same release after the user reported a live/local mismatch.
+- Rechecked the public URL without cache-busting: new entry
+  `/assets/index-BH2eC5Ka.js`. SHA-256 comparison of all 131 local production
+  HTML/JavaScript/CSS files against public responses passed with no mismatches.
+  This proves deployed asset parity, not an authenticated production UI journey.
+- Public restaurants and menu APIs return 200 (4 restaurants, 12 menu items);
+  unauthenticated users API returns 401. No production order, refund, payment,
+  account reset or policy activation was submitted during verification.
+- Backed up production PostgreSQL (239530-byte custom dump), restored it to
+  isolated local database `ruchigo_release_1790179514078` and rehearsed
+  migrations 0023–0027. Existing columns/rows across 33 application tables
+  matched before/after. Production migration then passed with the same
+  preservation comparison; production is through `0027_merchant_finance`.
+- Owner-restricted backup and before/after verification reports are retained
+  outside Git in the location recorded by DATA_STORAGE.md. Existing live data
+  was not replaced with local fixtures. Financial/rewards/extra-pricing,
+  scheduling and cash-tip policies remain disabled.
+- No authenticated production-admin browser journey was performed because no
+  usable production password was available; no session tokens were harvested
+  or credentials reset to bypass that limitation. Responsive browser suites
+  below are local verification, not live-browser or production-load tests.
+- Vercel CLI authentication recovered from the earlier 403. The Git integration
+  still points at `shxvaayy/runchigoo` whereas origin is `prasanti25/runchigoo`.
+  The user has not yet approved changing that integration. This release used
+  direct deployment/promotion; earlier blocked/source-only notes are historical.
+
 ## Desktop console and mobile usability refinement — latest local verification
 
 - `test:admin-workspace` passes on all 19 routes at **1440, 1280, 1024,

@@ -10,6 +10,20 @@ historical checkpoints, not evidence of the current Vercel alias.
 
 ## Outcome
 
+### Production release — 23 September
+
+Runtime `477963e` is live at https://runchigoo.vercel.app, deployment
+`dpl_ELq971mHuhvTSTm6x1XTgJdWgHbb`. The production, project and main-branch
+aliases point to this release. All 131 HTML/JavaScript/CSS files checked on the
+public deployment match the local production build byte-for-byte. Catalog APIs
+return 200; unauthenticated account access returns 401. Migrations through 0027
+were backed up, rehearsed and applied while preserving existing application rows.
+Commercial policies remain disabled; no production data was seeded or reset.
+Authenticated production-admin browser verification remains unperformed.
+Earlier source-only and blocked-rollout checkpoints below are historical.
+Automatic Git deployment still needs the repository connection aligned with
+the user's approval; the current release was deployed and promoted directly.
+
 ### Admin UI release — desktop and mobile
 
 The active admin routes now share a grouped evergreen navigation rail, consistent
@@ -51,9 +65,8 @@ the team support inbox and notifications use the same admin workspace.
   checked in addition to desktop/laptop layouts.
 
 This is a UI implementation/verification pass, **not completion of all 300
-features or production certification**. Publishing this source does not confirm
-a live deployment. No production migration, shared account reset or policy
-change is included; the existing Vercel integration/rollout gates still apply.
+features or production certification**. It is now deployed as recorded above.
+No shared account reset or commercial-policy activation was performed.
 Verification details are in [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md).
 
 ### Mobile navigation and admin overview refresh — local follow-up
@@ -74,10 +87,10 @@ permission-scoped shortcuts without gaining reporting/finance access.
 
 This follow-up is included in the admin UI release above. Mobile navigation,
 overview reporting, dashboard queues and the isolated merchant-finance journey
-were verified locally, as were lint/build checks. The earlier production
-migration and Vercel access limitations below remain unresolved.
+were verified locally, as were lint/build checks. The later production release
+above resolves the earlier migration and Vercel authentication blockers.
 
-### Earlier commerce increment — 23 September, pushed; production rollout pending
+### Historical commerce checkpoint — 23 September, before production rollout
 
 Runtime commit `a2ffa26` is pushed to `prasanti25/runchigoo` main. This was a
 source-only release: no production migration, deployment or policy activation

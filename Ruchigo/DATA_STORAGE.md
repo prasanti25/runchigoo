@@ -2,9 +2,13 @@
 
 ## Live application
 
-Source release note (23 September): runtime `a2ffa26` is pushed to main, but
-migrations 0023–0027 are **not applied to production**. No production deployment
-was performed with this push. They add restaurant schedule settings, order preparation time/cash
+Live release (23 September): runtime `477963e` is deployed and promoted at
+https://runchigoo.vercel.app, deployment `dpl_ELq971mHuhvTSTm6x1XTgJdWgHbb`.
+Migrations 0023–0027 are **applied to production**, after backup and an isolated
+restore/rehearsal. Original columns and rows in all 33 existing application
+tables were preserved. No accounts were reset or business records seeded.
+Rewards, commission, settlements, extra pricing, scheduling and cash tips remain
+disabled. The migrations add restaurant schedule settings, order preparation time/cash
 tip, optional tip-policy fields, coupon benefit/campaign rules and a redeemable
 coupon link on offers. Orders keep the applied coupon rule/version in their
 delivery quote snapshot. Existing totals and discount codes are preserved by
@@ -104,11 +108,15 @@ Production environments currently share some Neon integration variables with
 Preview/Development. Do not run destructive tests or seeds against those URLs;
 use an isolated database/branch for previews that need to write data.
 
-The Git remote is `prasanti25/runchigoo`; the last verified Vercel Git integration
-was `shxvaayy/runchigoo`. Project/alias metadata requests at the 23 September
-source push returned HTTP 403, so that configuration and the live revision could
-not be freshly verified. Therefore a push to this remote is not
-proof of deployment. Deploy from this app directory to the existing linked
-Vercel project and verify its production alias. Git-triggered deployment needs
-an explicit repository/root-directory alignment; this release does not silently
-repoint the existing integration.
+The Git remote is `prasanti25/runchigoo`; the verified Vercel Git integration
+remains `shxvaayy/runchigoo`. CLI authentication was refreshed and the release
+was deployed directly, then promoted after migration verification. The public,
+project and `git-main` aliases now point to the same release. The branch alias
+had still pointed at an older deployment and was corrected separately.
+A push alone is not proof of deployment: changing the connected repository
+still awaits the user's explicit choice. This release did not repoint it.
+
+The owner-restricted pre-release backup and row-preservation reports are outside
+Git at `/Users/shivaymehra/Library/Application Support/RuchiGo Backups/2026-09-23-admin-ui-477963e-FtwgCc/`.
+The restored rehearsal database is isolated from production. See
+[VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) for live-check scope.
