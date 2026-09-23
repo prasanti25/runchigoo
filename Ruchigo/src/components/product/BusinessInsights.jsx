@@ -99,7 +99,7 @@ export default function BusinessInsights() {
             </button>
           ))}
         </div>
-        <ReportDateControls admin={role === "admin"}>
+        <ReportDateControls admin={["admin", "restaurant"].includes(role)}>
           <form
             className="report-dates"
             onSubmit={(event) => {
@@ -206,7 +206,7 @@ export default function BusinessInsights() {
             {data.summary.previous_period_customers} customers with completed
             orders in the previous period ordered again in this period.
           </p>
-          {role === "admin" && (
+          {["admin", "restaurant"].includes(role) && (
             <section className="panel report-trend mb-5">
               <h3 className="mb-5">Order performance</h3>
               <OrderPerformance report={data} />
@@ -261,55 +261,6 @@ export default function BusinessInsights() {
                 Comparison: {data.comparison.start} to {data.comparison.end}.
                 Orders are grouped by the date placed and their current status.
               </p>
-              <div
-                className="report-bars"
-                role="img"
-                aria-label={`Completed order value trend from ${data.period.start} to ${data.period.end}. Exact daily values are available in the table below.`}
-              >
-                {data.daily.map((day) => (
-                  <div
-                    key={day.date}
-                    title={`${day.date}: ${money(day.gross_order_value)} · ${day.orders} completed`}
-                    style={{
-                      height: `${Math.max(2, (Number(day.gross_order_value) / Math.max(1, ...data.daily.map((row) => Number(row.gross_order_value)))) * 100)}%`,
-                    }}
-                  />
-                ))}
-              </div>
-              <div className="report-axis">
-                <span>{data.period.start}</span>
-                <span>{data.period.end}</span>
-              </div>
-              <details className="report-daily">
-                <summary>View exact daily figures</summary>
-                <div className="insight-table-wrap">
-                  <table>
-                    <caption>
-                      Order-date report, not a payout or tax statement
-                    </caption>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Placed</th>
-                        <th>Completed</th>
-                        <th>Cancelled</th>
-                        <th>Order value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.daily.map((day) => (
-                        <tr key={day.date}>
-                          <td>{day.date}</td>
-                          <td>{day.placed_orders}</td>
-                          <td>{day.orders}</td>
-                          <td>{day.cancelled}</td>
-                          <td>{money(day.gross_order_value)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
             </section>
           )}
           <div className="insight-grid">

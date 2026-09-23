@@ -4,24 +4,24 @@ import { Bell, LifeBuoy, LogOut, Settings } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Navbar from "../Navbar.jsx";
 import BrandLogo from "../common/BrandLogo.jsx";
-import NotificationBell from "../common/NotificationBell.jsx";
 import UserAvatar from "../common/UserAvatar.jsx";
 import { canOpenAdminRoute } from "../../lib/adminAccess.js";
 import {
   workspaceMenus as menus,
-  adminNavigationSections,
+  workspaceSections,
+  workspaceNames,
 } from "../../lib/workspaceNavigation.js";
 import "./AdminWorkspace.css";
 import "./AdminMobile.css";
 import AdminCommandBar from "./AdminCommandBar.jsx";
 import "./AdminDesktop.css";
+import "./PartnerWorkspace.css";
 
 export function WorkspaceNav({ type }) {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
   const navigation = useRef(null);
   useLayoutEffect(() => {
-    if (type !== "admin") return;
     const revealActive = () => {
       const nav = navigation.current;
       const active = nav?.querySelector('a[aria-current="page"]');
@@ -52,52 +52,43 @@ export function WorkspaceNav({ type }) {
         <Navbar />
       </div>
       <aside className="workspace-sidebar">
-        {type === "admin" ? (
+        {
           <div className="admin-sidebar-brand">
             <Link className="brand" to="/" aria-label="RuchiGo home">
               <BrandLogo />
             </Link>
             <div>
               <strong>RuchiGo</strong>
-              <span>OPERATIONS CONSOLE</span>
+              <span>{workspaceNames[type].toUpperCase()}</span>
             </div>
           </div>
-        ) : (
-          <>
-            <Link className="brand" to="/">
-              <BrandLogo />
-            </Link>
-            <p className="workspace-label">
-              {type === "admin"
-                ? "PLATFORM OPERATIONS"
-                : type === "restaurant"
-                  ? "PARTNER KITCHEN"
-                  : "DELIVERY PARTNER"}
-            </p>
-            <div className="workspace-person">
-              <UserAvatar user={user} className="workspace-avatar" />
-              <div>
-                <strong>
-                  {user?.first_name ||
-                    `${type[0].toUpperCase()}${type.slice(1)} account`}
-                </strong>
-                <small>{user?.email}</small>
-              </div>
+        }
+        {type !== "admin" && (
+          <Link
+            to={`/${type}-profile`}
+            className="workspace-person"
+            aria-label="Your partner profile"
+          >
+            <UserAvatar user={user} className="workspace-avatar" />
+            <div>
+              <strong>
+                {user?.first_name ||
+                  `${type[0].toUpperCase()}${type.slice(1)} account`}
+              </strong>
+              <small>{user?.email}</small>
             </div>
-          </>
+          </Link>
         )}
         <nav ref={navigation} aria-label={`${type} workspace`}>
-          {type === "admin"
-            ? adminNavigationSections.map(([label, keys]) => {
-                const visible = links.filter(([key]) => keys.includes(key));
-                return visible.length ? (
-                  <div className="admin-nav-section" key={label}>
-                    <p>{label}</p>
-                    {visible.map(renderLink)}
-                  </div>
-                ) : null;
-              })
-            : links.map(renderLink)}
+          {workspaceSections[type].map(([label, keys]) => {
+            const visible = links.filter(([key]) => keys.includes(key));
+            return visible.length ? (
+              <div className="admin-nav-section" key={label}>
+                <p>{label}</p>
+                {visible.map(renderLink)}
+              </div>
+            ) : null;
+          })}
           <NavLink to="/notifications">
             <Bell size={18} />
             Notifications
@@ -132,22 +123,19 @@ export function WorkspaceFrame({
   className = "",
 }) {
   return (
-    <div className={`workspace workspace-${type} ${className}`}>
+    <div
+      className={`workspace workspace-${type} ${type !== "admin" ? "workspace-partner" : ""} ${className}`}
+    >
       <WorkspaceNav type={type} />
       <main className="workspace-main">
-        {type === "admin" && <AdminCommandBar />}
+        <AdminCommandBar type={type} />
         <header className="workspace-heading">
           <div>
-            <p className="eyebrow">YOUR {type.toUpperCase()} WORKSPACE</p>
+            <p className="eyebrow">{workspaceNames[type].toUpperCase()}</p>
             <h1>{title}</h1>
             <p className="muted">{description}</p>
           </div>
-          <div className="workspace-heading-actions">
-            {action}
-            {type !== "admin" && (
-              <NotificationBell className="workspace-notification-bell" />
-            )}
-          </div>
+          <div className="workspace-heading-actions">{action}</div>
         </header>
         {children}
       </main>

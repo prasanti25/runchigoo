@@ -154,14 +154,14 @@ export default function PromotionWorkspace({ initialTab = "offers" }) {
       className={
         admin
           ? `admin-promotion-workspace${tab === "categories" ? " admin-category-workspace" : ""}`
-          : ""
+          : "partner-promotion-workspace"
       }
       title={
         admin
           ? tab === "categories"
             ? "Food categories"
             : "Offers & coupons"
-          : "Make your next offer count."
+          : "Offers & coupons"
       }
       description={
         admin
@@ -207,7 +207,7 @@ export default function PromotionWorkspace({ initialTab = "offers" }) {
       )}
       <ErrorNotice error={remote.error} onRetry={remote.reload} />
       {remote.loading && <Skeleton count={3} />}
-      {admin && remote.data && (
+      {remote.data && (
         <div className="admin-collection-summary">
           <strong>
             {tab === "categories"
@@ -225,7 +225,7 @@ export default function PromotionWorkspace({ initialTab = "offers" }) {
       <div className="kitchen-grid">
         {remote.data?.results.map((item) => (
           <article key={item.id} className="panel">
-            {admin && (
+            {
               <span className="admin-campaign-icon">
                 {tab === "categories" ? (
                   <Utensils size={22} />
@@ -235,7 +235,7 @@ export default function PromotionWorkspace({ initialTab = "offers" }) {
                   <Tag size={22} />
                 )}
               </span>
-            )}
+            }
             <div className="flex-row between">
               <h2>{item.title || item.code || item.name}</h2>
               <span
@@ -262,8 +262,7 @@ export default function PromotionWorkspace({ initialTab = "offers" }) {
             )}
             {item.ends_at && (
               <p className="form-help admin-campaign-date">
-                {admin && <CalendarDays size={14} />} Ends{" "}
-                {dateTime(item.ends_at)}
+                <CalendarDays size={14} /> Ends {dateTime(item.ends_at)}
               </p>
             )}
             <button className="text-link mt-5" onClick={() => open(item)}>

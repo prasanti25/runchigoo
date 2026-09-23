@@ -101,20 +101,26 @@ export default function Navbar() {
   return (
     <>
       <header
-        className={`app-header${adminWorkspace ? " admin-workspace-header" : ""}`}
+        className={`app-header${workspaceMode ? " admin-workspace-header" : ""}`}
       >
         <div className="header-inner">
           <Link to="/" className="brand" aria-label="RuchiGo home">
             <BrandLogo />
           </Link>
-          {adminWorkspace ? (
+          {workspaceMode ? (
             <Link
-              to="/admin-dashboard"
+              to={dashboard}
               className="admin-mobile-context"
-              aria-label="Admin workspace overview"
+              aria-label={`${role} workspace overview`}
             >
               <span>RuchiGo</span>
-              <strong>Admin workspace</strong>
+              <strong>
+                {role === "admin"
+                  ? "Admin workspace"
+                  : role === "restaurant"
+                    ? "Restaurant partner"
+                    : "Delivery partner"}
+              </strong>
             </Link>
           ) : (
             <button

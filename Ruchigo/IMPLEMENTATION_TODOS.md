@@ -4,6 +4,20 @@ Requested 23 September 2026. This is the active execution checklist for the six 
 
 ## Execution batches
 
+### Partner dashboard UI follow-up
+
+- [x] Consistent desktop rail, role-scoped command search and mobile navigation.
+- [x] All seven restaurant routes and all five delivery routes redesigned.
+- [x] Settings, notifications and partner support covered for both roles.
+- [x] Forms/dialogs, add-ons, coupons, payment filters and delivery-state checks.
+- [x] Responsive partner/admin regression, shared mobile navigation, 100 targeted
+  backend tests and isolated merchant/rider/finance workflow verification.
+
+Scope and page-by-page evidence: [PARTNER_WORKSPACES.md](PARTNER_WORKSPACES.md).
+The earlier commercial-feature tasks below remain independently tracked.
+
+### Earlier commerce batches
+
 - [x] A. Location-aware discovery: selected doorstep shared by home/search/recommendations; nearby radius and sorting; discovery/checkout zone parity; honest unknown-location states; cross-city and multi-zone regression.
 - [ ] B. Analytics: customer spending/favourites/monthly frequency; restaurant retention/sales/cancellations; admin delivery collections/refunds/active customers/cities; explicit metric definitions, role isolation and date filters.
 - [ ] C. Cart and fulfilment: scheduling with merchant hours, inventory reservation/release, kitchen due queue and durable dispatch; explicit rider tips in signed totals; existing cancellation/refund regressions.

@@ -1,5 +1,44 @@
 # Product verification — 23 September 2026
 
+## Restaurant and delivery console refresh — local verification
+
+- All 18 partner/shared role-page combinations pass at 1440, 1280, 1024, 768,
+  390 and 320px. Menu search/availability, command search, report-period/CSV,
+  queue links and history filtering pass; order summaries are unchanged.
+  Final source artifacts: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-partner-workspace-3eUSim`.
+- The same full 18-page/six-width suite passes against the actual compiled
+  frontend at local port 4175, backed by the retained local API. Production-build
+  artifacts: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-partner-workspace-rEAPcn`.
+- 15 deeper cases pass: add-on/choice groups, menu editing, weekly schedule,
+  offers/meal/BOGO coupon editors, payment filters, custom report dates, both
+  partner support forms, settings, unavailable-report recovery, completed-order
+  details, pickup controls and handover-code validation. The last two states
+  are browser-only response fixtures; no existing order was advanced/reopened.
+  Artifacts: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-partner-details-q729vu`.
+  A test initially used text-label matching for a select containing option
+  text; switching to its accessible combobox role fixed the selector, not app data.
+- All six mobile-menu scenarios pass, including guest/customer/admin shopping
+  and three role workspaces. Artifact folder: `ruchigo-mobile-navigation-M9zH8q`
+  under the same temporary root. All 19 admin routes also pass at six widths
+  (`ruchigo-admin-workspace-McOrLL`), and command keyboard/scope checks pass
+  (`ruchigo-admin-command-ur87jF`). No shared operational writes.
+- Real isolated merchant-finance browser/API workflow passes, including
+  restaurant preparation, rider pickup/OTP handover, earnings, external-payment
+  recording/correction and scope-less admin shopping. Three ledger entries,
+  one settlement, three audit records and the expected 360.00 balance verified
+  **only in the isolated fixture database**. Screenshots: `ruchigo-merchant-TngfHY`.
+  The harness was hardened for already-cancelled proxy routes on navigation;
+  this does not suppress application/API validation failures.
+- 100 targeted backend tests pass on isolated in-memory SQLite: dashboards,
+  menu operations, delivery chat, support operations and merchant finance.
+  Four new partner report/date/CSV tests and seven chart tests pass, as do lint,
+  production build and whitespace checks. Not a production-load, physical-device
+  GPS, payment-provider or production-admin authentication certification.
+- Scope and activation boundaries: [PARTNER_WORKSPACES.md](PARTNER_WORKSPACES.md).
+  No new schema migration, shared account reset/seed, policy activation, real
+  transfer or refund. Earlier production deployment evidence below refers to
+  the preceding admin release until this increment is deployed and verified.
+
 ## Production promotion and live asset verification — latest release
 
 - Runtime `477963e2963a10b218e7af91134a55679759c582`, deployment

@@ -69,3 +69,22 @@ export const adminNavigationSections = [
     ["delivery-zones", "order-policy", "activity", "access", "profile"],
   ],
 ];
+
+export const workspaceSections = {
+  admin: adminNavigationSections,
+  restaurant: [
+    ["Kitchen operations", ["dashboard", "orders", "menu"]],
+    ["Business", ["earnings", "analytics", "offers"]],
+    ["Your restaurant", ["profile"]],
+  ],
+  delivery: [
+    ["On the road", ["dashboard", "orders", "navigation"]],
+    ["Your account", ["earnings", "profile"]],
+  ],
+};
+
+export const workspaceNames = {
+  admin: "Operations console",
+  restaurant: "Restaurant partner",
+  delivery: "Delivery partner",
+};

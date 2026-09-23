@@ -11,7 +11,12 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { WorkspaceFrame, Metrics } from "../components/product/Workspace.jsx";
-import { EmptyState, ErrorNotice, Modal } from "../components/product/UI.jsx";
+import {
+  EmptyState,
+  ErrorNotice,
+  Modal,
+  Skeleton,
+} from "../components/product/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
 import { locationPoint } from "../lib/addressLocation.js";
@@ -54,12 +59,12 @@ export function DeliveryRequests() {
   return (
     <WorkspaceFrame
       type="delivery"
-      title="Good food. Great routes."
-      description="Pick up nearby requests and keep your active deliveries moving."
+      title="Delivery requests"
+      description="Available pickups and your assigned deliveries, clearly separated."
       action={
         <button
           className={`btn ${user.is_available ? "dark" : "secondary"}`}
-          disabled={busy === "availability"}
+          disabled={busy !== null}
           onClick={toggle}
         >
           <Power size={17} />
@@ -69,13 +74,21 @@ export function DeliveryRequests() {
     >
       <Metrics
         entries={[
-          ["Ready for pickup", available.data?.count || 0],
-          ["Your active deliveries", assigned.data?.count || 0],
+          ["Ready for pickup", available.data?.count ?? "—"],
+          ["Your active deliveries", assigned.data?.count ?? "—"],
+          ["Availability", user.is_available ? "Online" : "Offline"],
         ]}
       />
-      <ErrorNotice error={available.error || assigned.error} />
+      <ErrorNotice
+        error={available.error || assigned.error}
+        onRetry={() => {
+          available.reload();
+          assigned.reload();
+        }}
+      />
       <section className="mt-7">
         <h2 className="workspace-section-title">Your active deliveries</h2>
+        {assigned.loading && <Skeleton count={2} />}
         <div className="kitchen-grid">
           {assigned.data?.results.map((order) => (
             <article key={order.id} className="order-card">
@@ -96,12 +109,15 @@ export function DeliveryRequests() {
             </article>
           ))}
         </div>
-        {!assigned.loading && !assigned.data?.results.length && (
-          <p className="muted">No active deliveries right now.</p>
-        )}
+        {!assigned.loading &&
+          !assigned.error &&
+          !assigned.data?.results.length && (
+            <p className="muted">No active deliveries right now.</p>
+          )}
       </section>
       <section className="mt-9">
         <h2 className="workspace-section-title">Ready to pick up</h2>
+        {available.loading && <Skeleton count={2} />}
         {!user.is_available && (
           <p className="saving-line mb-5">
             You’re offline. Go online when you’re ready to accept a delivery.
@@ -132,10 +148,10 @@ export function DeliveryRequests() {
               </div>
               <button
                 className="btn dark w-full"
-                disabled={!user.is_available || busy === order.id}
+                disabled={!user.is_available || busy !== null}
                 onClick={() => accept(order)}
               >
-                Accept delivery
+                {busy === order.id ? "Accepting…" : "Accept delivery"}
                 <ArrowRight size={16} />
               </button>
             </article>
@@ -276,13 +292,45 @@ export function ActiveDelivery() {
   return (
     <WorkspaceFrame
       type="delivery"
-      title="One great meal to deliver."
-      description="Confirm pickup with the kitchen, then head to your customer."
+      title={order && !active ? "Delivery details" : "Active delivery"}
+      description="Your pickup, directions and handover steps in one place."
     >
       <ErrorNotice
         error={remote.error || geoError}
         onRetry={remote.error ? remote.reload : undefined}
       />
+      {remote.loading && <Skeleton count={2} />}
+      {order && order.status !== "cancelled" && (
+        <div className="partner-delivery-steps" aria-label="Delivery progress">
+          {["Pickup from kitchen", "On the way", "Handed over"].map(
+            (label, index) => {
+              const step = order.status === "delivered" ? 2 : pickedUp ? 1 : 0;
+              return (
+                <div
+                  key={label}
+                  className={
+                    index < step || order.status === "delivered"
+                      ? "complete"
+                      : index === step
+                        ? "current"
+                        : ""
+                  }
+                  aria-current={index === step ? "step" : undefined}
+                >
+                  <span>
+                    {index < step || order.status === "delivered" ? (
+                      <Check size={14} />
+                    ) : (
+                      index + 1
+                    )}
+                  </span>
+                  {label}
+                </div>
+              );
+            },
+          )}
+        </div>
+      )}
       {order ? (
         <div className="two-column">
           <div>
@@ -386,7 +434,7 @@ export function ActiveDelivery() {
               </section>
             )}
             <section className="panel">
-              <h2>Keep them in the loop.</h2>
+              <h2>Live location sharing</h2>
               <p className="muted mt-3">
                 Share your location during this delivery so the customer can
                 follow your progress. Your shared GPS is also used by our
@@ -410,14 +458,18 @@ export function ActiveDelivery() {
             </section>
             <section className="panel">
               <h2>
-                {order.payment?.method === "cod"
-                  ? `Collect ${money(order.total)}${Number(order.tip_amount) > 0 ? ` · includes ${money(order.tip_amount)} cash tip for you` : ""}`
-                  : "Payment recorded online"}
+                {!active
+                  ? `Order ${order.status.replaceAll("_", " ")}`
+                  : order.payment?.method === "cod"
+                    ? `Collect ${money(order.total)}${Number(order.tip_amount) > 0 ? ` · includes ${money(order.tip_amount)} cash tip for you` : ""}`
+                    : "Payment recorded online"}
               </h2>
               <p className="muted mt-3">
-                {order.payment?.method === "cod"
-                  ? "Collect payment when handing over the order, then ask for the delivery code."
-                  : "Ask the customer for their delivery code when handing over their food."}
+                {!active
+                  ? "This assignment is closed. No further pickup or handover action is available."
+                  : order.payment?.method === "cod"
+                    ? "Collect payment when handing over the order, then ask for the delivery code."
+                    : "Ask the customer for their delivery code when handing over their food."}
               </p>
               <button
                 className="btn primary w-full mt-5"

@@ -10,6 +10,18 @@ historical checkpoints, not evidence of the current Vercel alias.
 
 ## Outcome
 
+### Restaurant and delivery workspaces — desktop/mobile refresh
+
+The restaurant and delivery roles now use the same console-level design system
+as admin, with their own navigation and operational priorities. All 18 active
+partner/shared page combinations are covered, not only the landing dashboards.
+Kitchen reports/CSV and current queues, menu/stock/add-ons, offers/coupons,
+merchant finance, rider availability/routes/history, profiles, notifications,
+settings and role-specific support are included. Original logo and database
+records are preserved. See [PARTNER_WORKSPACES.md](PARTNER_WORKSPACES.md) for the
+page matrix, test scope and unchanged provider/feature boundaries. This does
+not mark the wider product matrix or real commercial operations complete.
+
 ### Production release — 23 September
 
 Runtime `477963e` is live at https://runchigoo.vercel.app, deployment

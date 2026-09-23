@@ -10,11 +10,11 @@ import { useAuth } from "../context/AuthContext.jsx";
 const inputClass =
   "mt-2 w-full rounded-xl border border-[#dfe4d8] bg-white px-4 py-3 outline-none transition focus:border-[#8ca676] focus:ring-2 focus:ring-[#ecf1e6]";
 
-function SettingsLayout({ admin, children }) {
-  if (admin)
+function SettingsLayout({ role, children }) {
+  if (["admin", "restaurant", "delivery"].includes(role))
     return (
       <WorkspaceFrame
-        type="admin"
+        type={role}
         title="Account settings"
         description="Manage your profile, sign-in security and privacy preferences."
       >
@@ -80,8 +80,8 @@ export default function Settings() {
   };
 
   return (
-    <SettingsLayout admin={user?.role === "admin"}>
-      {user?.role !== "admin" && (
+    <SettingsLayout role={user?.role}>
+      {!["admin", "restaurant", "delivery"].includes(user?.role) && (
         <div className="page-heading">
           <p className="eyebrow">YOUR ACCOUNT, YOUR WAY</p>
           <h1 className="mt-3">The little details that matter.</h1>

@@ -15,27 +15,31 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { canOpenAdminRoute } from "../../lib/adminAccess.js";
 import {
   workspaceMenus,
-  adminNavigationSections,
+  workspaceSections,
+  workspaceNames,
 } from "../../lib/workspaceNavigation.js";
 import NotificationBell from "../common/NotificationBell.jsx";
 import UserAvatar from "../common/UserAvatar.jsx";
 import { Modal } from "./UI.jsx";
 
-export default function AdminCommandBar() {
+export default function AdminCommandBar({ type = "admin" }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const field = useRef(null);
   const results = useRef(null);
   const destinations = [
-    ...workspaceMenus.admin
-      .filter(([path]) => canOpenAdminRoute(user, `/admin-${path}`))
+    ...workspaceMenus[type]
+      .filter(
+        ([path]) =>
+          type !== "admin" || canOpenAdminRoute(user, `/admin-${path}`),
+      )
       .map(([path, label, Icon]) => ({
-        to: `/admin-${path}`,
+        to: `/${type}-${path}`,
         label,
         Icon,
         section:
-          adminNavigationSections.find(([, keys]) =>
+          workspaceSections[type].find(([, keys]) =>
             keys.includes(path),
           )?.[0] || "Workspace",
         keywords:
@@ -47,11 +51,11 @@ export default function AdminCommandBar() {
                 ? "reports sales revenue"
                 : "",
       })),
-    ...(canOpenAdminRoute(user, "/support")
+    ...(type !== "admin" || canOpenAdminRoute(user, "/support")
       ? [
           {
-            to: "/support?view=team",
-            label: "Support inbox",
+            to: type === "admin" ? "/support?view=team" : "/support",
+            label: type === "admin" ? "Support inbox" : "Help & support",
             Icon: HelpCircle,
             section: "Platform",
           },
@@ -98,7 +102,7 @@ export default function AdminCommandBar() {
         <div className="admin-console-label">
           <span>RuchiGo</span>
           <ChevronRight size={13} />
-          <strong>Operations console</strong>
+          <strong>{workspaceNames[type]}</strong>
         </div>
         <button
           className="admin-command-trigger"
@@ -106,7 +110,11 @@ export default function AdminCommandBar() {
             setQuery("");
             setOpen(true);
           }}
-          aria-label="Find an admin workspace"
+          aria-label={
+            type === "admin"
+              ? "Find an admin workspace"
+              : `Find a ${type} workspace`
+          }
           aria-haspopup="dialog"
         >
           <Search size={16} />
@@ -121,9 +129,9 @@ export default function AdminCommandBar() {
           </Link>
           <NotificationBell className="workspace-notification-bell" />
           <Link
-            to="/admin-profile"
+            to={`/${type}-profile`}
             className="admin-command-account"
-            aria-label="Your admin profile"
+            aria-label={`Your ${type} profile`}
           >
             <UserAvatar user={user} className="nav-avatar" />
           </Link>
@@ -142,8 +150,14 @@ export default function AdminCommandBar() {
                 ref={field}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                aria-label="Search admin workspaces"
-                placeholder="Search orders, people, payments…"
+                aria-label={`Search ${type} workspaces`}
+                placeholder={
+                  type === "delivery"
+                    ? "Search deliveries, history, profile…"
+                    : type === "restaurant"
+                      ? "Search orders, menu, earnings…"
+                      : "Search orders, people, payments…"
+                }
                 onKeyDown={(event) => {
                   if (event.key === "ArrowDown") {
                     event.preventDefault();
@@ -200,8 +214,7 @@ export default function AdminCommandBar() {
             </nav>
             {!matches.length && (
               <p className="admin-command-empty">
-                No matching workspace. Try orders, restaurants or account
-                settings.
+                No matching workspace. Try orders or account settings.
               </p>
             )}
             <p className="admin-command-hint">

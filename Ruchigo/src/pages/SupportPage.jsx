@@ -44,6 +44,17 @@ export default function SupportPage() {
 }
 
 function SupportLayout({ teamView, children }) {
+  const { role } = useAuth();
+  if (["restaurant", "delivery"].includes(role))
+    return (
+      <WorkspaceFrame
+        type={role}
+        title="Help & support"
+        description="Your conversations, updates and resolutions in one place."
+      >
+        {children}
+      </WorkspaceFrame>
+    );
   if (teamView)
     return (
       <WorkspaceFrame
@@ -67,6 +78,8 @@ function SupportLayout({ teamView, children }) {
 
 function SupportWorkspace() {
   const { token, isAuthenticated, role, user } = useAuth();
+  const partner = ["restaurant", "delivery"].includes(role);
+  const SupportHeading = partner ? "h2" : "h1";
   const [params, setParams] = useSearchParams();
   const teamView = role === "admin" && params.get("view") === "team";
   const orderId = /^[1-9]\d*$/.test(params.get("order") || "")
@@ -191,6 +204,7 @@ function SupportWorkspace() {
   };
   const issueChat =
     creating &&
+    !partner &&
     !teamView &&
     linkedOrder.data &&
     [
@@ -208,11 +222,15 @@ function SupportWorkspace() {
             <p className="eyebrow">HELP & SUPPORT</p>
             <div className="section-title">
               <div>
-                <h1>{teamView ? "Support inbox" : "Let’s sort it out."}</h1>
+                <SupportHeading>
+                  {partner ? "How can we help?" : "Let’s sort it out."}
+                </SupportHeading>
                 <p className="muted mt-3">
-                  {teamView
-                    ? "Review customer conversations and send replies as RuchiGo support."
-                    : "Order questions, missing items or account help. We’re listening."}
+                  {partner
+                    ? "Pickup, kitchen operations, payments or account questions. Choose a topic or open a conversation."
+                    : teamView
+                      ? "Review customer conversations and send replies as RuchiGo support."
+                      : "Order questions, missing items or account help. We’re listening."}
                 </p>
               </div>
               {isAuthenticated && !teamView && (
@@ -244,7 +262,16 @@ function SupportWorkspace() {
         )}
         <ErrorNotice error={linkedOrder.error} onRetry={linkedOrder.reload} />
         {linkedOrder.data && (
-          <Link to={`/tracking/${orderId}`} className="support-order-context">
+          <Link
+            to={
+              role === "delivery"
+                ? `/delivery-navigation?order=${orderId}`
+                : role === "restaurant"
+                  ? `/restaurant-orders?status=${linkedOrder.data.status}`
+                  : `/tracking/${orderId}`
+            }
+            className="support-order-context"
+          >
             <div>
               <strong>{linkedOrder.data.restaurant_detail?.name}</strong>
               <span>
@@ -278,7 +305,49 @@ function SupportWorkspace() {
             />
           )
         )}
-        {!teamView && !issueChat && !ticket && !linkedId && (
+        {partner && !ticket && !linkedId && (
+          <div className="partner-support-topics">
+            {[
+              [
+                "delivery",
+                role === "restaurant"
+                  ? "Order & pickup issues"
+                  : "Pickup & delivery help",
+                "Get help with a current assignment or kitchen order.",
+              ],
+              [
+                "payment",
+                "Payments & records",
+                "Ask about a payment record or account statement.",
+              ],
+              [
+                "account",
+                "Your partner account",
+                "Profile, sign-in and account-access questions.",
+              ],
+            ].map(([category, title, description]) => (
+              <button
+                key={category}
+                onClick={() => {
+                  setForm({
+                    category,
+                    subject: title,
+                    message: "",
+                    order: orderId || "",
+                  });
+                  setError("");
+                  setCreating(true);
+                }}
+              >
+                <LifeBuoy size={20} />
+                <strong>{title}</strong>
+                <span>{description}</span>
+                <ArrowRight size={16} />
+              </button>
+            ))}
+          </div>
+        )}
+        {!partner && !teamView && !issueChat && !ticket && !linkedId && (
           <FoodAssistant support orderId={orderId} />
         )}
         {!isAuthenticated ? (
@@ -377,20 +446,42 @@ function SupportWorkspace() {
         {!teamView && (
           <section className="discovery-section">
             <h2>Quick answers</h2>
-            {[
-              [
-                "Can I cancel my order?",
-                "Open Your orders → order details to check the cancellation window saved at checkout. Eligible orders show Cancel order. Self-service cancellation is unavailable once cooking starts. If the window has closed or a payment needs review, choose Get help. A refund request is not a completed refund.",
-              ],
-              [
-                "An item is missing or incorrect.",
-                "Open a ticket, choose Missing item or Wrong item, and include your order number. The support team can review the issue with the restaurant.",
-              ],
-              [
-                "How do I confirm my delivery?",
-                "Share the six-digit delivery code with your partner only after your food reaches you. Find it on your tracking page.",
-              ],
-            ].map(([q, a]) => (
+            {(partner
+              ? [
+                  [
+                    "How do I report an order problem?",
+                    role === "restaurant"
+                      ? "Open Live orders and use Report a fulfilment issue on the affected order. Orders already in preparation or with captured payment need issue review, not a simple decline."
+                      : "Open Active delivery to check the pickup and customer details. Contact the customer through the delivery conversation, or create a support ticket with the order ID.",
+                  ],
+                  [
+                    "Where are my payments and records?",
+                    role === "restaurant"
+                      ? "Earnings & payments separates customer payments from your restaurant ledger. Payout availability depends on the platform’s approved settlement setup."
+                      : "Delivery history lists your assignments. Customer order values are not rider earnings. Payouts and incentives will only appear when a payout model is configured.",
+                  ],
+                  [
+                    "How do I manage availability?",
+                    role === "restaurant"
+                      ? "Use Restaurant profile to update opening hours and the Accepting orders switch. Save your changes to apply them."
+                      : "Use the online switch in your overview, delivery requests or profile. Only share live GPS during an active delivery; keep that page open for updates.",
+                  ],
+                ]
+              : [
+                  [
+                    "Can I cancel my order?",
+                    "Open Your orders → order details to check the cancellation window saved at checkout. Eligible orders show Cancel order. Self-service cancellation is unavailable once cooking starts. If the window has closed or a payment needs review, choose Get help. A refund request is not a completed refund.",
+                  ],
+                  [
+                    "An item is missing or incorrect.",
+                    "Open a ticket, choose Missing item or Wrong item, and include your order number. The support team can review the issue with the restaurant.",
+                  ],
+                  [
+                    "How do I confirm my delivery?",
+                    "Share the six-digit delivery code with your partner only after your food reaches you. Find it on your tracking page.",
+                  ],
+                ]
+            ).map(([q, a]) => (
               <details className="faq-item" key={q}>
                 <summary>{q}</summary>
                 <p>{a}</p>
@@ -427,17 +518,20 @@ function SupportWorkspace() {
                     setForm({ ...form, category: event.target.value })
                   }
                 >
-                  {[
-                    "delivery",
-                    "missing_item",
-                    "wrong_item",
-                    "food_quality",
-                    "payment",
-                    "refund",
-                    "account",
-                    "privacy",
-                    "other",
-                  ].map((category) => (
+                  {(partner
+                    ? ["delivery", "payment", "account", "privacy", "other"]
+                    : [
+                        "delivery",
+                        "missing_item",
+                        "wrong_item",
+                        "food_quality",
+                        "payment",
+                        "refund",
+                        "account",
+                        "privacy",
+                        "other",
+                      ]
+                  ).map((category) => (
                     <option key={category} value={category}>
                       {category.replaceAll("_", " ")}
                     </option>

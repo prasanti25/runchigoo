@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test:partner-overview": "node --test scripts/partner-overview.test.mjs",
+    "test:partner-workspace": "node scripts/partner-workspace-e2e.mjs",
+    "test:partner-details": "node scripts/partner-details-e2e.mjs",
     "dev": "vite",
     "dev:backend": "node scripts/run-backend.mjs",
     "dev:all": "concurrently -k \"npm run dev -- --host 0.0.0.0\" \"npm run dev:backend\"",

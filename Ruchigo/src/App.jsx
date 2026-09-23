@@ -63,7 +63,7 @@ const OperationsWorkspace = lazy(
   () => import("./pages/OperationsWorkspace.jsx"),
 );
 const RestaurantDashboard = lazy(() =>
-  import("./pages/RestaurantWorkspace.jsx").then((m) => ({
+  import("./pages/PartnerOverview.jsx").then((m) => ({
     default: m.RestaurantOverview,
   })),
 );
@@ -88,7 +88,9 @@ const RestaurantAnalytics = lazy(() =>
   rolePages().then((module) => ({ default: module.RestaurantAnalytics })),
 );
 const DeliveryDashboard = lazy(() =>
-  rolePages().then((module) => ({ default: module.DeliveryDashboard })),
+  import("./pages/PartnerOverview.jsx").then((module) => ({
+    default: module.DeliveryOverview,
+  })),
 );
 const DeliveryOrders = lazy(() =>
   import("./pages/DeliveryWorkspace.jsx").then((m) => ({
@@ -101,7 +103,9 @@ const DeliveryNavigation = lazy(() =>
   })),
 );
 const DeliveryEarnings = lazy(() =>
-  rolePages().then((module) => ({ default: module.DeliveryEarnings })),
+  import("./pages/PartnerOverview.jsx").then((module) => ({
+    default: module.DeliveryHistory,
+  })),
 );
 const DeliveryProfile = lazy(() => import("./pages/PartnerAccount.jsx"));
 const adminPages = () => import("./pages/admin/LiveAdminPages.jsx");

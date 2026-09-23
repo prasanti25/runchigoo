@@ -82,9 +82,17 @@ async function pageFor(auth) {
   });
   await context.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
-    await route.fulfill({
-      response: await route.fetch({ url: backend + url.pathname + url.search }),
-    });
+    try {
+      const response = await route.fetch({
+        url: backend + url.pathname + url.search,
+      });
+      await route.fulfill({ response });
+    } catch (error) {
+      // React cancels outstanding reads when a workspace is left. Their
+      // isolated proxy responses can finish after Playwright closes the route.
+      if (/Route is already handled|Target.*closed/.test(error.message)) return;
+      throw error;
+    }
   });
   await context.addInitScript(
     (auth) =>

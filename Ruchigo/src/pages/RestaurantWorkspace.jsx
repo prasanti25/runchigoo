@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Check, Clock3, Edit3, Plus, Search, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { WorkspaceFrame, Metrics } from "../components/product/Workspace.jsx";
@@ -12,6 +12,7 @@ import {
   ErrorNotice,
   FoodImage,
   Modal,
+  Skeleton,
   VegMark,
 } from "../components/product/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -45,10 +46,13 @@ export function MenuWorkspace() {
   const { token } = useAuth();
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
-  const menu = useRemote(
-    `/menu-items/?search=${encodeURIComponent(query)}&page=${page}`,
-    token,
-  );
+  const [availability, setAvailability] = useState("");
+  const [category, setCategory] = useState("");
+  const [toggling, setToggling] = useState(null);
+  const menuParams = new URLSearchParams({ search: query, page });
+  if (availability !== "") menuParams.set("is_available", availability);
+  if (category) menuParams.set("category", category);
+  const menu = useRemote(`/menu-items/?${menuParams}`, token);
   const categories = useRemote("/categories/", token);
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -91,6 +95,7 @@ export function MenuWorkspace() {
     }
   };
   const toggle = async (item) => {
+    setToggling(item.id);
     try {
       await apiRequest(`/menu-items/${item.id}/`, {
         token,
@@ -100,12 +105,14 @@ export function MenuWorkspace() {
       menu.reload();
     } catch (err) {
       toast.error(err.message);
+    } finally {
+      setToggling(null);
     }
   };
   return (
     <WorkspaceFrame
       type="restaurant"
-      title="Your menu, your way."
+      title="Menu & availability"
       description="Manage dishes, prices, dietary details and what’s available today."
       action={
         <button
@@ -120,19 +127,61 @@ export function MenuWorkspace() {
         </button>
       }
     >
-      <div className="discovery-search">
-        <Search size={18} />
-        <input
-          aria-label="Search your menu"
-          placeholder="Search your dishes…"
-          value={query}
+      <div className="partner-menu-toolbar">
+        <div className="discovery-search">
+          <Search size={18} />
+          <input
+            aria-label="Search your menu"
+            placeholder="Search your dishes…"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
+          />
+        </div>
+        <select
+          aria-label="Menu availability"
+          value={availability}
           onChange={(event) => {
-            setQuery(event.target.value);
+            setAvailability(event.target.value);
             setPage(1);
           }}
-        />
+        >
+          <option value="">All availability</option>
+          <option value="true">Available</option>
+          <option value="false">Unavailable</option>
+        </select>
+        <select
+          aria-label="Menu category"
+          value={category}
+          onChange={(event) => {
+            setCategory(event.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">All categories</option>
+          {categories.data?.results.map((item) => (
+            <option value={item.id} key={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
       </div>
-      <ErrorNotice error={menu.error} onRetry={menu.reload} />
+      <div className="partner-menu-caption">
+        <span>
+          {menu.data ? `${menu.data.count} matching dishes` : "Your menu"}
+        </span>
+        <span>Prices, portions & add-ons</span>
+      </div>
+      <ErrorNotice
+        error={menu.error || categories.error}
+        onRetry={() => {
+          menu.reload();
+          categories.reload();
+        }}
+      />
+      {menu.loading && <Skeleton count={3} />}
       <div className="workspace-menu-grid">
         {menu.data?.results.map((item) => (
           <article className="food-card" key={item.id}>
@@ -158,9 +207,15 @@ export function MenuWorkspace() {
               <div className="flex-row between mt-5">
                 <button
                   className={`status-pill ${item.is_available ? "" : "cancelled"}`}
+                  disabled={toggling !== null}
+                  aria-label={`${item.is_available ? "Mark unavailable" : "Mark available"}: ${item.name}`}
                   onClick={() => toggle(item)}
                 >
-                  {item.is_available ? "Available" : "Unavailable"}
+                  {toggling === item.id
+                    ? "Updating…"
+                    : item.is_available
+                      ? "Available"
+                      : "Unavailable"}
                 </button>
                 <button
                   className="text-link"
@@ -184,8 +239,16 @@ export function MenuWorkspace() {
       </div>
       {!menu.loading && !menu.error && !menu.data?.results.length && (
         <EmptyState
-          title="Bring your menu to life"
-          description="Add your first dish with a price, photo and a little about what makes it special."
+          title={
+            query || category || availability !== ""
+              ? "No matching dishes"
+              : "Bring your menu to life"
+          }
+          description={
+            query || category || availability !== ""
+              ? "Try a different search, category or availability filter."
+              : "Add your first dish with a price, photo and a little about what makes it special."
+          }
         />
       )}
       {menu.data?.count > 20 && (
@@ -495,10 +558,36 @@ export function MenuWorkspace() {
 
 export function KitchenOrders() {
   const { token } = useAuth();
-  const [page, setPage] = useState(1);
-  const [status, setStatus] = useState("pending");
+  const [params, setParams] = useSearchParams();
+  const page = /^[1-9]\d*$/.test(params.get("page") || "")
+    ? Number(params.get("page"))
+    : 1;
+  const setPage = (value) => {
+    const next = new URLSearchParams(params);
+    next.set("page", String(value));
+    setParams(next);
+  };
+  const orderFilter = /^[1-9]\d*$/.test(params.get("order_id") || "")
+    ? params.get("order_id")
+    : "";
+  const statuses = [
+    "pending",
+    "confirmed",
+    "preparing",
+    "ready",
+    "assigned",
+    "out_for_delivery",
+    "delivered",
+    "cancelled",
+  ];
+  const status = statuses.includes(params.get("status"))
+    ? params.get("status")
+    : "pending";
+  const summary = useRemote("/orders/summary/", token, 5000);
+  const [rejecting, setRejecting] = useState(null);
+  const [rejectError, setRejectError] = useState("");
   const { data, error, loading, reload } = useRemote(
-    `/orders/?status=${status}&page=${page}`,
+    `/orders/?status=${status}&page=${page}${orderFilter ? `&order_id=${orderFilter}` : ""}`,
     token,
     5000,
   );
@@ -512,9 +601,12 @@ export function KitchenOrders() {
         body: { status: next, expected_status: order.status },
       });
       reload();
+      summary.reload();
+      setRejecting(null);
       toast.success("Order updated");
     } catch (err) {
-      toast.error(err.message);
+      if (next === "cancelled") setRejectError(err.message);
+      else toast.error(err.message);
     } finally {
       setBusy(null);
     }
@@ -527,33 +619,51 @@ export function KitchenOrders() {
   return (
     <WorkspaceFrame
       type="restaurant"
-      title="Good food in the making."
-      description="Your live kitchen queue, refreshed every five seconds."
+      title="Live kitchen orders"
+      description="Review new orders, prepare with care and hand over to your rider."
     >
       <div className="filter-bar">
-        {[
-          "pending",
-          "confirmed",
-          "preparing",
-          "ready",
-          "assigned",
-          "out_for_delivery",
-          "delivered",
-          "cancelled",
-        ].map((value) => (
+        {statuses.map((value) => (
           <button
             key={value}
             className={`filter-chip ${status === value ? "selected" : ""}`}
+            aria-pressed={status === value}
             onClick={() => {
-              setStatus(value);
-              setPage(1);
+              setParams({ status: value });
             }}
           >
             {statusLabel(value)}
+            {summary.data && (
+              <span>
+                {summary.data.by_status.find((row) => row.status === value)
+                  ?.count || 0}
+              </span>
+            )}
           </button>
         ))}
       </div>
       <ErrorNotice error={error} onRetry={reload} />
+      <ErrorNotice error={summary.error} onRetry={summary.reload} />
+      {orderFilter && (
+        <div className="partner-inline-notice">
+          <div>
+            <strong>Viewing one selected order</strong>
+            <p>The status tabs return to your full kitchen queue.</p>
+          </div>
+          <button className="text-link" onClick={() => setParams({ status })}>
+            Show all orders
+          </button>
+        </div>
+      )}
+      <div className="partner-menu-caption mb-5">
+        <span>
+          {data
+            ? `${data.count} ${data.count === 1 ? "order" : "orders"} · ${statusLabel(status)}`
+            : "Loading orders…"}
+        </span>
+        <span>Updates every 5 seconds</span>
+      </div>
+      {loading && <Skeleton count={2} />}
       <div className="kitchen-grid">
         {data?.results.map((order) => (
           <article className="order-card" key={order.id}>
@@ -610,28 +720,57 @@ export function KitchenOrders() {
                   <Check size={16} />
                   {next[order.status][1]}
                 </button>
-                {order.payment?.status !== "paid" && (
-                  <button
-                    className="btn danger"
-                    aria-label="Reject order"
-                    disabled={busy === order.id}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          "Cancel this order and notify the customer?",
-                        )
-                      )
-                        update(order, "cancelled");
-                    }}
-                  >
-                    <X size={17} />
-                  </button>
-                )}
+                {order.status === "pending" &&
+                  order.payment?.status !== "paid" && (
+                    <button
+                      className="btn danger"
+                      aria-label="Reject order"
+                      disabled={busy === order.id}
+                      onClick={() => {
+                        setRejectError("");
+                        setRejecting(order);
+                      }}
+                    >
+                      <X size={17} />
+                      Decline
+                    </button>
+                  )}
               </div>
             )}
           </article>
         ))}
       </div>
+      {rejecting && (
+        <Modal
+          title="Decline this order?"
+          onClose={() => {
+            if (busy === null) setRejecting(null);
+          }}
+        >
+          <p className="muted mt-4">
+            Order #{orderNumber(rejecting)} has not been accepted. Declining
+            cancels it and notifies the customer. If preparation has started or
+            payment is captured, use “Report a fulfilment issue” instead.
+          </p>
+          <ErrorNotice error={rejectError} />
+          <div className="flex-row mt-6">
+            <button
+              className="btn secondary"
+              disabled={busy !== null}
+              onClick={() => setRejecting(null)}
+            >
+              Keep order
+            </button>
+            <button
+              className="btn danger"
+              disabled={busy !== null}
+              onClick={() => update(rejecting, "cancelled")}
+            >
+              {busy !== null ? "Declining…" : "Decline order"}
+            </button>
+          </div>
+        </Modal>
+      )}
       {data && (data.next || data.previous) && (
         <div className="pagination">
           <button
@@ -672,6 +811,7 @@ export function RestaurantProfile() {
       description="Introduce your kitchen and keep your location and contact details current."
     >
       <ErrorNotice error={error} onRetry={reload} />
+      {loading && <Skeleton count={2} />}
       {!loading && !error && (
         <ProfileEditor
           key={existing?.id || "new"}
