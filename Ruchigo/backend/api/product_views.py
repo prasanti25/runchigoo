@@ -292,6 +292,17 @@ class SupportViewSet(AdminScopeMixin, viewsets.ModelViewSet):
         ticket = quick_help(ticket.pk, request.user, topic, client_id)
         return Response(self.get_serializer(ticket).data)
 
+    @action(detail=True, methods=["post"], url_path="report-issue")
+    def report_issue(self, request, pk=None):
+        ticket = self.get_object()
+        if ticket.user_id != request.user.pk:
+            return Response({"detail": "Only the conversation owner can submit these details."}, status=403)
+        from .support_issues import IssueInput, report_issue
+        payload = IssueInput(data=request.data)
+        payload.is_valid(raise_exception=True)
+        ticket = report_issue(ticket.pk, request.user, payload.validated_data)
+        return Response(self.get_serializer(ticket).data)
+
     @action(detail=True, methods=["post"])
     @transaction.atomic
     def handoff(self, request, pk=None):

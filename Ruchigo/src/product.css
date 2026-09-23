@@ -3958,6 +3958,11 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 22px;
 }
+/* Keep the conversation controls clear of fixed shopping navigation. The
+   regular header remains available to leave support. */
+body:has(.support-thread) .mobile-bottom-nav {
+  display: none;
+}
 .fulfillment-hold {
   display: flex;
   align-items: flex-start;
@@ -4072,7 +4077,8 @@ button:disabled {
   gap: 7px;
   margin-top: 11px;
 }
-.support-message-actions a {
+.support-message-actions a,
+.support-message-actions button {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -4082,6 +4088,11 @@ button:disabled {
   padding: 9px 11px;
   font-size: 12px;
   font-weight: 600;
+  min-height: 44px;
+  text-align: left;
+}
+.support-message-actions button:disabled {
+  opacity: 0.55;
 }
 .support-thread-composer {
   padding: 18px 24px 24px;

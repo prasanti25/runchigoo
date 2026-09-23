@@ -82,7 +82,8 @@ class SupportOperationsTests(APITestCase):
         response = self.respond(ticket, message)
         reply = response.data["messages"][-1]
         self.assertIn("don’t eat", reply["body"])
-        self.assertIn(f"order={order.pk}&category=food_quality", reply["actions"][-1]["to"])
+        self.assertEqual(reply["actions"][-1]["kind"], "issue")
+        self.assertEqual(reply["actions"][-1]["category"], "food_quality")
         self.assertFalse(RefundRequest.objects.exists())
 
     def test_refund_guidance_uses_actual_ledger_state_and_original_destination(self):
@@ -136,15 +137,170 @@ class SupportOperationsTests(APITestCase):
         self.assertEqual(self.respond(ticket, message).status_code, 200)
         self.assertFalse(TicketMessage.objects.filter(reply_to=message).exists())
 
-    def test_team_handoff_is_idempotent_and_quick_assistance_stops(self):
+    def test_team_handoff_is_idempotent_and_order_help_remains_available(self):
         ticket, message = self.ticket()
         path = f"/api/v1/support/{ticket.pk}/handoff/"
         self.assertEqual(self.client.post(path).status_code, 200)
         self.assertEqual(self.client.post(path).status_code, 200)
         self.respond(ticket, message)
-        self.assertFalse(TicketMessage.objects.filter(reply_to=message).exists())
+        self.assertTrue(TicketMessage.objects.filter(reply_to=message).exists())
         self.assertEqual(AuditLog.objects.filter(action="support.team_requested").count(), 1)
         ticket.refresh_from_db(); self.assertTrue(ticket.staff_requested_at)
+
+    def test_cancelled_cod_refund_conversation_has_contextual_choices_and_closure(self):
+        order = self.order("cancelled")
+        Payment.objects.filter(order=order).update(status="failed")
+        ticket, _ = self.ticket(order)
+        self.client.post(f"/api/v1/support/{ticket.pk}/handoff/")
+        self.client.post(f"/api/v1/support/{ticket.pk}/resolve/")
+        # Mirrors the reported case: a formerly resolved/queued ticket reopens.
+        result = self.client.post(f"/api/v1/support/{ticket.pk}/reply/", {"message": "i would like to ask for refund"})
+        message = ticket.messages.get(pk=result.data["messages"][-1]["id"])
+        result = self.respond(ticket, message)
+        self.assertIn("cash-on-delivery", result.data["messages"][-1]["body"])
+        self.assertEqual([a["topic"] for a in result.data["messages"][-1]["actions"]], ["not_paid", "paid_cash", "unexpected_debit"])
+        result = self.client.post(f"/api/v1/support/{ticket.pk}/reply/", {"message": "no"})
+        message = ticket.messages.get(pk=result.data["messages"][-1]["id"])
+        result = self.respond(ticket, message)
+        self.assertIn("no money to refund", result.data["messages"][-1]["body"])
+        self.assertEqual(result.data["messages"][-1]["actions"][0]["kind"], "resolve")
+        self.assertEqual(self.client.post(f"/api/v1/support/{ticket.pk}/resolve/").status_code, 200)
+        self.assertEqual(self.client.post(f"/api/v1/support/{ticket.pk}/feedback/", {"score": 5}).status_code, 200)
+        self.assertFalse(RefundRequest.objects.exists())
+        order.refresh_from_db(); self.assertEqual(order.status, "cancelled")
+        self.assertEqual(order.payment.status, "failed")
+
+    def test_yes_to_payment_question_asks_method_instead_of_inventing_payment(self):
+        ticket, message = self.ticket(self.order("cancelled"), "refund please")
+        self.respond(ticket, message)
+        message = TicketMessage.objects.create(ticket=ticket, author=self.customer, body="haan")
+        result = self.respond(ticket, message)
+        self.assertIn("How did you pay", result.data["messages"][-1]["body"])
+        self.assertFalse(RefundRequest.objects.exists())
+
+    def test_not_paid_reply_cannot_overrule_a_confirmed_ledger_payment(self):
+        ticket, message = self.ticket(self.order("cancelled", paid=True), "I did not pay")
+        result = self.respond(ticket, message)
+        self.assertIn("shows a payment", result.data["messages"][-1]["body"])
+        self.assertNotIn("no money to refund", result.data["messages"][-1]["body"])
+
+    def report_issue(self, ticket, **changes):
+        return self.client.post(f"/api/v1/support/{ticket.pk}/report-issue/", {
+            "category": "payment", "message": "I paid cash but the payment is not recorded.",
+            "client_id": str(uuid4()), **changes,
+        }, format="json")
+
+    def test_unrecorded_payment_issue_stays_in_same_ticket_without_a_payout(self):
+        order = self.order("cancelled")
+        ticket, _ = self.ticket(order)
+        key = str(uuid4())
+        for _ in range(2):
+            result = self.report_issue(ticket, client_id=key)
+            self.assertEqual(result.status_code, 200, result.data)
+        self.assertEqual(SupportTicket.objects.count(), 1)
+        self.assertEqual(ticket.messages.count(), 3)
+        self.assertIn("needs verification", result.data["messages"][-1]["body"])
+        self.assertFalse(RefundRequest.objects.exists())
+        self.assertEqual(AuditLog.objects.filter(action="support.issue_submitted").count(), 1)
+        self.assertEqual(self.report_issue(ticket, client_id=key, message="Changed payment story").status_code, 400)
+        self.assertEqual(self.report_issue(ticket, request_refund=True).status_code, 400)
+
+    def test_paid_meal_issue_creates_one_refund_review_and_preserves_details(self):
+        order = self.order("delivered", paid=True)
+        ticket, _ = self.ticket(order)
+        body = {"client_id": str(uuid4()), "category": "food_quality", "message": "The meal smelled sour and was not eaten.", "affected_item_ids": [order.items.first().pk], "request_refund": True}
+        for _ in range(2):
+            result = self.report_issue(ticket, **body)
+            self.assertEqual(result.status_code, 200, result.data)
+        self.assertEqual(SupportTicket.objects.count(), 1)
+        self.assertEqual(RefundRequest.objects.count(), 1)
+        self.assertEqual(result.data["refund_request"]["status"], "requested")
+        self.assertEqual(result.data["affected_items"][0]["name"], self.item.name)
+        self.assertEqual(order.payment.status, "paid")
+
+    def test_issue_intake_checks_owner_items_and_delivery_state(self):
+        order = self.order("preparing")
+        ticket, _ = self.ticket(order)
+        self.assertEqual(self.report_issue(ticket, affected_item_ids=[999999]).status_code, 400)
+        self.assertEqual(self.report_issue(ticket, category="food_quality", affected_item_ids=[order.items.first().pk]).status_code, 400)
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self.report_issue(ticket).status_code, 403)
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.report_issue(ticket).status_code, 404)
+
+    def test_cancel_and_rating_answers_offer_owned_inline_actions(self):
+        for status, topic, expected_kind in [("pending", "cancel", "cancel"), ("delivered", "review", "review")]:
+            ticket, message = self.ticket(self.order(status), topic)
+            result = self.respond(ticket, message)
+            self.assertEqual(result.data["messages"][-1]["actions"][0]["kind"], expected_kind)
+
+    def test_received_food_followup_checks_delivery_mismatch(self):
+        ticket, message = self.ticket(self.order("preparing"), "food is spoiled")
+        self.respond(ticket, message)
+        message = TicketMessage.objects.create(ticket=ticket, author=self.customer, body="yes")
+        result = self.respond(ticket, message)
+        self.assertIn("delivery record needs checking", result.data["messages"][-1]["body"])
+        self.assertEqual(result.data["messages"][-1]["actions"][0]["category"], "delivery")
+
+    @patch("api.support_assistant.structured_response", return_value=None)
+    def test_staff_question_resets_previous_automated_yes_no_context(self, provider):
+        ticket, message = self.ticket(self.order("cancelled"), "refund please")
+        self.respond(ticket, message)
+        TicketMessage.objects.create(ticket=ticket, author=self.admin, body="Is there anything else you need?")
+        message = TicketMessage.objects.create(ticket=ticket, author=self.customer, body="no")
+        result = self.respond(ticket, message)
+        self.assertNotIn("Since you didn’t pay", result.data["messages"][-1]["body"])
+
+    def test_legacy_refunded_payment_is_not_presented_as_unpaid(self):
+        order = self.order("cancelled")
+        Payment.objects.filter(order=order).update(status="refunded")
+        ticket, message = self.ticket(order, "refund status")
+        result = self.respond(ticket, message)
+        self.assertIn("already marked refunded", result.data["messages"][-1]["body"])
+        self.assertFalse(RefundRequest.objects.exists())
+
+    def test_refund_not_received_does_not_become_a_missing_delivery(self):
+        order = self.order("delivered", paid=True)
+        ticket, message = self.ticket(order, "I have not received my refund")
+        refund = RefundRequest.objects.create(order=order, ticket=ticket, requested_amount=140, approved_amount=140, status="processed")
+        result = self.respond(ticket, message)
+        reply = result.data["messages"][-1]
+        self.assertIn("original payment method", reply["body"])
+        self.assertEqual(reply["actions"][-1]["category"], "refund")
+        self.assertEqual(reply["actions"][-1]["label"], "Report refund not received")
+        result = self.report_issue(ticket, category="refund", message="The refund is still not in my bank account.")
+        self.assertEqual(result.status_code, 200, result.data)
+        refund.refresh_from_db()
+        self.assertEqual(refund.status, "processed")
+        self.assertEqual(RefundRequest.objects.count(), 1)
+
+    def test_rejected_refund_can_receive_details_without_new_approval(self):
+        order = self.order("delivered", paid=True)
+        ticket, message = self.ticket(order, "refund was rejected")
+        refund = RefundRequest.objects.create(order=order, ticket=ticket, requested_amount=140, status="rejected")
+        result = self.respond(ticket, message)
+        self.assertEqual(result.data["messages"][-1]["actions"][-1]["kind"], "issue")
+        result = self.report_issue(ticket, category="refund", message="Please check again; one of the dishes was missing.")
+        self.assertEqual(result.status_code, 200, result.data)
+        refund.refresh_from_db()
+        self.assertEqual(refund.status, "rejected")
+        self.assertEqual(RefundRequest.objects.count(), 1)
+
+    def test_food_issue_can_add_affected_dishes_to_existing_review(self):
+        order = self.order("delivered", paid=True)
+        ticket, message = self.ticket(order, "food is spoiled")
+        RefundRequest.objects.create(order=order, ticket=ticket, requested_amount=140)
+        result = self.respond(ticket, message)
+        self.assertEqual(result.data["messages"][-1]["actions"][-1]["category"], "food_quality")
+
+    def test_payment_followup_does_not_ask_for_reported_details_again(self):
+        ticket, _ = self.ticket(self.order("cancelled"))
+        self.assertEqual(self.report_issue(ticket).status_code, 200)
+        message = TicketMessage.objects.create(ticket=ticket, author=self.customer, body="refund status")
+        result = self.respond(ticket, message)
+        self.assertIn("already open for a payment check", result.data["messages"][-1]["body"])
+        self.assertNotIn("Did you actually pay", result.data["messages"][-1]["body"])
+        self.assertFalse(RefundRequest.objects.exists())
 
     def test_admin_shopper_is_requester_and_gets_real_replies(self):
         order = self.order("cancelled")

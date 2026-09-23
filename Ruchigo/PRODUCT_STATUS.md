@@ -22,8 +22,9 @@ access their own help without gaining another customer's data or inbox access.
 
 Order-aware quick choices use current kitchen, delivery, cancellation and payment
 records. A queued customer can explicitly check facts without dropping the human
-review. Text messages in that queue remain for the team; there is no claim of a
-human agent being online. Replies are persisted, retries are idempotent, and a
+review. The newer contextual-support increment below also enables ordinary text
+assistance in that queue; there is no claim of a human agent being online.
+Replies are persisted, retries are idempotent, and a
 reply arriving through polling cannot leave typing/buttons stuck. Selected chat
 updates are polled every 3 seconds (the inbox every 5); this is not WebSocket or
 millisecond delivery. Requests time out after 20 seconds with recovery messaging.
@@ -44,6 +45,47 @@ ticket 55; user order 16 unchanged and no real refunds submitted. Runtime
 updated support bundle, guest sign-in flow, 1440/390/320px layout, protected
 support/dispatch endpoints and no browser errors or business writes. Authenticated
 conversations were exercised locally, not by modifying production customer tickets.
+
+### Contextual support follow-ups — release verification
+
+The supplied account's latest ticket was inspected read-only. It was resolved,
+had a queued-review flag, and concerned a cancelled COD order without a recorded
+collection. That flag incorrectly silenced later customer text. Assistance now
+continues while review stays queued, with context-aware yes/no and payment-method
+choices. Historical messages and their actual authors are not rewritten.
+
+No-payment confirmation offers an explicit close-chat/feedback path. Reported
+cash or online debits open payment-mismatch intake in the same owned ticket.
+Missing/spoiled/wrong food, delivery-status discrepancies, refund follow-ups and
+additional review details use persisted issue intake, affected-item validation
+and retry-safe submissions. Only a captured payment can create a refund-review
+request; this never approves or transfers money. Existing refund decisions are
+preserved. Rejected or reportedly missing refunds can receive more details without
+creating a second refund. Routine cancellation and meal-rating choices open the
+real confirmation/rating controls inside the conversation.
+
+Only the latest support message exposes its choices, mobile resizing retains the
+latest message, and pending replies recover after failed/lost requests. Fixed
+shopping navigation is hidden in open conversations so it cannot cover Send.
+Payment follow-ups acknowledge already-recorded details instead of repeating
+the initial payment question. Gemini
+classifies unfamiliar redacted text; order/payment facts and allowed actions come
+from the database. Routine assistance does not require staff. Unverified payments,
+food disputes and refund approval still require verification and authorized
+policy; this is not a claim of universally humanless support.
+
+No schema changes, live customer test messages or real refund submissions are
+part of this increment. See `VERIFICATION_REPORT.md` for final checks/deployment.
+
+### Delhi district checkout — deployed
+
+Explicit Delhi district aliases now let South Delhi addresses match Delhi
+kitchens in checkout, discovery and recommendation filtering. Noida/Gurugram
+remain separate; configured pin/radius/trip constraints are unchanged. Checkout
+and the delivery header share the selected saved address. Runtime `c4bbce9` is
+deployed at https://runchigoo.vercel.app, deployment
+`dpl_3o38CaK5TyeYmBmiQvDvN8X6oFdJ`. Public discovery checks and the isolated
+checkout browser regression pass; no live address/order/policy was edited.
 
 ### Google rider map and public demo — deployed and verified
 
@@ -193,7 +235,7 @@ See [FEATURE_MATRIX.md](FEATURE_MATRIX.md) for all 300 numbered entries, includi
 - Persisted refund requests and admin reviews, original-payment Razorpay refund submission, verified partial/full refund ledger, signed callbacks and uncertain-result reconciliation. Eligible self-cancellation has a separately admin-authorized automatic full-refund policy with durable recovery. Staff cancellation now explicitly approves a full original-method obligation before separate provider submission. Cash payouts, broader eligibility rules and live provider verification remain outstanding. The local payment provider/webhook are not configured; no real money was moved.
 - Cancellation is available in history and tracking with explicit reasons/confirmation, live eligibility refresh and server-side order locks. No self-cancellation once cooking starts. The unchanged default closes at acceptance; admins may configure pre-preparation cancellation and prepaid refunds for future orders. Checkout saves the policy revision, so later changes do not rewrite old rights. Refund status and order-linked help stay visible; stock/coupon release is one-time.
 - Resolved support conversations offer sad/neutral/happy face feedback and optional comments, stored separately from meal ratings. Only the conversation owner can submit them.
-- The screenshot's passive ticket form is replaced by one persisted conversational thread: factual assistance after each owned message, real-request typing, linked order/refund facts, retry-safe message IDs, bounded Gemini intent classification and explicit team handoff. Staff involvement stops automated replies. Food complaints on undelivered/cancelled records ask about a status mismatch rather than assuming delivery. Active-thread notifications stay in the inbox without overlaying the composer.
+- The screenshot's passive ticket form is replaced by one persisted conversational thread: factual assistance after each owned message, real-request typing, linked order/refund facts, retry-safe message IDs, bounded Gemini intent classification and explicit team handoff. A later staff reply suppresses a redundant automated answer; a queued review no longer silences new customer text. Food complaints on undelivered/cancelled records ask about a status mismatch rather than assuming delivery. Active-thread notifications stay in the inbox without overlaying the composer.
 - Restaurant fulfilment issue → customer-visible hold → explicit admin resume/cancel decision is wired through the four roles. Held orders cannot progress or be assigned/picked up/delivered. Staff cancellation uses current-stage validation and explicit full online-refund approval; cooked food is not restocked. Policy, cash and live-provider boundaries remain explicit.
 - Delivery-area admin workspace, opt-in circular-zone enforcement and server-signed address-specific bill. Cross-city checkout is always rejected. New zone prices are not enabled automatically; baseline same-city pricing is preserved until an admin changes policy.
 - Fifteen-minute unpaid reservation expiry, one-time stock/coupon release, and late-capture reconciliation without reviving cancelled orders. Production scheduling is still required; lazy customer-order/checkout expiry is also present.

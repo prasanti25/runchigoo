@@ -9,10 +9,13 @@ import {
   statusLabel,
   useRemote,
 } from "../../lib/product.js";
-import { ErrorNotice } from "./UI.jsx";
+import { ErrorNotice, Modal } from "./UI.jsx";
 import RefundStatus from "./RefundStatus.jsx";
 import SupportFeedback from "./SupportFeedback.jsx";
 import OrderOperations from "./OrderOperations.jsx";
+import CancelOrder from "./CancelOrder.jsx";
+import OrderReview from "./OrderReview.jsx";
+import OrderIssueChat from "./OrderIssueChat.jsx";
 
 export default function SupportThread({ ticket }) {
   const { token } = useAuth();
@@ -34,18 +37,26 @@ export default function SupportThread({ ticket }) {
   const [choicePending, setChoicePending] = useState(false);
   const [error, setError] = useState("");
   const [responseError, setResponseError] = useState("");
+  const [issueCategory, setIssueCategory] = useState(null);
   const [retry, setRetry] = useState(0);
   const attempts = useRef(new Set());
   const clientKey = useRef(null);
   const choiceKey = useRef(null);
+  const issueKey = useRef(null);
   const log = useRef(null);
   const lastCustomer = current.messages
     .filter((message) => !message.from_support)
     .at(-1);
+  const lastSupport = current.messages
+    .filter((message) => message.from_support)
+    .at(-1);
+  const activeActions = lastSupport?.actions || [];
+  const quickChoices = (current.quick_choices || []).filter(
+    (choice) => !activeActions.some((action) => action.topic === choice.topic),
+  );
   const needsResponse =
     isRequester &&
     current.status !== "resolved" &&
-    !current.staff_requested_at &&
     Boolean(lastCustomer) &&
     !current.messages.some((message) => message.reply_to === lastCustomer.id);
   const messageId = lastCustomer?.id;
@@ -92,6 +103,19 @@ export default function SupportThread({ ticket }) {
       behavior: "instant",
     });
   }, [current.messages.length, responding, pendingText]);
+  useEffect(() => {
+    const element = log.current;
+    if (!element) return;
+    let width = element.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth !== width) {
+        width = element.clientWidth;
+        element.scrollTo({ top: element.scrollHeight, behavior: "instant" });
+      }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   const refresh = async () => {
     try {
       setUpdated(await apiRequest(`/support/${current.id}/`, { token }));
@@ -149,6 +173,78 @@ export default function SupportThread({ ticket }) {
     setChoicePending(false);
     setPendingText("");
     if (ok) choiceKey.current = null;
+  };
+  const submitIssue = async (body) => {
+    const signature = JSON.stringify(body);
+    if (issueKey.current?.signature !== signature)
+      issueKey.current = { signature, id: crypto.randomUUID() };
+    if (
+      await mutate("report-issue", { ...body, client_id: issueKey.current.id })
+    ) {
+      setIssueCategory(null);
+      issueKey.current = null;
+      order.reload();
+    }
+  };
+  const renderAction = (action, index) => {
+    const key = `${action.topic || action.kind || action.to}:${index}`;
+    if (action.to)
+      return (
+        <Link key={key} to={action.to}>
+          {action.label}
+          <ArrowRight size={14} />
+        </Link>
+      );
+    if (!isRequester) return null;
+    if (action.topic)
+      return (
+        <button
+          key={key}
+          disabled={sending || responding}
+          onClick={() => choose(action)}
+        >
+          {action.label}
+          <ArrowRight size={14} />
+        </button>
+      );
+    if (action.kind === "resolve")
+      return (
+        current.status !== "resolved" && (
+          <button
+            key={key}
+            disabled={sending || responding}
+            onClick={() => mutate("resolve", {})}
+          >
+            {action.label}
+            <Check size={14} />
+          </button>
+        )
+      );
+    if (action.kind === "cancel" && order.data)
+      return order.data.cancellation?.allowed ? (
+        <CancelOrder key={key} order={order.data} compact onUpdated={refresh} />
+      ) : (
+        <p key={key}>{order.data.cancellation?.message}</p>
+      );
+    if (action.kind === "review" && order.data)
+      return (
+        <OrderReview key={key} order={order.data} compact onSaved={refresh} />
+      );
+    if (action.kind === "issue" && order.data)
+      return (
+        <button
+          key={key}
+          disabled={sending || responding}
+          onClick={() => {
+            setError("");
+            setIssueCategory(action.category);
+          }}
+        >
+          {action.label}
+          <ArrowRight size={14} />
+        </button>
+      );
+    return null;
   };
   return (
     <section className="support-thread" aria-label="Support conversation">
@@ -237,14 +333,9 @@ export default function SupportThread({ ticket }) {
             className={`support-bubble ${message.from_support ? "support" : "customer"}`}
           >
             <p>{message.body}</p>
-            {!!message.actions?.length && (
+            {message.id === lastSupport?.id && !!message.actions?.length && (
               <div className="support-message-actions">
-                {message.actions.map((action) => (
-                  <Link key={`${action.to}:${action.label}`} to={action.to}>
-                    {action.label}
-                    <ArrowRight size={14} />
-                  </Link>
-                ))}
+                {message.actions.map(renderAction)}
               </div>
             )}
             <small>
@@ -280,13 +371,13 @@ export default function SupportThread({ ticket }) {
           error={responseError}
           onRetry={() => setRetry((value) => value + 1)}
         />
-        {isRequester && current.status !== "resolved" && (
+        {isRequester && quickChoices.length > 0 && (
           <div
             className="thread-quick-actions"
             role="group"
             aria-label="Quick order help"
           >
-            {(current.quick_choices || []).map((choice) => (
+            {quickChoices.map((choice) => (
               <button
                 key={choice.topic}
                 disabled={sending || responding}
@@ -301,7 +392,7 @@ export default function SupportThread({ ticket }) {
         {current.staff_requested_at && current.status !== "resolved" && (
           <p className="thread-queue-note">
             {isRequester
-              ? "Your team review is still open. Use the options above for an immediate order update, or leave a message for the team. Sending a message does not cancel or refund an order."
+              ? "Your review stays open while we help you here. You can keep chatting; any cancellation or refund needs its own confirmation."
               : "This conversation is in the team review queue. Reply to the customer below; order and refund decisions use the support actions."}
           </p>
         )}
@@ -327,9 +418,7 @@ export default function SupportThread({ ticket }) {
                 ? "Reply to reopen this conversation…"
                 : !isRequester
                   ? "Reply to the customer…"
-                  : current.staff_requested_at
-                    ? "Leave a message for the team…"
-                    : "Write a message…"
+                  : "Write a message…"
             }
             onKeyDown={(event) => {
               if (
@@ -363,16 +452,17 @@ export default function SupportThread({ ticket }) {
                 Talk to the team
               </button>
             )}
-          {current.status !== "resolved" && (
-            <button
-              className="text-link"
-              disabled={sending || responding}
-              onClick={() => mutate("resolve", {})}
-            >
-              <Check size={15} />
-              {isRequester ? "That helped, close chat" : "Mark resolved"}
-            </button>
-          )}
+          {current.status !== "resolved" &&
+            !activeActions.some((action) => action.kind === "resolve") && (
+              <button
+                className="text-link"
+                disabled={sending || responding}
+                onClick={() => mutate("resolve", {})}
+              >
+                <Check size={15} />
+                {isRequester ? "That helped, close chat" : "Mark resolved"}
+              </button>
+            )}
         </div>
         <SupportFeedback
           key={`${current.id}:${current.feedback_at || "new"}`}
@@ -380,6 +470,24 @@ export default function SupportThread({ ticket }) {
           onSaved={refresh}
         />
       </div>
+      {issueCategory && order.data && (
+        <Modal
+          title="Add details to this conversation"
+          onClose={() => !sending && setIssueCategory(null)}
+        >
+          <OrderIssueChat
+            key={`${current.id}:${issueCategory}`}
+            order={order.data}
+            category={issueCategory}
+            inThread
+            allowRefundRequest={!current.refund_request}
+            busy={sending}
+            error={error}
+            onClose={() => !sending && setIssueCategory(null)}
+            onSubmit={submitIssue}
+          />
+        </Modal>
+      )}
     </section>
   );
 }

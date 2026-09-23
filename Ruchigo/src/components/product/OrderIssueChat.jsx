@@ -18,6 +18,8 @@ export default function OrderIssueChat({
   onClose,
   busy,
   error,
+  inThread = false,
+  allowRefundRequest = true,
 }) {
   const [step, setStep] = useState(1);
   const [items, setItems] = useState([]);
@@ -26,7 +28,8 @@ export default function OrderIssueChat({
   const foodIssue = ["food_quality", "missing_item", "wrong_item"].includes(
     category,
   );
-  const canReviewRefund = order.payment?.status === "paid";
+  const canReviewRefund =
+    allowRefundRequest && order.payment?.status === "paid";
   const online = order.payment?.method === "razorpay";
   const topics = {
     food_quality: "Food quality issue",
@@ -34,6 +37,7 @@ export default function OrderIssueChat({
     wrong_item: "Incorrect items",
     refund: "Payment or refund help",
     payment: "Payment help",
+    delivery: "Delivery issue",
   };
   return (
     <section
@@ -65,7 +69,9 @@ export default function OrderIssueChat({
             ? "I’m sorry your meal wasn’t right. If it seems spoiled or unsafe, please don’t eat it. Which dishes were affected?"
             : foodIssue
               ? "Let’s check that with the kitchen. Which items need attention?"
-              : "I can help you open a payment review for this order. First, tell us what happened."}
+              : category === "delivery"
+                ? "Tell us what happened with the delivery, whether the food reached you, and when. We’ll attach this to the order’s delivery record."
+                : "Tell us the amount, how and when you paid, and what went wrong. Don’t include an OTP, payment PIN or full card number."}
         </p>
       </div>
       {step === 1 && (
@@ -107,14 +113,16 @@ export default function OrderIssueChat({
               autoFocus
               required
               minLength={5}
-              maxLength={3000}
+              maxLength={inThread ? 1800 : 3000}
               rows={3}
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               placeholder={
                 foodIssue
                   ? "For example, the food smelled sour or an item was missing…"
-                  : "Tell us about the payment or refund you need help with…"
+                  : category === "delivery"
+                    ? "For example, the app says delivered but nobody at my address received it…"
+                    : "Tell us about the payment or refund you need help with…"
               }
             />
           </label>
@@ -153,7 +161,9 @@ export default function OrderIssueChat({
                     ? online
                       ? "If approved, back to your original payment method"
                       : "Cash payment: support will explain available return options"
-                    : "No confirmed payment to refund. Choose payment support below."}
+                    : !allowRefundRequest
+                      ? "A refund conversation already exists. Add details to it below without creating another request."
+                      : "No confirmed payment to refund. You can still record the issue below."}
                 </small>
               </span>
               {resolution === "refund" && <Check size={18} />}
@@ -165,7 +175,9 @@ export default function OrderIssueChat({
             >
               <MessageCircle size={23} />
               <span>
-                <strong>Talk to support</strong>
+                <strong>
+                  {inThread ? "Record this issue" : "Talk to support"}
+                </strong>
                 <small>
                   Ask a question or get help without requesting a refund
                 </small>
@@ -178,7 +190,9 @@ export default function OrderIssueChat({
               <p>
                 {resolution === "refund"
                   ? `Would you like to submit a review for this ${money(order.total)} order? ${online ? "Any approved online refund goes back to the original payment method. We won’t ask for an OTP, UPI PIN or another account." : "This does not start an automatic cash payout."} Support will confirm the eligible amount after reviewing your issue.`
-                  : "Would you like to send this to the support team? Your order and selected dishes will be attached, so you don’t need to explain them again."}
+                  : inThread
+                    ? "Save these details on this conversation? Your order and selected dishes stay attached. This does not approve a refund or cancel an order."
+                    : "Would you like to send this to the support team? Your order and selected dishes will be attached, so you don’t need to explain them again."}
               </p>
             </div>
           )}
@@ -211,7 +225,9 @@ export default function OrderIssueChat({
                 ? "Sending…"
                 : resolution === "refund"
                   ? "Yes, request a review"
-                  : "Send to support"}
+                  : inThread
+                    ? "Save issue details"
+                    : "Send to support"}
             </button>
           </div>
         </>

@@ -60,6 +60,9 @@ async function session(email, role) {
 async function screenshot(page, label) {
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
+    if (await page.locator(".support-thread").count()) {
+      await expect(page.getByRole("navigation", { name: "Mobile navigation" })).toBeHidden();
+    }
     assert.ok(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -149,6 +152,23 @@ try {
   await expect(thread.locator(".support-typing")).toHaveCount(0);
   await page.unroute("**/api/v1/support/*/quick-help/");
   await thread
+    .getByRole("button", { name: "Can I cancel this order?", exact: true })
+    .click();
+  await thread
+    .getByRole("button", { name: "Cancel order", exact: true })
+    .click();
+  const inlineCancellation = page.getByRole("dialog", {
+    name: "Cancel this order?",
+  });
+  await expect(inlineCancellation).toBeVisible();
+  await inlineCancellation
+    .getByRole("button", { name: "Keep my order" })
+    .click();
+  assert.equal(
+    (await api(`/orders/${order.id}/`, { token: customer.token })).status,
+    "pending",
+  );
+  await thread
     .getByLabel("Your reply", { exact: true })
     .fill("The food is spoiled");
   await thread.getByRole("button", { name: "Send reply", exact: true }).click();
@@ -232,7 +252,7 @@ try {
   await expect(feedback).toContainText("Thanks for telling us how we did");
   await screenshot(page, "working-support-feedback");
   passed.push(
-    "Explicit team handoff pauses automatic replies but permits factual button checks; staff reply appears without refresh, resolution and persisted face feedback work",
+    "Team review preserves factual help; staff reply appears without refresh, resolution and persisted face feedback work",
   );
 
   await kitchen.page.goto(`${base}/restaurant-orders`, {
@@ -307,6 +327,70 @@ try {
   passed.push(
     "Kitchen reports hold, progress blocked, customer sees hold, admin resumes without rewinding then explicitly cancels the test COD order",
   );
+  await page.goto(`${base}/support?ticket=${ticket.id}`, {
+    waitUntil: "networkidle",
+  });
+  await thread
+    .getByLabel("Your reply", { exact: true })
+    .fill("i would like to ask for refund");
+  await thread.getByRole("button", { name: "Send reply", exact: true }).click();
+  await expect(log).toContainText("Did you actually pay anything", {
+    timeout: 15000,
+  });
+  await thread
+    .getByRole("button", { name: "No, I didn’t pay", exact: true })
+    .click();
+  await expect(log).toContainText("no money to refund");
+  await thread
+    .getByRole("button", { name: "That helped, close chat", exact: true })
+    .click();
+  await expect(
+    thread.getByRole("form", { name: "Rate support conversation" }),
+  ).toBeVisible();
+  await screenshot(page, "guided-no-payment-support");
+  const ticketCount = (await api("/support/", { token: customer.token })).count;
+  await thread
+    .getByRole("button", { name: "Check payment or refund", exact: true })
+    .click();
+  await thread
+    .getByRole("button", { name: "I paid cash", exact: true })
+    .click();
+  await thread
+    .getByRole("button", { name: "Add payment details", exact: true })
+    .click();
+  const issue = page.getByRole("dialog", {
+    name: "Add details to this conversation",
+  });
+  await issue
+    .getByLabel("What happened?")
+    .fill(
+      `${marker} Local mismatch workflow test only: paid cash, no payment record.`,
+    );
+  await issue.getByRole("button", { name: "Continue", exact: true }).click();
+  await issue.getByRole("button", { name: "Record this issue" }).click();
+  await issue
+    .getByRole("button", { name: "Save issue details", exact: true })
+    .click();
+  await expect(issue).toHaveCount(0);
+  await expect(log).toContainText("payment needs verification");
+  await thread.getByRole("button", { name: "Check latest status", exact: true }).click();
+  await expect(log).toContainText("already open for a payment check");
+  await expect(thread.getByRole("button", { name: "Add more payment details", exact: true })).toBeVisible();
+  assert.equal(
+    (await api("/support/", { token: customer.token })).count,
+    ticketCount,
+  );
+  assert.equal(
+    (await api(`/orders/${order.id}/`, { token: customer.token })).refunds
+      .length,
+    0,
+  );
+  await thread
+    .getByRole("button", { name: "That helped, close chat", exact: true })
+    .click();
+  passed.push(
+    "Cancelled COD refund request gets payment choices and no-payment closure; cash mismatch is recorded in the same ticket without fake refund or duplicate ticket",
+  );
   const own = await api("/support/", {
     token: admin.token,
     method: "POST",
@@ -324,7 +408,10 @@ try {
   );
   await expect(adminThread.locator(".thread-context-note")).toHaveCount(0);
   await expect(
-    adminThread.getByRole("group", { name: "Quick order help" }),
+    adminThread.getByRole("button", {
+      name: "Help with my account",
+      exact: true,
+    }),
   ).toBeVisible();
   await adminThread
     .getByLabel("Your reply", { exact: true })

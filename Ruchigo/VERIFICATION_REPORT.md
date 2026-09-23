@@ -1,6 +1,46 @@
 # Product verification — 23 September 2026
 
-## Delhi district checkout regression — locally verified
+## Contextual support follow-ups — verified release candidate
+
+- Inspected only the supplied account's latest production ticket/order/payment
+  using a read-only database session. No historical messages, author labels,
+  ticket states or payments were changed. Temporary environment file removed.
+- Fixed queued-text silence, contextual yes/no/payment choices and same-ticket
+  issue intake. New tests cover requester isolation, affected-item ownership,
+  idempotent retries, no-payment safety, no duplicate refund, delivery mismatch,
+  existing refund decisions and processed/rejected refund follow-ups.
+- Final focused support suite: **45 tests passed**, including reportedly missing
+  refunds, added evidence on rejected reviews and avoiding repeated payment
+  intake. Expanded full regression: **360 tests passed** on isolated SQLite in
+  235.0s. The last payment-follow-up addition is covered by the final focused
+  run; it was added after the full suite started.
+- Final local browser suite passed on order **56**, ticket **66**: real persisted
+  replies, queued/resolved COD refund flow, no-payment closure/face feedback,
+  cash mismatch in the same ticket, inline cancellation confirmation, admin
+  requester/staff isolation, lost-response retry and delayed POST recovery.
+  Desktop/390/320px layouts pass with zero browser errors; mobile screenshot
+  inspected. User order 16 unchanged; no real refunds. The final check also
+  verifies existing payment details are acknowledged on follow-up.
+- One intermediate browser run failed while the mobile bottom bar intercepted
+  Send and the development page reloaded. Chat now hides the fixed shopping
+  bar while a conversation is open, with a regression assertion; the final
+  complete rerun passed. Header navigation remains available.
+- Actual configured Gemini classified “Paise wapas kab milenge?” as refund and
+  a delivered-but-not-received Hinglish complaint as not_received. Provider
+  responses were not mocked in these two checks; broader language-quality
+  evaluation remains necessary.
+- Lint/production build, diff check and migration drift pass. A 573-file
+  source/build scan found no matches for four configured private provider keys.
+  The pre-existing local Django key is an example placeholder, not a production
+  credential; use a unique secret in production. No new schema/provider
+  configuration is needed.
+  Production verification will stay public/read-only; authenticated actions
+  are exercised on local fixtures rather than live customer conversations.
+- Routine self-service is automatic, not universal dispute adjudication.
+  Payment discrepancies and financial decisions remain verification/policy
+  gated, and refund requested/approved/processing/processed are distinct states.
+
+## Delhi district checkout regression — deployed and verified
 
 - Fixed exact-city rejection of saved `South Delhi` addresses at `Delhi`
   kitchens. Explicit Delhi district aliases apply consistently to checkout,
@@ -17,8 +57,10 @@
 - **347 backend tests pass** on isolated SQLite, including actual checkout,
   preserved address text, alias rejection, zone-radius/trip limits and discovery.
   Lint/build, API retry regression and diff checks pass. No migration required.
-- Deployment pending at this checkpoint; smarter support follow-ups are the
-  next requested increment, not part of this checkout fix.
+- Runtime `c4bbce9` is pushed to main and deployed. Deployment
+  `dpl_3o38CaK5TyeYmBmiQvDvN8X6oFdJ` is READY and aliased to
+  https://runchigoo.vercel.app. Public-only production discovery confirms Delhi
+  and South Delhi return the same two restaurants; Noida remains separate.
 
 ## Support release — production deployed and public smoke verified
 
