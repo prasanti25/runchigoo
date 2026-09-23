@@ -290,7 +290,7 @@ export function AuthProvider({ children }) {
 
       if (error?.message && error.message.includes("pending admin approval")) {
         toast.error(error.message);
-        navigate("/pending-approval", { replace: true });
+        navigate("/pending-approval", { replace: true, state: { email: normalizedEmail, role: safeRole } });
         return false;
       }
 
@@ -340,7 +340,7 @@ export function AuthProvider({ children }) {
         return true;
       }
       toast.success(data.detail || "Registration submitted. Awaiting approval.");
-      navigate("/pending-approval", { replace: true });
+      navigate("/pending-approval", { replace: true, state: { email: normalizedEmail, role: data.user?.role || role } });
       return true;
     } catch (error) {
       toast.error(error.message);

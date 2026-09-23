@@ -305,7 +305,11 @@ export function RestaurantOverview() {
               : kitchen.accepting_orders
                 ? "Accepting orders"
                 : "Not accepting orders"
-            : "Status unavailable"}
+            : restaurant.loading
+              ? "Checking status…"
+              : restaurant.error
+                ? "Status unavailable"
+                : "Setup needed"}
         </span>
         <Link to="/restaurant-profile" className="text-link">
           Manage kitchen

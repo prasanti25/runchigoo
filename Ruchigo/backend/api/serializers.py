@@ -111,9 +111,17 @@ class UserSerializer(serializers.ModelSerializer):
 
 class AdminUserSerializer(UserSerializer):
     password = serializers.CharField(write_only=True, min_length=8, required=False)
+    access_status = serializers.SerializerMethodField()
+
+    def get_access_status(self, obj):
+        from .account_access import account_access_status
+        if obj.is_active:
+            return "active"
+        annotated = getattr(obj, "access_status", None)
+        return annotated if annotated in ["pending", "blocked"] else account_access_status(obj)
 
     class Meta(UserSerializer.Meta):
-        fields = UserSerializer.Meta.fields + ["password"]
+        fields = UserSerializer.Meta.fields + ["password", "access_status"]
         read_only_fields = ["id", "email_verified", "created_at"]
 
     def validate_password(self, value):
@@ -124,6 +132,8 @@ class AdminUserSerializer(UserSerializer):
         password = validated_data.pop("password", None)
         if not password:
             raise serializers.ValidationError({"password": "This field is required."})
+        if validated_data.get("role") == User.Role.DELIVERY:
+            validated_data.setdefault("is_available", False)
         user = User.objects.create_user(**validated_data, password=password)
         if user.role == User.Role.ADMIN:
             AdminAccessGrant.objects.create(user=user, scopes=[], full_access=False)
@@ -157,12 +167,14 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, data):
         role = data.get("role", User.Role.CUSTOMER)
         is_active = role == User.Role.CUSTOMER
+        if role == User.Role.DELIVERY:
+            data["is_available"] = False
         user = User.objects.create_user(is_active=is_active, **data)
         notify([user.pk], event=f"account:{user.pk}:registered", title="Welcome to RuchiGo",
                message="Your account is ready. Discover your next favourite meal." if is_active else "Your partner registration has been received and is awaiting approval.", kind="account")
         if not is_active:
             notify(admin_ids("partners"), event=f"account:{user.pk}:approval-request", title="Partner approval needed",
-                   message=f"A new {user.get_role_display().lower()} account is waiting for review.", kind="account", metadata={"approval_role": role})
+                   message=f"A new {user.get_role_display().lower()} account is waiting for review.", kind="account", metadata={"approval_role": role, "account_id": user.pk})
         return user
 
 class RestaurantSerializer(serializers.ModelSerializer):

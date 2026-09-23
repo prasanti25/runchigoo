@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -27,6 +27,10 @@ import { WorkspaceFrame } from "../../components/product/Workspace.jsx";
 import UserAvatar from "../../components/common/UserAvatar.jsx";
 import LoadingScreen from "../../components/common/LoadingScreen.jsx";
 import { canOpenAdminRoute } from "../../lib/adminAccess.js";
+import {
+  accountAccessAction,
+  accountAccessLabel,
+} from "../../lib/accountAccess.js";
 import {
   EmptyState,
   ErrorNotice,
@@ -116,7 +120,11 @@ function AccessActions({ person, disabled, onSelect }) {
             }}
           >
             {person.is_active ? <Ban size={16} /> : <UserCheck size={16} />}
-            {person.is_active ? "Block access" : "Restore access"}
+            {person.is_active
+              ? "Block access"
+              : person.access_status === "pending"
+                ? "Approve account"
+                : "Restore access"}
           </button>
           <p>Changes require a reason and confirmation.</p>
         </div>
@@ -127,11 +135,15 @@ function AccessActions({ person, disabled, onSelect }) {
 
 export default function PeopleWorkspace({ partnersOnly = false }) {
   const { token, user } = useAuth();
-  const [search, setSearch] = useState("");
+  const [urlParams] = useSearchParams();
+  const initialSearch = urlParams.get("search") || "";
+  const [search, setSearch] = useState(initialSearch);
   const [filters, setFilters] = useState({
-    search: "",
-    role: "",
+    search: initialSearch,
+    role: roles.includes(urlParams.get("role")) ? urlParams.get("role") : "",
     is_active: "",
+    access_status:
+      urlParams.get("access_status") === "pending" ? "pending" : "",
     page: 1,
   });
   const [editing, setEditing] = useState(null);
@@ -143,13 +155,16 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
     Object.entries(filters).filter(([, value]) => value !== ""),
   );
   if (partnersOnly) params.set("partner_only", "true");
-  const people = useRemote(`/users/?${params}`, token);
+  const people = useRemote(`/users/?${params}`, token, 20000);
   const summaryParams = new URLSearchParams(params);
   summaryParams.delete("page");
-  const summary = useRemote(`/users/summary/?${summaryParams}`, token);
+  const summary = useRemote(`/users/summary/?${summaryParams}`, token, 20000);
   const canManageAdmins = summary.data?.can_manage_admins;
   const hasFilters = Boolean(
-    filters.search || filters.role || filters.is_active,
+    filters.search ||
+    filters.role ||
+    filters.is_active ||
+    filters.access_status,
   );
   const availableRoles = roles.filter(
     (role) => !partnersOnly || ["restaurant", "delivery"].includes(role),
@@ -159,13 +174,24 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
     .reduce((total, row) => total + row.count, 0);
   function clearFilters() {
     setSearch("");
-    setFilters({ search: "", role: "", is_active: "", page: 1 });
+    setFilters({
+      search: "",
+      role: "",
+      is_active: "",
+      access_status: "",
+      page: 1,
+    });
   }
   const setFilter = (key, value) =>
     setFilters((current) => ({ ...current, [key]: value, page: 1 }));
   function refresh() {
     people.reload();
     summary.reload();
+  }
+  function review(person) {
+    setDecision({ person, action: accountAccessAction(person) });
+    setDraft(blank);
+    setError("");
   }
   function edit(person) {
     setEditing(person || {});
@@ -217,7 +243,9 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
       toast.success(
         decision.action === "block"
           ? "Account blocked"
-          : "Account access restored",
+          : decision.action === "approve"
+            ? "Account approved. They can now sign in."
+            : "Account access restored",
       );
       setDecision(null);
       refresh();
@@ -289,6 +317,36 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
           </article>
         ))}
       </div>
+      {summary.data?.pending > 0 && (
+        <aside className="people-pending-notice">
+          <UserCheck size={21} aria-hidden="true" />
+          <div>
+            <strong>
+              {summary.data.pending}{" "}
+              {summary.data.pending === 1 ? "partner is" : "partners are"}{" "}
+              waiting for approval
+            </strong>
+            <p>
+              Review their name, email and role, then approve account access.
+              They sign in with the password they registered.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={() =>
+              setFilters((current) => ({
+                ...current,
+                is_active: "",
+                access_status: "pending",
+                page: 1,
+              }))
+            }
+          >
+            Review pending <ArrowRight size={15} />
+          </button>
+        </aside>
+      )}
       <section
         className="panel people-workspace people-directory"
         aria-label="Account directory"
@@ -399,11 +457,23 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
             <div>
               <select
                 aria-label="Filter account access"
-                value={filters.is_active}
-                onChange={(event) => setFilter("is_active", event.target.value)}
+                value={filters.access_status || filters.is_active}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setFilters((current) => ({
+                    ...current,
+                    page: 1,
+                    is_active: ["true", "false"].includes(value) ? value : "",
+                    access_status: ["pending", "blocked"].includes(value)
+                      ? value
+                      : "",
+                  }));
+                }}
               >
                 <option value="">Any access</option>
                 <option value="true">Active</option>
+                <option value="pending">Pending approval</option>
+                <option value="blocked">Blocked</option>
                 <option value="false">Inactive</option>
               </select>
               <ChevronDown size={15} aria-hidden="true" />
@@ -417,6 +487,9 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
               {filters.role ? ` · ${roleLabel(filters.role)}` : ""}
               {filters.is_active
                 ? ` · ${filters.is_active === "true" ? "Active" : "Inactive"}`
+                : ""}
+              {filters.access_status
+                ? ` · ${filters.access_status === "pending" ? "Pending approval" : "Blocked"}`
                 : ""}
             </span>
             <button type="button" onClick={clearFilters}>
@@ -492,10 +565,10 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
                       </td>
                       <td className="people-status-cell">
                         <span
-                          className={`people-access-badge ${person.is_active ? "is-active" : "is-inactive"}`}
+                          className={`people-access-badge ${person.is_active ? "is-active" : person.access_status === "pending" ? "is-inactive" : "is-blocked"}`}
                         >
                           <i aria-hidden="true" />
-                          {person.is_active ? "Active" : "Inactive"}
+                          {accountAccessLabel(person)}
                         </span>
                       </td>
                       <td className="people-joined-cell" data-label="Joined">
@@ -506,6 +579,17 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
                       </td>
                       <td className="people-manage-cell">
                         <div className="people-actions">
+                          {person.access_status === "pending" &&
+                            !person.is_active && (
+                              <button
+                                type="button"
+                                className="people-approve-button"
+                                disabled={busy || protectedAccount}
+                                onClick={() => review(person)}
+                              >
+                                <UserCheck size={14} /> Approve
+                              </button>
+                            )}
                           {!partnersOnly && (
                             <button
                               type="button"
@@ -521,14 +605,7 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
                           <AccessActions
                             person={person}
                             disabled={protectedAccount || person.id === user.id}
-                            onSelect={() => {
-                              setDecision({
-                                person,
-                                action: person.is_active ? "block" : "unblock",
-                              });
-                              setDraft(blank);
-                              setError("");
-                            }}
+                            onSelect={() => review(person)}
                           />
                         </div>
                       </td>
@@ -703,7 +780,9 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
           title={
             decision.action === "block"
               ? "Block account access?"
-              : "Restore account access?"
+              : decision.action === "approve"
+                ? "Approve partner account?"
+                : "Restore account access?"
           }
           onClose={() => !busy && setDecision(null)}
         >
@@ -723,13 +802,18 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
               </span>
               <div>
                 <strong>{personName(decision.person)}</strong>
-                <p>{decision.person.email}</p>
+                <p>
+                  {decision.person.email} · {roleLabel(decision.person.role)}
+                </p>
+                {decision.person.phone && <p>{decision.person.phone}</p>}
               </div>
             </div>
             <p className="muted">
               {decision.action === "block"
                 ? "This account will lose access. Active orders must be resolved first; their status will not be changed by this action."
-                : "This account will be able to sign in again. This does not verify identity or approve a restaurant listing."}
+                : decision.action === "approve"
+                  ? `This ${roleLabel(decision.person.role).toLowerCase()} can sign in with their existing registration password after approval. ${decision.person.role === "delivery" ? "They start offline and choose when to go online." : "Their restaurant listing still requires a separate review before going live."} This approves sign-in access, not KYC verification.`
+                  : "This account will be able to sign in again. This does not verify identity or approve a restaurant listing."}
             </p>
             <label>
               Reason
@@ -757,7 +841,9 @@ export default function PeopleWorkspace({ partnersOnly = false }) {
                   ? "Saving…"
                   : decision.action === "block"
                     ? "Confirm block"
-                    : "Confirm restore"}
+                    : decision.action === "approve"
+                      ? "Approve account"
+                      : "Confirm restore"}
               </button>
             </div>
           </form>

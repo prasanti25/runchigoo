@@ -27,6 +27,7 @@ from .payment_expiry import expire_unpaid_orders
 from .cancellations import CancellationInput, cancel_customer_order
 from .order_operations import require_active_fulfillment
 from .admin_access import AdminScopeMixin, effective_scopes
+from .account_access import with_access_status, account_access_status
 from .dashboard_filters import OrderDashboardFilter, PaymentDashboardFilter
 from .rider_location import LiveLocationThrottle, RiderPlaceThrottle, live_location, rider_place
 from .google_routing import RouteThrottle
@@ -74,7 +75,9 @@ class AuthViewSet(AdminScopeMixin, viewsets.GenericViewSet):
             pending_user = User.objects.filter(email__iexact=email).first()
             if pending_user and pending_user.check_password(password):
                 if not pending_user.is_active:
-                    return Response({"detail": "Account pending admin approval."}, status=status.HTTP_403_FORBIDDEN)
+                    pending = account_access_status(pending_user) == "pending"
+                    return Response({"detail": "Account pending admin approval." if pending else "Account access is blocked. Contact support for an access review.",
+                                     "code": "approval_pending" if pending else "account_blocked"}, status=status.HTTP_403_FORBIDDEN)
                 user = authenticate(request, username=pending_user.username, password=password)
         if not user:
             return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
@@ -729,17 +732,27 @@ class UserManagementViewSet(AdminScopeMixin, viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = with_access_status(super().get_queryset())
         scopes = effective_scopes(self.request.user)
         if ("*" not in scopes and "people" not in scopes) or self.request.query_params.get("partner_only") == "true":
             qs = qs.filter(role__in=[User.Role.RESTAURANT, User.Role.DELIVERY])
+        access = self.request.query_params.get("access_status")
+        if access:
+            if access not in ["active", "pending", "blocked"]:
+                raise serializers.ValidationError({"access_status": "Choose active, pending or blocked."})
+            qs = qs.filter(access_status=access)
         return qs.select_for_update() if self.request.method not in permissions.SAFE_METHODS else qs
 
     @action(detail=False, methods=["get"])
     def summary(self, request):
         users = self.filter_queryset(self.get_queryset())
-        return Response({"total": users.count(), "active": users.filter(is_active=True).count(),
-                         "inactive": users.filter(is_active=False).count(),
+        counts = users.aggregate(
+            total=Count("pk"), active=Count("pk", filter=Q(is_active=True)),
+            inactive=Count("pk", filter=Q(is_active=False)),
+            pending=Count("pk", filter=Q(access_status="pending")),
+            blocked=Count("pk", filter=Q(access_status="blocked")),
+        )
+        return Response({**counts,
                          "by_role": list(users.order_by().values("role").annotate(count=Count("id")).order_by("role")),
                          "can_manage_admins": request.user.is_superuser})
 
@@ -762,7 +775,7 @@ class UserManagementViewSet(AdminScopeMixin, viewsets.ModelViewSet):
         if serializer.validated_data.get("role") == User.Role.ADMIN and not self.request.user.is_superuser:
             raise serializers.ValidationError({"role": "Only a superuser can create an administrator."})
         user = serializer.save()
-        self.audit_change(user, "account.created", {"role": user.role})
+        self.audit_change(user, "account.created", {"role": user.role, "active": user.is_active})
 
     @transaction.atomic
     def perform_update(self, serializer):
@@ -782,6 +795,8 @@ class UserManagementViewSet(AdminScopeMixin, viewsets.ModelViewSet):
             self.check_active_work(serializer.instance)
         fields = sorted(serializer.validated_data)
         previous_role, previous_active = serializer.instance.role, serializer.instance.is_active
+        if not previous_active and serializer.validated_data.get("is_active") is True and serializer.instance.role in [User.Role.RESTAURANT, User.Role.DELIVERY]:
+            raise serializers.ValidationError({"is_active": "Use the approval or restore-access action to activate a partner account."})
         user = serializer.save()
         if changed_role and user.role == User.Role.ADMIN:
             AdminAccessGrant.objects.update_or_create(user=user, defaults={"full_access": False, "scopes": []})
@@ -812,8 +827,12 @@ class UserManagementViewSet(AdminScopeMixin, viewsets.ModelViewSet):
             return Response({"detail": "Only restaurant and delivery accounts require approval."}, status=status.HTTP_400_BAD_REQUEST)
         if user.is_active:
             return Response({"detail": "User is already active."}, status=status.HTTP_400_BAD_REQUEST)
+        if account_access_status(user) != "pending":
+            return Response({"detail": "This account was previously active or blocked. Refresh and use Restore access instead."}, status=409)
         user.is_active = True
-        user.save(update_fields=["is_active"])
+        if user.role == User.Role.DELIVERY:
+            user.is_available = False
+        user.save(update_fields=["is_active", "is_available"])
         self.audit_change(user, "account.approved", {"role": user.role})
         Notification.objects.create(
             user=user,
@@ -845,11 +864,7 @@ class UserManagementViewSet(AdminScopeMixin, viewsets.ModelViewSet):
                 html_message=approval_html_message,
                 fail_silently=True,
             )
-        if user.role == User.Role.RESTAURANT:
-            restaurant = Restaurant.objects.filter(owner=user).first()
-            if restaurant and not restaurant.is_approved:
-                restaurant.is_approved = True
-                restaurant.save(update_fields=["is_approved"])
+        # Sign-in approval never silently publishes an unreviewed restaurant.
         return Response({"detail": "User approved successfully."})
 
     @action(detail=True, methods=["post"], permission_classes=[IsAdmin])
@@ -865,7 +880,9 @@ class UserManagementViewSet(AdminScopeMixin, viewsets.ModelViewSet):
             return Response({"detail": "User is already inactive."}, status=status.HTTP_400_BAD_REQUEST)
         self.check_active_work(user)
         user.is_active = False
-        user.save(update_fields=["is_active"])
+        if user.role == User.Role.DELIVERY:
+            user.is_available = False
+        user.save(update_fields=["is_active", "is_available"])
         self.audit_change(user, "account.blocked")
         Notification.objects.create(
             user=user,
@@ -882,8 +899,12 @@ class UserManagementViewSet(AdminScopeMixin, viewsets.ModelViewSet):
         self.check_target(user)
         if user.is_active:
             return Response({"detail": "User is already active."}, status=status.HTTP_400_BAD_REQUEST)
+        if account_access_status(user) == "pending":
+            return Response({"detail": "This is a new partner application. Refresh and use Approve account instead."}, status=409)
         user.is_active = True
-        user.save(update_fields=["is_active"])
+        if user.role == User.Role.DELIVERY:
+            user.is_available = False
+        user.save(update_fields=["is_active", "is_available"])
         self.audit_change(user, "account.restored")
         Notification.objects.create(
             user=user,

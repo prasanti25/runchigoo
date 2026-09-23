@@ -394,6 +394,53 @@
   background: #f8f0e5;
   color: #ac8449;
 }
+.people-access-badge.is-blocked {
+  background: #fff0ee;
+  color: #ac5046;
+}
+.people-approve-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #e8f3eb;
+  color: #24543a;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.people-approve-button:hover {
+  background: #d6e9dd;
+}
+.people-approve-button:focus-visible {
+  outline: 2px solid #24543a;
+  outline-offset: 3px;
+}
+.people-pending-notice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 20px;
+  border: 1px solid #e4d9bc;
+  border-radius: 16px;
+  background: #fffcf3;
+  margin-bottom: 20px;
+  color: #68522f;
+}
+.people-pending-notice > div {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.people-pending-notice strong {
+  font-size: 14px;
+}
+.people-pending-notice p {
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 4px;
+}
 .people-joined-cell {
   color: #84907b;
   font-size: 11px;
@@ -705,6 +752,13 @@
     border: 0;
     min-width: 0;
   }
+  .workspace.workspace-admin
+    .workspace-main
+    .people-directory
+    .people-table
+    td {
+    padding-block: 0;
+  }
   .people-person-cell {
     grid-column: 1 / -1;
   }
@@ -723,6 +777,7 @@
     justify-self: end;
   }
   .people-directory .people-table td.people-joined-cell {
+    grid-column: 1 / -1;
     padding-left: 51px;
     align-self: center;
     font-size: 10px;
@@ -732,7 +787,16 @@
     color: #9aa48f;
   }
   .people-manage-cell {
-    justify-self: end;
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+  .people-directory .people-manage-cell .people-actions {
+    min-height: 44px;
+    padding-left: 51px;
+  }
+  .people-approve-button {
+    margin-right: auto;
+    min-height: 44px;
   }
   .people-directory .people-pagination {
     padding: 15px 17px;

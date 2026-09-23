@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Mail } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -13,12 +13,15 @@ import AuthFooter from "../../components/auth/AuthFooter";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { state } = useLocation();
   const [activeTab, setActiveTab] = useState("login");
   const { login, loading } = useAuth();
   const [formData, setFormData] = useState({
-    email: "",
+    email: state?.email || "",
     password: "",
-    role: "customer",
+    role: ["restaurant", "delivery", "admin"].includes(state?.role)
+      ? state.role
+      : "customer",
   });
   const [errors, setErrors] = useState({});
 

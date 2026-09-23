@@ -1,6 +1,31 @@
 # Product verification — 23 September 2026
 
-## Partner console production release — latest live checkpoint
+## Account approval fix — verified locally, awaiting promotion
+
+- Replaced the missing first-approval action in People/partner access with a
+  visible, confirmed **Approve** action; pending and blocked accounts now have
+  distinct API-derived states, filters and login messages. Rider management uses
+  the same actions. Account approval does not publish restaurant listings or
+  claim KYC verification. See `ACCOUNT_APPROVAL.md`.
+- 68 backend tests passed (approval, dashboards, admin access and API flow),
+  followed by the expanded nine-test approval suite including admin-created
+  riders starting offline. No migration or production account/password changes.
+- Real isolated browser registrations passed across customer, restaurant and
+  delivery roles; all three admin approval surfaces, persistence after reload,
+  original-password login, block/restore and six viewport widths were exercised.
+  Final compiled-build artifacts: `ruchigo-approval-a09zW8` under the system
+  temporary directory. No account API mocks; no browser errors. Explicit mobile
+  assertions cover joining-date/action overlap and excessive inherited padding.
+- The 19-page/six-width admin regression passed (`ruchigo-admin-workspace-53rBk6`),
+  as did all six mobile-navigation scenarios (`ruchigo-mobile-navigation-3XKHLo`).
+  The final small mobile spacing adjustment was also exercised in the compiled
+  approval test. Lint, build and whitespace checks passed.
+- 15 changed/new release files and 136 built HTML/JS/CSS files were checked
+  against 13 configured private values with no findings. The report itself is
+  documentation only. Production verification must be recorded after promotion;
+  these are not authenticated live-account tests or a load certification.
+
+## Partner console production release — previous live checkpoint
 
 - Runtime `748aeb5621c9837bf9fd7724cf73dc78da18ede0` is pushed to main and
   directly deployed to the linked Vercel project. Deployment

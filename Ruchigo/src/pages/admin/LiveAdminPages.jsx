@@ -25,6 +25,10 @@ import { fetchAllPages } from "../../lib/collections.js";
 import { canOpenAdminRoute, hasAdminScope } from "../../lib/adminAccess.js";
 import AdminOverview from "./AdminOverview.jsx";
 import { workspaceMenus } from "../../lib/workspaceNavigation.js";
+import {
+  accountAccessAction,
+  accountAccessLabel,
+} from "../../lib/accountAccess.js";
 
 const money = (value) =>
   `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -403,6 +407,7 @@ export function AdminDeliveryPartners() {
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [reason, setReason] = useState("");
   const name = (person) =>
     [person.first_name, person.last_name].filter(Boolean).join(" ") ||
     person.email;
@@ -414,6 +419,8 @@ export function AdminDeliveryPartners() {
       (filter === "all" ||
         (filter === "active" && person.is_active) ||
         (filter === "inactive" && !person.is_active) ||
+        (filter === "pending" && person.access_status === "pending") ||
+        (filter === "blocked" && person.access_status === "blocked") ||
         (filter === "available" && person.is_active && person.is_available)),
   );
   const value = (count) => (loading || error ? "—" : count);
@@ -421,10 +428,8 @@ export function AdminDeliveryPartners() {
     setBusy(true);
     try {
       await apiRequest(
-        "/users/" +
-          selected.id +
-          (selected.is_active ? "/block/" : "/approve/"),
-        { token, method: "POST" },
+        "/users/" + selected.id + `/${accountAccessAction(selected)}/`,
+        { token, method: "POST", body: { reason } },
       );
       toast.success("Delivery partner updated.");
       setSelected(null);
@@ -439,9 +444,16 @@ export function AdminDeliveryPartners() {
     <button
       className="btn secondary"
       disabled={busy}
-      onClick={() => setSelected(person)}
+      onClick={() => {
+        setSelected(person);
+        setReason("");
+      }}
     >
-      {person.is_active ? "Review access" : "Review approval"}
+      {person.is_active
+        ? "Review access"
+        : person.access_status === "pending"
+          ? "Approve account"
+          : "Restore access"}
     </button>
   );
   return (
@@ -457,8 +469,11 @@ export function AdminDeliveryPartners() {
             value(records.filter((person) => person.is_active).length),
           ],
           [
-            "Pending / blocked",
-            value(records.filter((person) => !person.is_active).length),
+            "Pending approval",
+            value(
+              records.filter((person) => person.access_status === "pending")
+                .length,
+            ),
           ],
           [
             "Available",
@@ -497,6 +512,8 @@ export function AdminDeliveryPartners() {
             >
               <option value="all">All riders</option>
               <option value="active">Active accounts</option>
+              <option value="pending">Pending approval</option>
+              <option value="blocked">Blocked access</option>
               <option value="inactive">Pending / blocked</option>
               <option value="available">Available</option>
             </select>
@@ -556,7 +573,7 @@ export function AdminDeliveryPartners() {
                             (person.is_active ? "delivered" : "cancelled")
                           }
                         >
-                          {person.is_active ? "Active" : "Inactive"}
+                          {accountAccessLabel(person)}
                         </span>
                       </td>
                       <td>
@@ -589,7 +606,7 @@ export function AdminDeliveryPartners() {
                     </div>
                     <div>
                       <dt>Account</dt>
-                      <dd>{person.is_active ? "Active" : "Inactive"}</dd>
+                      <dd>{accountAccessLabel(person)}</dd>
                     </div>
                     <div>
                       <dt>Availability</dt>
@@ -612,16 +629,31 @@ export function AdminDeliveryPartners() {
           title={
             selected.is_active
               ? "Review rider access"
-              : "Approve rider account?"
+              : selected.access_status === "pending"
+                ? "Approve rider account?"
+                : "Restore rider access?"
           }
           onClose={() => !busy && setSelected(null)}
         >
-          <p className="muted mt-4">{name(selected)}</p>
+          <p className="muted mt-4">
+            {name(selected)} · {selected.email}
+          </p>
           <p className="form-help mt-4">
             {selected.is_active
               ? "Blocking prevents account access. The server checks active assignments and can refuse unsafe account changes."
-              : "Confirm this partner is approved to access delivery work. This does not perform KYC verification."}
+              : selected.access_status === "pending"
+                ? "This partner can sign in with their registration password after approval. They start offline and choose when to go online. Account approval does not perform KYC verification."
+                : "Restore sign-in access for this previously approved or blocked rider. They start offline; their delivery history is preserved."}
           </p>
+          <label className="field mt-4">
+            Reason for this decision
+            <textarea
+              value={reason}
+              required
+              maxLength={500}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </label>
           <div className="admin-confirm-actions">
             <button
               className="btn secondary"
@@ -630,12 +662,18 @@ export function AdminDeliveryPartners() {
             >
               Keep unchanged
             </button>
-            <button className="btn primary" disabled={busy} onClick={confirm}>
+            <button
+              className="btn primary"
+              disabled={busy || !reason.trim()}
+              onClick={confirm}
+            >
               {busy
                 ? "Saving…"
                 : selected.is_active
                   ? "Block account"
-                  : "Approve account"}
+                  : selected.access_status === "pending"
+                    ? "Approve account"
+                    : "Confirm restore"}
             </button>
           </div>
         </Modal>
