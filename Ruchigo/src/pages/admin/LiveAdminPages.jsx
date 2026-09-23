@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import LoadingScreen from "../../components/common/LoadingScreen.jsx";
 import BusinessInsights from "../../components/product/BusinessInsights.jsx";
 import OrderOperations from "../../components/product/OrderOperations.jsx";
 import RefundStatus from "../../components/product/RefundStatus.jsx";
 import { Link } from "react-router-dom";
+import {
+  ArrowUpRight,
+  LayoutDashboard,
+  ShieldCheck,
+  Search,
+  Store,
+  MapPin,
+  Bike,
+} from "lucide-react";
+import { Modal, ErrorNotice } from "../../components/product/UI.jsx";
 import toast from "react-hot-toast";
 import {
   WorkspaceFrame,
@@ -14,6 +24,7 @@ import { apiRequest } from "../../lib/api.js";
 import { fetchAllPages } from "../../lib/collections.js";
 import { canOpenAdminRoute, hasAdminScope } from "../../lib/adminAccess.js";
 import AdminOverview from "./AdminOverview.jsx";
+import { workspaceMenus } from "../../lib/workspaceNavigation.js";
 
 const money = (value) =>
   `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -28,11 +39,10 @@ function AdminFrame({ title, subtitle, children }) {
   );
 }
 
-function Notice({ loading, error, empty }) {
+function Notice({ loading, error, empty, onRetry }) {
   if (loading)
     return <LoadingScreen inline message="Loading your workspace…" />;
-  if (error)
-    return <p className="rounded-2xl bg-red-50 p-6 text-red-700">{error}</p>;
+  if (error) return <ErrorNotice error={error} onRetry={onRetry} />;
   if (empty)
     return (
       <p className="rounded-2xl bg-white p-6 text-gray-500">
@@ -113,19 +123,46 @@ export function AdminDashboard() {
     ["/admin-activity", "Activity log"],
   ].filter(([path]) => canOpenAdminRoute(user, path));
   return (
-    <AdminFrame
+    <WorkspaceFrame
+      type="admin"
+      className="admin-overview-workspace"
       title="Your operations workspace"
-      subtitle="Workspaces assigned to your administrator account."
+      description="Your team, your responsibilities, one place to get to work."
     >
-      <div className="workspace-quicklinks">
-        {links.map(([path, title]) => (
-          <Link key={path} to={path}>
-            <div>
-              <strong>{title}</strong>
-              <span>Open workspace</span>
-            </div>
-          </Link>
-        ))}
+      <section className="overview-access-intro">
+        <span>
+          <ShieldCheck size={26} />
+        </span>
+        <div>
+          <p>YOUR ASSIGNED ACCESS</p>
+          <h2>{links.length} operational workspaces</h2>
+          <p>
+            Your shortcuts reflect the permissions assigned to your account.
+          </p>
+        </div>
+      </section>
+      <div className="overview-access-grid">
+        {links.map(([path, title]) => {
+          const Icon =
+            workspaceMenus.admin.find(
+              ([key]) => `/admin-${key}` === path,
+            )?.[2] || LayoutDashboard;
+          return (
+            <Link
+              key={path}
+              to={path === "/support" ? "/support?view=team" : path}
+            >
+              <span>
+                <Icon size={23} />
+              </span>
+              <div>
+                <strong>{title}</strong>
+                <span>Open workspace</span>
+              </div>
+              <ArrowUpRight size={17} />
+            </Link>
+          );
+        })}
       </div>
       {!links.length && (
         <section className="panel">
@@ -136,131 +173,222 @@ export function AdminDashboard() {
           </p>
         </section>
       )}
-    </AdminFrame>
+    </WorkspaceFrame>
   );
 }
 
 export function AdminRestaurants() {
   const { token } = useAuth();
-  const [approving, setApproving] = useState(null);
   const { records, loading, error, reload } = useCollection(
     "/restaurants/?ordering=-created_at",
   );
   const [query, setQuery] = useState("");
-  const approve = async (restaurant) => {
-    if (
-      !window.confirm(
-        `Approve ${restaurant.name} to appear in the customer catalog?`,
-      )
-    )
-      return;
-    setApproving(restaurant.id);
+  const [filter, setFilter] = useState("all");
+  const [selected, setSelected] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const visible = records.filter(
+    (item) =>
+      (item.name + " " + item.city + " " + (item.email || ""))
+        .toLowerCase()
+        .includes(query.toLowerCase()) &&
+      (filter === "all" ||
+        (filter === "pending" && !item.is_approved) ||
+        (filter === "approved" && item.is_approved) ||
+        (filter === "open" && item.is_open && item.is_approved)),
+  );
+  const value = (count) => (loading || error ? "—" : count);
+  async function confirm() {
+    setBusy(true);
     try {
-      await apiRequest(`/restaurants/${restaurant.id}/approve/`, {
-        token,
-        method: "POST",
-      });
-      toast.success("Restaurant approved.");
-      reload();
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setApproving(null);
-    }
-  };
-  const visible = useMemo(
-    () =>
-      records.filter((item) =>
-        `${item.name} ${item.city} ${item.email}`
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-      ),
-    [records, query],
-  );
-  const toggleOpen = useCallback(
-    async (restaurant) => {
-      try {
-        await apiRequest(`/restaurants/${restaurant.id}/`, {
+      const approving = selected.action === "approve";
+      await apiRequest(
+        "/restaurants/" +
+          selected.restaurant.id +
+          (approving ? "/approve/" : "/"),
+        {
           token,
-          method: "PATCH",
-          body: { is_open: !restaurant.is_open },
-        });
-        toast.success("Restaurant status updated.");
-        reload();
-      } catch (requestError) {
-        toast.error(requestError.message);
-      }
-    },
-    [reload, token],
-  );
+          method: approving ? "POST" : "PATCH",
+          ...(approving
+            ? {}
+            : { body: { is_open: !selected.restaurant.is_open } }),
+        },
+      );
+      toast.success(
+        approving ? "Restaurant approved." : "Restaurant availability updated.",
+      );
+      setSelected(null);
+      reload();
+    } catch (failure) {
+      toast.error(failure.message);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <AdminFrame
       title="Restaurants"
-      subtitle="Review live restaurant profiles and availability."
+      subtitle="Manage marketplace listings, review approvals and control availability."
     >
       <Metrics
         entries={[
-          ["Total", records.length],
-          ["Approved", records.filter((item) => item.is_approved).length],
+          ["Restaurant listings", value(records.length)],
           [
-            "Open",
-            records.filter((item) => item.is_open && item.is_approved).length,
+            "Approved",
+            value(records.filter((item) => item.is_approved).length),
           ],
-          ["Pending", records.filter((item) => !item.is_approved).length],
+          [
+            "Marked open",
+            value(
+              records.filter((item) => item.is_open && item.is_approved).length,
+            ),
+          ],
+          [
+            "Awaiting review",
+            value(records.filter((item) => !item.is_approved).length),
+          ],
         ]}
       />
-      <input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder="Search restaurants"
-        className="mt-6 w-full rounded-2xl border border-orange-100 bg-white px-5 py-4 outline-none"
-      />
-      <Notice
-        loading={loading}
-        error={error}
-        empty={!loading && !visible.length}
-      />
-      {!!visible.length && (
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          {visible.map((restaurant) => (
-            <article
-              key={restaurant.id}
-              className="rounded-3xl border border-orange-100 bg-white p-6"
+      <section className="panel admin-directory">
+        <div className="admin-directory-heading">
+          <div>
+            <h2>Restaurant directory</h2>
+            <p>Listing status and operating availability in one place.</p>
+          </div>
+          <span>{value(visible.length)} matching</span>
+        </div>
+        <div className="admin-directory-tools">
+          <label className="admin-directory-search">
+            <Search size={17} />
+            <input
+              aria-label="Search restaurants"
+              placeholder="Search by restaurant, city or email"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <label>
+            <span className="sr-only">Restaurant listing filter</span>
+            <select
+              aria-label="Restaurant listing filter"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
             >
-              <div className="flex items-start justify-between gap-4">
+              <option value="all">All listings</option>
+              <option value="approved">Approved</option>
+              <option value="pending">Awaiting review</option>
+              <option value="open">Marked open</option>
+            </select>
+          </label>
+        </div>
+        <Notice
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          empty={!loading && !visible.length}
+        />
+        <div className="admin-restaurant-grid">
+          {visible.map((restaurant) => (
+            <article className="admin-restaurant-card" key={restaurant.id}>
+              <header>
+                <span className="admin-partner-symbol">
+                  <Store size={22} />
+                </span>
                 <div>
-                  <h2 className="text-xl font-bold">{restaurant.name}</h2>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {restaurant.city} · {restaurant.email || "No public email"}
+                  <h3>{restaurant.name}</h3>
+                  <p>
+                    <MapPin size={12} />
+                    {restaurant.city || "City not supplied"}
                   </p>
                 </div>
                 <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${restaurant.is_approved ? "bg-green-50 text-green-700" : "bg-orange-50 text-orange-700"}`}
+                  className={
+                    "status-pill " +
+                    (restaurant.is_approved ? "delivered" : "pending")
+                  }
                 >
-                  {restaurant.is_approved ? "Approved" : "Pending"}
+                  {restaurant.is_approved ? "Approved" : "Review"}
                 </span>
-              </div>
-              <p className="mt-4 text-sm text-gray-600">{restaurant.address}</p>
-              <button
-                onClick={() => toggleOpen(restaurant)}
-                className="mt-5 rounded-xl border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-600"
-              >
-                Mark {restaurant.is_open ? "closed" : "open"}
-              </button>
-              {!restaurant.is_approved && (
-                <button
-                  className="btn primary ml-3 mt-5"
-                  disabled={approving === restaurant.id}
-                  onClick={() => approve(restaurant)}
+              </header>
+              <dl>
+                <div>
+                  <dt>Public contact</dt>
+                  <dd>{restaurant.email || "Not supplied"}</dd>
+                </div>
+                <div>
+                  <dt>Address</dt>
+                  <dd>{restaurant.address || "Not supplied"}</dd>
+                </div>
+              </dl>
+              <footer>
+                <span
+                  className={
+                    "admin-availability " + (restaurant.is_open ? "open" : "")
+                  }
                 >
-                  {approving === restaurant.id
-                    ? "Approving…"
-                    : "Approve restaurant"}
-                </button>
-              )}
+                  <i />
+                  {restaurant.is_open ? "Marked open" : "Marked closed"}
+                </span>
+                <div>
+                  <button
+                    className="btn secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      setSelected({ restaurant, action: "availability" })
+                    }
+                  >
+                    Mark {restaurant.is_open ? "closed" : "open"}
+                  </button>
+                  {!restaurant.is_approved && (
+                    <button
+                      className="btn primary"
+                      disabled={busy}
+                      onClick={() =>
+                        setSelected({ restaurant, action: "approve" })
+                      }
+                    >
+                      Review listing
+                    </button>
+                  )}
+                </div>
+              </footer>
             </article>
           ))}
         </div>
+      </section>
+      {selected && (
+        <Modal
+          title={
+            selected.action === "approve"
+              ? "Approve restaurant listing?"
+              : "Change restaurant availability?"
+          }
+          onClose={() => !busy && setSelected(null)}
+        >
+          <p className="muted mt-4">{selected.restaurant.name}</p>
+          <p className="form-help mt-4">
+            {selected.action === "approve"
+              ? "This publishes the listing in the customer marketplace. Confirm the merchant information has been reviewed."
+              : "Mark this restaurant " +
+                (selected.restaurant.is_open ? "closed" : "open") +
+                ". Existing orders keep their current state."}
+          </p>
+          <div className="admin-confirm-actions">
+            <button
+              className="btn secondary"
+              disabled={busy}
+              onClick={() => setSelected(null)}
+            >
+              Keep unchanged
+            </button>
+            <button className="btn primary" disabled={busy} onClick={confirm}>
+              {busy
+                ? "Saving…"
+                : selected.action === "approve"
+                  ? "Approve restaurant"
+                  : "Confirm availability"}
+            </button>
+          </div>
+        </Modal>
       )}
     </AdminFrame>
   );
@@ -271,86 +399,246 @@ export function AdminDeliveryPartners() {
   const { records, loading, error, reload } = useCollection(
     "/users/?role=delivery",
   );
-  const mutate = useCallback(
-    async (user, action) => {
-      try {
-        await apiRequest(`/users/${user.id}/${action}/`, {
-          token,
-          method: "POST",
-        });
-        toast.success("Delivery partner updated.");
-        reload();
-      } catch (requestError) {
-        toast.error(requestError.message);
-      }
-    },
-    [reload, token],
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [selected, setSelected] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const name = (person) =>
+    [person.first_name, person.last_name].filter(Boolean).join(" ") ||
+    person.email;
+  const visible = records.filter(
+    (person) =>
+      (name(person) + " " + person.email + " " + (person.phone || ""))
+        .toLowerCase()
+        .includes(query.toLowerCase()) &&
+      (filter === "all" ||
+        (filter === "active" && person.is_active) ||
+        (filter === "inactive" && !person.is_active) ||
+        (filter === "available" && person.is_active && person.is_available)),
+  );
+  const value = (count) => (loading || error ? "—" : count);
+  async function confirm() {
+    setBusy(true);
+    try {
+      await apiRequest(
+        "/users/" +
+          selected.id +
+          (selected.is_active ? "/block/" : "/approve/"),
+        { token, method: "POST" },
+      );
+      toast.success("Delivery partner updated.");
+      setSelected(null);
+      reload();
+    } catch (failure) {
+      toast.error(failure.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const action = (person) => (
+    <button
+      className="btn secondary"
+      disabled={busy}
+      onClick={() => setSelected(person)}
+    >
+      {person.is_active ? "Review access" : "Review approval"}
+    </button>
   );
   return (
     <AdminFrame
       title="Delivery partners"
-      subtitle="Approve or block delivery accounts using live account data."
+      subtitle="Review rider accounts, availability and access without changing active deliveries."
     >
       <Metrics
         entries={[
-          ["Total", records.length],
-          ["Active", records.filter((item) => item.is_active).length],
+          ["Registered riders", value(records.length)],
+          [
+            "Active accounts",
+            value(records.filter((person) => person.is_active).length),
+          ],
           [
             "Pending / blocked",
-            records.filter((item) => !item.is_active).length,
+            value(records.filter((person) => !person.is_active).length),
           ],
           [
             "Available",
-            records.filter((item) => item.is_active && item.is_available)
-              .length,
+            value(
+              records.filter(
+                (person) => person.is_active && person.is_available,
+              ).length,
+            ),
           ],
         ]}
       />
-      <Notice
-        loading={loading}
-        error={error}
-        empty={!loading && !records.length}
-      />
-      {!!records.length && (
-        <div className="mt-6 overflow-x-auto rounded-3xl border border-orange-100 bg-white p-6">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead>
-              <tr className="border-b text-gray-500">
-                <th className="py-3">Partner</th>
-                <th>Phone</th>
-                <th>Status</th>
-                <th>Joined</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((user) => (
-                <tr key={user.id} className="border-b border-gray-100">
-                  <td className="py-4">
-                    <p className="font-semibold">
-                      {`${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-                        user.email}
-                    </p>
-                    <p className="text-gray-500">{user.email}</p>
-                  </td>
-                  <td>{user.phone || "—"}</td>
-                  <td>{user.is_active ? "Active" : "Inactive"}</td>
-                  <td>{date(user.created_at)}</td>
-                  <td>
-                    <button
-                      onClick={() =>
-                        mutate(user, user.is_active ? "block" : "approve")
-                      }
-                      className="rounded-lg bg-orange-50 px-3 py-2 font-semibold text-orange-700"
-                    >
-                      {user.is_active ? "Block" : "Approve"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section className="panel admin-directory">
+        <div className="admin-directory-heading">
+          <div>
+            <h2>Rider directory</h2>
+            <p>Availability is reported by riders, not inferred from GPS.</p>
+          </div>
+          <span>{value(visible.length)} matching</span>
         </div>
+        <div className="admin-directory-tools">
+          <label className="admin-directory-search">
+            <Search size={17} />
+            <input
+              aria-label="Search delivery partners"
+              placeholder="Search by name, email or phone"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <label>
+            <span className="sr-only">Delivery partner filter</span>
+            <select
+              aria-label="Delivery partner filter"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+            >
+              <option value="all">All riders</option>
+              <option value="active">Active accounts</option>
+              <option value="inactive">Pending / blocked</option>
+              <option value="available">Available</option>
+            </select>
+          </label>
+        </div>
+        <Notice
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          empty={!loading && !visible.length}
+        />
+        {!!visible.length && (
+          <>
+            <div className="admin-rider-table">
+              <table className="people-table">
+                <caption className="sr-only">
+                  Matching delivery partners
+                </caption>
+                <thead>
+                  <tr>
+                    <th>Delivery partner</th>
+                    <th>Contact</th>
+                    <th>Account</th>
+                    <th>Availability</th>
+                    <th>Access</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((person) => (
+                    <tr key={person.id}>
+                      <td>
+                        <div className="admin-rider-identity">
+                          <span>
+                            <Bike size={20} />
+                          </span>
+                          <div>
+                            <strong>{name(person)}</strong>
+                            <small>
+                              Joined{" "}
+                              {new Date(person.created_at).toLocaleDateString(
+                                "en-IN",
+                              )}
+                            </small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        {person.email}
+                        <small className="admin-contact-phone">
+                          {person.phone || "No phone supplied"}
+                        </small>
+                      </td>
+                      <td>
+                        <span
+                          className={
+                            "status-pill " +
+                            (person.is_active ? "delivered" : "cancelled")
+                          }
+                        >
+                          {person.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td>
+                        {person.is_active && person.is_available
+                          ? "Available"
+                          : "Offline"}
+                      </td>
+                      <td>{action(person)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="admin-rider-cards">
+              {visible.map((person) => (
+                <article key={person.id}>
+                  <div className="admin-rider-identity">
+                    <span>
+                      <Bike size={20} />
+                    </span>
+                    <div>
+                      <strong>{name(person)}</strong>
+                      <small>{person.email}</small>
+                    </div>
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Phone</dt>
+                      <dd>{person.phone || "Not supplied"}</dd>
+                    </div>
+                    <div>
+                      <dt>Account</dt>
+                      <dd>{person.is_active ? "Active" : "Inactive"}</dd>
+                    </div>
+                    <div>
+                      <dt>Availability</dt>
+                      <dd>
+                        {person.is_active && person.is_available
+                          ? "Available"
+                          : "Offline"}
+                      </dd>
+                    </div>
+                  </dl>
+                  {action(person)}
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+      {selected && (
+        <Modal
+          title={
+            selected.is_active
+              ? "Review rider access"
+              : "Approve rider account?"
+          }
+          onClose={() => !busy && setSelected(null)}
+        >
+          <p className="muted mt-4">{name(selected)}</p>
+          <p className="form-help mt-4">
+            {selected.is_active
+              ? "Blocking prevents account access. The server checks active assignments and can refuse unsafe account changes."
+              : "Confirm this partner is approved to access delivery work. This does not perform KYC verification."}
+          </p>
+          <div className="admin-confirm-actions">
+            <button
+              className="btn secondary"
+              disabled={busy}
+              onClick={() => setSelected(null)}
+            >
+              Keep unchanged
+            </button>
+            <button className="btn primary" disabled={busy} onClick={confirm}>
+              {busy
+                ? "Saving…"
+                : selected.is_active
+                  ? "Block account"
+                  : "Approve account"}
+            </button>
+          </div>
+        </Modal>
       )}
     </AdminFrame>
   );
@@ -543,7 +831,7 @@ export function AdminReports() {
   return (
     <AdminFrame
       title="Reports"
-      subtitle="Current aggregate platform data; no placeholder forecasts."
+      subtitle="Order performance, customer retention and collected payment breakdowns."
     >
       <BusinessInsights />
       <div className="section-title mt-8">

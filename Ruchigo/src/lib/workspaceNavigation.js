@@ -50,3 +50,22 @@ export const workspaceMenus = {
     ["access", "Team access", Users],
   ],
 };
+
+export const adminNavigationSections = [
+  ["Workspace", ["dashboard", "orders", "payments"]],
+  [
+    "Marketplace",
+    [
+      "restaurants",
+      "delivery-partners",
+      "users",
+      "partner-accounts",
+      "catalog",
+    ],
+  ],
+  ["Growth & insights", ["offers", "reports", "reviews"]],
+  [
+    "Platform",
+    ["delivery-zones", "order-policy", "activity", "access", "profile"],
+  ],
+];

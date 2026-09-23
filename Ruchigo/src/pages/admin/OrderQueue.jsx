@@ -1,6 +1,6 @@
 import { useState } from "react";
 import LoadingScreen from "../../components/common/LoadingScreen.jsx";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { hasAdminScope } from "../../lib/adminAccess.js";
@@ -17,6 +17,7 @@ import {
 } from "../../components/product/Workspace.jsx";
 import { EmptyState, ErrorNotice } from "../../components/product/UI.jsx";
 import OrderOperations from "../../components/product/OrderOperations.jsx";
+import ResponsiveFilters from "../../components/product/ResponsiveFilters.jsx";
 import "../../components/product/Operations.css";
 
 const statuses = [
@@ -33,16 +34,21 @@ const statuses = [
 
 export default function OrderQueue() {
   const { token, user } = useAuth();
+  const [routeParams] = useSearchParams();
   const [filters, setFilters] = useState({
-    status: "",
-    search: "",
+    status: statuses.includes(routeParams.get("status"))
+      ? routeParams.get("status")
+      : "",
+    search: (routeParams.get("search") || "").slice(0, 100),
     on_hold: "",
     placed_after: "",
     placed_before: "",
     ordering: "-created_at",
     page: 1,
   });
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() =>
+    (routeParams.get("search") || "").slice(0, 100),
+  );
   const params = new URLSearchParams(
     Object.entries(filters).filter(([, value]) => value !== ""),
   );
@@ -63,6 +69,7 @@ export default function OrderQueue() {
   return (
     <WorkspaceFrame
       type="admin"
+      className="admin-order-workspace"
       title="Orders"
       description="Follow each order from confirmation to handover. Updates every 10 seconds."
     >
@@ -74,7 +81,14 @@ export default function OrderQueue() {
           ["Ready for pickup", count("ready")],
         ]}
       />
-      <section className="panel">
+      <section className="panel admin-order-queue">
+        <div className="admin-queue-heading">
+          <h2>Order queue</h2>
+          <p className="form-help">
+            Restaurants manage preparation. Assigned riders confirm pickup and
+            delivery.
+          </p>
+        </div>
         <div className="people-toolbar">
           <form
             className="people-search"
@@ -120,44 +134,55 @@ export default function OrderQueue() {
             </select>
           </label>
         </div>
-        <div className="report-toolbar">
-          <div className="report-dates">
-            <label>
-              From
-              <input
-                type="date"
-                aria-label="Order start date"
-                value={filters.placed_after}
-                onChange={(event) => filter("placed_after", event.target.value)}
-              />
-            </label>
-            <label>
-              To
-              <input
-                type="date"
-                aria-label="Order end date"
-                value={filters.placed_before}
-                onChange={(event) =>
-                  filter("placed_before", event.target.value)
-                }
-              />
-            </label>
+        <ResponsiveFilters
+          title="Dates & sorting"
+          active={Boolean(
+            filters.placed_after ||
+            filters.placed_before ||
+            filters.ordering !== "-created_at",
+          )}
+        >
+          <div className="report-toolbar">
+            <div className="report-dates">
+              <label>
+                From
+                <input
+                  type="date"
+                  aria-label="Order start date"
+                  value={filters.placed_after}
+                  onChange={(event) =>
+                    filter("placed_after", event.target.value)
+                  }
+                />
+              </label>
+              <label>
+                To
+                <input
+                  type="date"
+                  aria-label="Order end date"
+                  value={filters.placed_before}
+                  onChange={(event) =>
+                    filter("placed_before", event.target.value)
+                  }
+                />
+              </label>
+            </div>
+            <div className="people-toolbar">
+              <label>
+                Order by
+                <select
+                  aria-label="Order sort"
+                  value={filters.ordering}
+                  onChange={(event) => filter("ordering", event.target.value)}
+                >
+                  <option value="-created_at">Newest first</option>
+                  <option value="created_at">Oldest first</option>
+                  <option value="-total">Highest value</option>
+                </select>
+              </label>
+            </div>
           </div>
-          <div className="people-toolbar">
-            <label>
-              Order by
-              <select
-                aria-label="Order sort"
-                value={filters.ordering}
-                onChange={(event) => filter("ordering", event.target.value)}
-              >
-                <option value="-created_at">Newest first</option>
-                <option value="created_at">Oldest first</option>
-                <option value="-total">Highest value</option>
-              </select>
-            </label>
-          </div>
-        </div>
+        </ResponsiveFilters>
         <ErrorNotice error={orders.error || stats.error} onRetry={refresh} />
         {orders.loading && <LoadingScreen inline message="Loading orders…" />}
         {!orders.loading && !orders.error && !orders.data?.results.length && (
@@ -182,12 +207,14 @@ export default function OrderQueue() {
                       Scheduled preparation: {dateTime(order.scheduled_for)}
                     </p>
                   )}
-                  <p className="muted">
-                    {dateTime(order.created_at)} ·{" "}
+                </div>
+                <p className="muted admin-order-meta">
+                  <span>{dateTime(order.created_at)}</span>
+                  <span>
                     {order.items.reduce((sum, item) => sum + item.quantity, 0)}{" "}
                     items
-                  </p>
-                </div>
+                  </span>
+                </p>
                 <div className="operations-order-price">
                   <strong>{money(order.total)}</strong>
                   <span className={`status-pill ${order.status}`}>
@@ -235,10 +262,6 @@ export default function OrderQueue() {
               </details>
               <div className="people-actions">
                 <OrderOperations order={order} onUpdated={refresh} />
-                <p className="form-help">
-                  Restaurant updates preparation; the assigned rider confirms
-                  pickup and delivery.
-                </p>
                 {hasAdminScope(user, "support") && (
                   <Link
                     className="text-link"

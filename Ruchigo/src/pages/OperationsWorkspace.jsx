@@ -1,6 +1,6 @@
 import { useState } from "react";
 import LoadingScreen from "../components/common/LoadingScreen.jsx";
-import { Eye, EyeOff, Search, Star } from "lucide-react";
+import { Eye, EyeOff, Search, Star, History } from "lucide-react";
 import toast from "react-hot-toast";
 import { WorkspaceFrame } from "../components/product/Workspace.jsx";
 import { EmptyState, ErrorNotice, Modal } from "../components/product/UI.jsx";
@@ -44,9 +44,8 @@ export default function OperationsWorkspace({ reviews = false }) {
   return (
     <WorkspaceFrame
       type="admin"
-      title={
-        reviews ? "Keep the conversation fair." : "A record of what changed."
-      }
+      className={reviews ? "admin-reviews-workspace" : "admin-audit-workspace"}
+      title={reviews ? "Review moderation" : "Activity & audit log"}
       description={
         reviews
           ? "Moderate reviews with a recorded reason. Hidden reviews do not contribute to public ratings."
@@ -97,9 +96,7 @@ export default function OperationsWorkspace({ reviews = false }) {
         </button>
       </form>
       <ErrorNotice error={remote.error} onRetry={remote.reload} />
-      {remote.loading && (
-        <LoadingScreen inline message="Loading records…" />
-      )}
+      {remote.loading && <LoadingScreen inline message="Loading records…" />}
       {reviews ? (
         <div className="kitchen-grid">
           {remote.data?.results.map((review) => (
@@ -136,11 +133,14 @@ export default function OperationsWorkspace({ reviews = false }) {
           ))}
         </div>
       ) : (
-        <div className="audit-list">
+        <div className="audit-list admin-audit-timeline">
           {remote.data?.results.map((entry) => (
             <article className="panel" key={entry.id}>
+              <span className="admin-audit-marker">
+                <History size={17} />
+              </span>
               <div className="flex-row between">
-                <h2>{entry.action}</h2>
+                <h2>{entry.action.replace(/[._]/g, " ")}</h2>
                 <time className="muted">{dateTime(entry.created_at)}</time>
               </div>
               <p className="muted mt-3">

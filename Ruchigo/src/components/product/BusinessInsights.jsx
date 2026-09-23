@@ -12,9 +12,19 @@ import { apiRequest } from "../../lib/api.js";
 import { money, useRemote } from "../../lib/product.js";
 import { ErrorNotice, Skeleton } from "./UI.jsx";
 import "./Operations.css";
+import OrderPerformance from "./OrderPerformance.jsx";
+import ResponsiveFilters from "./ResponsiveFilters.jsx";
+
+function ReportDateControls({ admin, children }) {
+  return admin ? (
+    <ResponsiveFilters title="Custom date range">{children}</ResponsiveFilters>
+  ) : (
+    children
+  );
+}
 
 export default function BusinessInsights() {
-  const { token } = useAuth();
+  const { token, role } = useAuth();
   const [range, setRange] = useState("");
   const [dates, setDates] = useState({ start: "", end: "" });
   const [rangeError, setRangeError] = useState("");
@@ -89,51 +99,53 @@ export default function BusinessInsights() {
             </button>
           ))}
         </div>
-        <form
-          className="report-dates"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (
-              !dates.start ||
-              !dates.end ||
-              dates.end < dates.start ||
-              (new Date(dates.end) - new Date(dates.start)) / 86400000 > 89
-            ) {
-              setRangeError(
-                "Choose both dates, in order, up to 90 days apart.",
-              );
-              return;
-            }
-            setRangeError("");
-            setRange(`?${new URLSearchParams(dates)}`);
-          }}
-        >
-          <label>
-            From
-            <input
-              aria-label="Report start date"
-              type="date"
-              required
-              value={dates.start}
-              onChange={(event) =>
-                setDates({ ...dates, start: event.target.value })
+        <ReportDateControls admin={role === "admin"}>
+          <form
+            className="report-dates"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (
+                !dates.start ||
+                !dates.end ||
+                dates.end < dates.start ||
+                (new Date(dates.end) - new Date(dates.start)) / 86400000 > 89
+              ) {
+                setRangeError(
+                  "Choose both dates, in order, up to 90 days apart.",
+                );
+                return;
               }
-            />
-          </label>
-          <label>
-            To
-            <input
-              aria-label="Report end date"
-              type="date"
-              required
-              value={dates.end}
-              onChange={(event) =>
-                setDates({ ...dates, end: event.target.value })
-              }
-            />
-          </label>
-          <button className="btn secondary">Apply dates</button>
-        </form>
+              setRangeError("");
+              setRange(`?${new URLSearchParams(dates)}`);
+            }}
+          >
+            <label>
+              From
+              <input
+                aria-label="Report start date"
+                type="date"
+                required
+                value={dates.start}
+                onChange={(event) =>
+                  setDates({ ...dates, start: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              To
+              <input
+                aria-label="Report end date"
+                type="date"
+                required
+                value={dates.end}
+                onChange={(event) =>
+                  setDates({ ...dates, end: event.target.value })
+                }
+              />
+            </label>
+            <button className="btn secondary">Apply dates</button>
+          </form>
+        </ReportDateControls>
         <button
           type="button"
           className="btn secondary"
@@ -194,6 +206,12 @@ export default function BusinessInsights() {
             {data.summary.previous_period_customers} customers with completed
             orders in the previous period ordered again in this period.
           </p>
+          {role === "admin" && (
+            <section className="panel report-trend mb-5">
+              <h3 className="mb-5">Order performance</h3>
+              <OrderPerformance report={data} />
+            </section>
+          )}
           {data.financials && (
             <section className="panel mb-5" aria-label="Payment analytics">
               <h3>Money behind the orders</h3>
@@ -224,74 +242,76 @@ export default function BusinessInsights() {
               <p className="muted">{data.financials.definition}</p>
             </section>
           )}
-          <section className="panel report-trend">
-            <div className="section-title">
-              <div>
-                <p className="eyebrow">COMPLETED ORDER VALUE</p>
-                <h3>{money(data.summary.gross_order_value)}</h3>
+          {role !== "admin" && (
+            <section className="panel report-trend">
+              <div className="section-title">
+                <div>
+                  <p className="eyebrow">COMPLETED ORDER VALUE</p>
+                  <h3>{money(data.summary.gross_order_value)}</h3>
+                </div>
+                <span className="muted">
+                  {data.summary.orders} orders placed · {data.summary.cancelled}{" "}
+                  cancelled
+                </span>
               </div>
-              <span className="muted">
-                {data.summary.orders} orders placed · {data.summary.cancelled}{" "}
-                cancelled
-              </span>
-            </div>
-            <p className="muted">
-              {data.comparison.change_percent.gross_order_value === null
-                ? "No previous-period sales to compare."
-                : `${data.comparison.change_percent.gross_order_value > 0 ? "+" : ""}${data.comparison.change_percent.gross_order_value}% vs previous period.`}{" "}
-              Comparison: {data.comparison.start} to {data.comparison.end}.
-              Orders are grouped by the date placed and their current status.
-            </p>
-            <div
-              className="report-bars"
-              role="img"
-              aria-label={`Completed order value trend from ${data.period.start} to ${data.period.end}. Exact daily values are available in the table below.`}
-            >
-              {data.daily.map((day) => (
-                <div
-                  key={day.date}
-                  title={`${day.date}: ${money(day.gross_order_value)} · ${day.orders} completed`}
-                  style={{
-                    height: `${Math.max(2, (Number(day.gross_order_value) / Math.max(1, ...data.daily.map((row) => Number(row.gross_order_value)))) * 100)}%`,
-                  }}
-                />
-              ))}
-            </div>
-            <div className="report-axis">
-              <span>{data.period.start}</span>
-              <span>{data.period.end}</span>
-            </div>
-            <details className="report-daily">
-              <summary>View exact daily figures</summary>
-              <div className="insight-table-wrap">
-                <table>
-                  <caption>
-                    Order-date report, not a payout or tax statement
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Placed</th>
-                      <th>Completed</th>
-                      <th>Cancelled</th>
-                      <th>Order value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.daily.map((day) => (
-                      <tr key={day.date}>
-                        <td>{day.date}</td>
-                        <td>{day.placed_orders}</td>
-                        <td>{day.orders}</td>
-                        <td>{day.cancelled}</td>
-                        <td>{money(day.gross_order_value)}</td>
+              <p className="muted">
+                {data.comparison.change_percent.gross_order_value === null
+                  ? "No previous-period sales to compare."
+                  : `${data.comparison.change_percent.gross_order_value > 0 ? "+" : ""}${data.comparison.change_percent.gross_order_value}% vs previous period.`}{" "}
+                Comparison: {data.comparison.start} to {data.comparison.end}.
+                Orders are grouped by the date placed and their current status.
+              </p>
+              <div
+                className="report-bars"
+                role="img"
+                aria-label={`Completed order value trend from ${data.period.start} to ${data.period.end}. Exact daily values are available in the table below.`}
+              >
+                {data.daily.map((day) => (
+                  <div
+                    key={day.date}
+                    title={`${day.date}: ${money(day.gross_order_value)} · ${day.orders} completed`}
+                    style={{
+                      height: `${Math.max(2, (Number(day.gross_order_value) / Math.max(1, ...data.daily.map((row) => Number(row.gross_order_value)))) * 100)}%`,
+                    }}
+                  />
+                ))}
+              </div>
+              <div className="report-axis">
+                <span>{data.period.start}</span>
+                <span>{data.period.end}</span>
+              </div>
+              <details className="report-daily">
+                <summary>View exact daily figures</summary>
+                <div className="insight-table-wrap">
+                  <table>
+                    <caption>
+                      Order-date report, not a payout or tax statement
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Placed</th>
+                        <th>Completed</th>
+                        <th>Cancelled</th>
+                        <th>Order value</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          </section>
+                    </thead>
+                    <tbody>
+                      {data.daily.map((day) => (
+                        <tr key={day.date}>
+                          <td>{day.date}</td>
+                          <td>{day.placed_orders}</td>
+                          <td>{day.orders}</td>
+                          <td>{day.cancelled}</td>
+                          <td>{money(day.gross_order_value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            </section>
+          )}
           <div className="insight-grid">
             <section className="panel">
               <h3>

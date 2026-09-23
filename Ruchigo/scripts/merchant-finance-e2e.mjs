@@ -302,6 +302,46 @@ Address.objects.create(user=admin,line1='Admin personal doorstep',city='Local QA
 print(json.dumps({'ready':True}))`);
   const shopper = await login("admin");
   const shopPage = await pageFor(shopper);
+  await shopPage.goto(`${base}/admin-dashboard`);
+  await expect(
+    shopPage.getByRole("heading", { name: "Waiting for workspace access" }),
+  ).toBeVisible();
+  await shopPage
+    .getByRole("button", { name: "Find an admin workspace" })
+    .click();
+  const palette = shopPage.getByRole("dialog", { name: "Find a workspace" });
+  for (const path of [
+    "/admin-users",
+    "/admin-payments",
+    "/admin-access",
+    "/admin-reports",
+    "/support?view=team",
+  ]) {
+    await expect(palette.locator(`a[href="${path}"]`)).toHaveCount(0);
+  }
+  await expect(
+    palette.getByRole("link", { name: "Account settings" }),
+  ).toBeVisible();
+  await shopPage.keyboard.press("Escape");
+  await shopPage.setViewportSize({ width: 390, height: 844 });
+  await shopPage
+    .getByRole("button", { name: "Open workspace menu", exact: true })
+    .click();
+  const scopedMenu = shopPage.getByRole("dialog", { name: "Your workspace" });
+  await expect(
+    scopedMenu.getByRole("link", { name: "Payments & earnings", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    scopedMenu.getByRole("link", { name: "People", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    scopedMenu.getByRole("link", { name: "Support inbox", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    scopedMenu.getByRole("link", { name: "Account settings", exact: true }),
+  ).toBeVisible();
+  await scopedMenu.getByRole("button", { name: "Close dialog" }).click();
+  await shopPage.setViewportSize({ width: 1440, height: 1000 });
   await shopPage.goto(`${base}/restaurant/${fixture.restaurant}`);
   await shopPage.getByRole("button", { name: "ADD", exact: true }).click();
   await expect(

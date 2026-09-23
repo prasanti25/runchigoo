@@ -257,7 +257,7 @@ export default function LedgerWorkspace() {
                                 : "Online"}
                             </td>
                             <td>
-                              <span className="status-pill">
+                              <span className={`status-pill ${payment.status}`}>
                                 {payment.status}
                               </span>
                               {payment.reconciliation_required && (
@@ -290,7 +290,9 @@ export default function LedgerWorkspace() {
                           · Payment #{payment.id}
                         </p>
                         <footer>
-                          <span className="status-pill">{payment.status}</span>
+                          <span className={`status-pill ${payment.status}`}>
+                            {payment.status}
+                          </span>
                           <time>{dateTime(payment.created_at)}</time>
                         </footer>
                         {payment.reconciliation_required && (

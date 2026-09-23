@@ -127,6 +127,7 @@ try {
   const admin = await login("admin");
   const adminPage = await pageFor(admin);
   await adminPage.goto(`${base}/admin-order-policy`);
+  await adminPage.getByRole("tab", { name: "Rewards & referrals" }).click();
   await adminPage
     .getByRole("button", { name: "Review rewards policy" })
     .click();
@@ -262,6 +263,7 @@ try {
     revision: zonePolicy.revision,
   });
   await adminPage.goto(`${base}/admin-delivery-zones`);
+  await adminPage.getByRole("tab", { name: "Pricing rules" }).click();
   await adminPage.getByRole("button", { name: "Add pricing rule" }).click();
   await adminPage
     .getByLabel("Customer-facing fee name")
@@ -309,6 +311,7 @@ try {
       "Delivery includes ₹17 temporary demand fee. QA busy-hour delivery.",
     ),
   ).toBeVisible();
+  await adminPage.getByRole("tab", { name: "Service cities" }).click();
   await adminPage.getByRole("button", { name: "Manage a city" }).click();
   await adminPage.getByLabel("City name", { exact: true }).fill("Local QA");
   await adminPage.getByLabel("Allow new orders in this city").uncheck();

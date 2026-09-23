@@ -10,7 +10,74 @@ historical checkpoints, not evidence of the current Vercel alias.
 
 ## Outcome
 
-### Current increment — 23 September, pushed; production rollout pending
+### Admin UI release — desktop and mobile
+
+The active admin routes now share a grouped evergreen navigation rail, consistent
+headers, restrained status colours, data tables, forms and responsive cards.
+This covers overview, orders, payments/restaurant finance, restaurants, riders,
+people, partner accounts, categories, offers/coupons, reports, reviews, delivery
+settings, order policies, audit history, team access and profile. Account settings,
+the team support inbox and notifications use the same admin workspace.
+
+- Overview and admin reports share an interactive chart: orders/order value,
+  bars/trend, daily/seven-day aggregation, delivered-series toggle, keyboard/touch
+  inspection and exact daily figures. Sparse history remains sparse; no business
+  data was seeded to decorate the charts.
+- Restaurant and rider directories have real search/filtering, mobile cards and
+  explicit confirmation before existing approval/availability/access operations.
+  Failed reads offer retry; failed payment badges are not coloured as success.
+- Cancellation, cash/tips and rewards policies are separate keyboard-accessible
+  tabs. Zones, cities and pricing have their own tabs. Unsaved form state survives
+  switching sections; no shared commercial setting was activated.
+- Offers/categories have aligned campaign cards, audit records use a timeline,
+  and access cards identify the administrator. Original RuchiGo branding remains.
+- Mobile navigation has a sliding/fading drawer, a morphing menu icon, immediate
+  link navigation, reduced-motion support, focus return and scroll-lock cleanup.
+- Desktop now has a compact branded rail with independently scrolling navigation,
+  a persistent rail footer and automatic visibility of the selected page. The
+  utility bar contains workspace search, storefront, notifications and profile.
+  Search supports Cmd/Ctrl+K, arrow keys, Enter/Escape, focus return and only
+  permitted destinations; it does not search or expose private record contents.
+- Desktop overview hierarchy, live-operation strip, value cards and chart/flow
+  alignment are refined. Order rows and category cards are denser without losing
+  details, support controls or real statuses. Original logo/assets are unchanged.
+- The admin phone header identifies the operations workspace without shopping
+  address/cart controls. Admin shopping routes retain the customer header.
+  Mobile forms use readable inputs, safe-area-aware scrolling and a reachable
+  sticky close action. Date filters collapse without discarding drafts; a native
+  details-toggle/desktop-resize race was fixed and covered by browser regression.
+- Mobile review search has its own full-width row and notification text no longer
+  competes with a right-hand action column. Narrow and short viewports are
+  checked in addition to desktop/laptop layouts.
+
+This is a UI implementation/verification pass, **not completion of all 300
+features or production certification**. Publishing this source does not confirm
+a live deployment. No production migration, shared account reset or policy
+change is included; the existing Vercel integration/rollout gates still apply.
+Verification details are in [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md).
+
+### Mobile navigation and admin overview refresh — local follow-up
+
+The mobile header now has an explicit 44px menu trigger for shoppers and all
+partner/admin workspaces. Header, Account and More shortcuts open the same
+role-aware, scrollable dialog. It includes account settings/sign-out, supports
+Escape/backdrop dismissal and focus return, and closes when navigation or a
+desktop resize makes it obsolete. Original branding is unchanged.
+
+The admin overview now separates the current operational snapshot from
+7/30/90-day performance: real API-backed trends, readable KPI cards, exact daily
+figures/CSV export, stage-filtered order links, latest-order lookup and partner
+approvals. Reporting uses complete IST days and groups by order placement date;
+gross delivered-order value is not labelled platform profit. Unavailable
+reports show an error/retry instead of invented zeros. Delegated admins retain
+permission-scoped shortcuts without gaining reporting/finance access.
+
+This follow-up is included in the admin UI release above. Mobile navigation,
+overview reporting, dashboard queues and the isolated merchant-finance journey
+were verified locally, as were lint/build checks. The earlier production
+migration and Vercel access limitations below remain unresolved.
+
+### Earlier commerce increment — 23 September, pushed; production rollout pending
 
 Runtime commit `a2ffa26` is pushed to `prasanti25/runchigoo` main. This was a
 source-only release: no production migration, deployment or policy activation

@@ -7,31 +7,46 @@ import { apiRequest } from "../../lib/api.js";
 import { useRemote } from "../../lib/product.js";
 import CashTipPolicy from "../../components/product/CashTipPolicy.jsx";
 import RewardPolicy from "../../components/product/RewardPolicy.jsx";
+import WorkspaceTabs from "../../components/product/WorkspaceTabs.jsx";
 
 export default function OrderPolicies() {
   const { token } = useAuth();
   const policy = useRemote("/cancellation-policy/", token);
+  const [section, setSection] = useState("cancellation");
   return (
     <WorkspaceFrame
       type="admin"
       title="Order policies"
       description="Clear cancellation cutoffs and explicit refund authorization. Existing orders retain their checkout-time policy."
     >
-      <ErrorNotice error={policy.error} onRetry={policy.reload} />
-      {policy.loading ? (
-        <Skeleton count={1} />
-      ) : (
-        policy.data && (
-          <PolicyForm
-            key={policy.data.revision}
-            initial={policy.data}
-            token={token}
-            onSaved={policy.reload}
-          />
-        )
-      )}
-      <CashTipPolicy token={token} />
-      <RewardPolicy token={token} />
+      <WorkspaceTabs
+        label="Order policy sections"
+        tabs={[
+          ["cancellation", "Cancellations"],
+          ["tips", "Cash & tips"],
+          ["rewards", "Rewards & referrals"],
+        ]}
+        value={section}
+        onChange={setSection}
+      >
+        <div>
+          <ErrorNotice error={policy.error} onRetry={policy.reload} />
+          {policy.loading ? (
+            <Skeleton count={1} />
+          ) : (
+            policy.data && (
+              <PolicyForm
+                key={policy.data.revision}
+                initial={policy.data}
+                token={token}
+                onSaved={policy.reload}
+              />
+            )
+          )}
+        </div>
+        <CashTipPolicy token={token} />
+        <RewardPolicy token={token} />
+      </WorkspaceTabs>
     </WorkspaceFrame>
   );
 }

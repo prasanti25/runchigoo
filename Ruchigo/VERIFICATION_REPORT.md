@@ -1,5 +1,138 @@
 # Product verification — 23 September 2026
 
+## Desktop console and mobile usability refinement — latest local verification
+
+- `test:admin-workspace` passes on all 19 routes at **1440, 1280, 1024,
+  768, 390 and 320px**, including 800px-high laptop layouts. Real API reads,
+  overflow/control visibility, filtering, tab state and safe dialog dismissal
+  remain covered. No business writes or browser/API errors; order 16 unchanged.
+- `test:admin-mobile-forms` passes for 14 dialogs: add/edit account, partner
+  access, category, offer, coupon, zone, city, delivery pricing, cancellation,
+  cash/tips, rewards, team permissions and commission review. Checks 390/320px,
+  a 430px-high viewport, 16px inputs, sticky 44px close controls, last-control
+  reachability and scroll restoration. Also checks order-filter resizing,
+  preserved report dates and an unsent support reply. Non-auth business writes
+  are intercepted and rejected; none were attempted.
+- A real responsive-filter regression was found: native details toggle events
+  could race a viewport resize and leave hidden dates on desktop. The summary
+  now controls the open state through React; the mobile/desktop round trip passes.
+- `test:admin-command` passes: focus on open, filtering, empty results,
+  arrow/Home/End/Enter navigation, Cmd/Ctrl+K, Escape, focus/scroll restoration,
+  an existing-dialog guard and scrollable sidebar access at 1440/1280/1024px.
+  Normal destination reads are real; no new records or fabricated metrics.
+  An initial test opened the next shortcut before lazy route mounting finished;
+  it now waits for the destination heading, not only the changed URL.
+- `test:admin-overview`, `test:dashboard-queues`, all seven `test:overview-chart`
+  unit tests, `npm run check` and `git diff --check` pass on the refined code.
+- `test:mobile-navigation` passes all six role/shopping scenarios again, with
+  no browser errors or business writes. `test:merchant-finance` passes using its
+  isolated database/API, including the new scope-less admin command-search check:
+  no people, payments, reports, delegation or support-inbox destinations; account
+  settings remain accessible. Its finance fixtures never touch shared records.
+- Built-asset smoke check also passes using a temporary Vite preview server:
+  overview, people, orders and reports at 1440/390px, plus workspace search.
+  Desktop/mobile screenshots were inspected; no page/API errors or business
+  writes occurred. The temporary preview server was stopped after verification;
+  the regular frontend/backend development servers remain available.
+- Visually inspected the desktop viewport of every admin route and the changed
+  mobile layouts, plus 1280/1024px overview/profile layouts. Desktop order rows
+  and category cards are compact, active sidebar entries stay visible, and the
+  original RuchiGo logo is retained. These are Chromium browser checks, not a
+  physical iPhone/Android keyboard or production-load certification.
+- Latest artifacts:
+  - Routes: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-admin-workspace-fliP9X`.
+  - Forms: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-admin-mobile-forms-d2tVo7`.
+  - Workspace search: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-admin-command-wAPOuy`.
+  - Overview: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-overview-KDTcV6`.
+  - Mobile navigation: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-mobile-navigation-QsAOtw`.
+  - Isolated finance: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-merchant-3MnbE1`.
+  - Production-build smoke: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-admin-build-9gC4wf`.
+- Local frontend is at `http://127.0.0.1:5173/admin-dashboard`. Publishing the
+  admin UI source is not evidence of deployment. No provider-key change, account
+  reset, production migration or shared commercial-policy write is included.
+  Earlier backend-suite and rewards-suite results below are historical, not
+  rerun here. Lint, build and all seven chart unit tests were rerun successfully
+  before preparing the source commit; `origin/main` had no divergence.
+
+## Full admin workspace design pass — local follow-up
+
+- `npm run test:admin-workspace`: read-only sweep of 19 routes at 1440, 768,
+  390 and 320px. Checks admin headers, loading completion, document overflow and
+  clipped controls; restaurant search, restaurant/rider confirmation dismissal,
+  policy/area tab navigation and account/zone form opening without submission.
+  Unsaved cancellation selections survive switching away and back; the test
+  restores the original selection without submitting a policy change.
+  Normal reads use the real local API, not fabricated dashboard responses.
+- `npm run test:admin-overview`: real API values and CSV match for 7/30/90 days;
+  daily tables, keyboard date movement, delivered visibility, currency metric,
+  partial seven-day aggregation, bars/trend and stage/order deep links pass.
+  Explicit 503 simulation still verifies unavailable-data recovery.
+- `npm run test:overview-chart`: seven unit tests pass, including paise-safe
+  aggregation, partial final groups, nonmutation, empty data, and whole-count
+  axes checked against maxima from 1 through 10,000.
+- `npm run test:mobile-navigation`: all six actor scenarios pass, including
+  reduced-motion behavior and menu-icon state, focus/scroll restoration,
+  desktop resize, touch targets and header/lower-menu navigation.
+- `npm run test:dashboard-queues`: search/status/payment/refund/category routes
+  pass; no business writes, original order 16 unchanged.
+- `npm run test:merchant-finance`: isolated database/API journey passes, including
+  scoped navigation, empty/populated charts, merchant finance/settlement and
+  admin personal checkout. `npm run test:rewards` passes after adapting navigation
+  to the new tabs: reward policy, collection/redemption/restoration, pricing,
+  city pause/reopen and 320/390px layouts. These suites change only their own
+  temporary test databases, not shared preview or production policies.
+- Parallel read-only suites initially exceeded the local API rate limit (429).
+  They were rerun serially without weakening throttles. The earlier rewards
+  test also needed its existing city-management step to select the new tab.
+  Final results below refer to successful reruns, not those failed attempts.
+- Desktop/mobile screenshots were visually inspected: overview, people,
+  restaurants/riders, payments, offers, access, policies, reports, audit and team
+  support. Corrected uneven grid-card margins and duplicate directory padding.
+- Final screenshot sets:
+  - All admin routes: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-admin-workspace-pR8KFq`.
+  - Interactive overview: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-overview-YCM5k3`.
+  - Mobile menu: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-mobile-navigation-a5FCIc`.
+  - Isolated finance: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-merchant-cVHtQP`.
+  - Isolated rewards/pricing/cities: `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-rewards-3TbTy7`.
+- No backend implementation, production migration, account password, provider
+  key or shared business record was changed. The earlier 469-test backend result
+  remains historical; this UI pass is not a new full-backend or physical-device
+  certification. No Git push or deployment was performed.
+
+## Mobile menus and admin overview redesign — verified locally
+
+- Reproduction found no header hamburger in local/current public customer UI;
+  the account header button was hidden at phone widths. The existing lower
+  Account/More buttons did open in automation; the user's exact physical-device
+  failure was not reproduced. Added explicit header triggers and a shared
+  portaled navigation dialog, rather than assuming a backend login fault.
+- `npm run test:mobile-navigation` passes for guest/customer/admin shopping and
+  admin/restaurant/rider workspaces. Real local authentication, touch taps,
+  320/390/768/820/1023px, link navigation, header/lower shortcuts, full-menu scroll,
+  44px header touch targets, Escape/close/backdrop, keyboard focus return, desktop
+  resize and existing desktop dropdown tested. Zero page errors/business writes.
+- `npm run test:admin-overview` passes against the real local API: 7/30/90-day
+  totals and daily counts, exported CSV, chart inspection, all six stage links,
+  latest-order lookup and 320/390/768/820/1024/1280/1440px overflow checks. One
+  explicitly simulated 503 verifies missing figures and retry recovery; normal
+  reporting is not mocked. Zero page errors/business writes; order 16 unchanged.
+- `npm run test:dashboard-queues` passes again with zero business writes and
+  order 16 unchanged. `npm run test:merchant-finance` passes on its own temporary
+  database/API, including empty/populated overview, mobile navigation, financial
+  operations and personal admin checkout. Added a real scope-less administrator
+  check: no People/Finance/Support inbox links, but account settings remain usable.
+- `npm run check` passes (lint and production build). No backend implementation,
+  migration, private credential, commercial policy or shared business record was
+  changed. Prior 469-test backend evidence remains historical, not a new rerun.
+- Final overview screenshots:
+  `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-overview-wlDwhu`.
+  Final navigation screenshots:
+  `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-mobile-navigation-lUbHcq`.
+  Isolated finance/screenshots:
+  `/var/folders/d2/hgxpr10520s0mtkjj3b92qy40000gn/T/ruchigo-merchant-KLvoV1`.
+- This follow-up is uncommitted/unpushed and not deployed. No physical phone or
+  production upgrade acceptance is claimed; existing rollout gates still apply.
+
 ## Main-branch push checkpoint — production rollout pending
 
 - Runtime `a2ffa26` was successfully pushed to `prasanti25/runchigoo` main.

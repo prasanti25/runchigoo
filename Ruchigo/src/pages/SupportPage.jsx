@@ -3,6 +3,7 @@ import LoadingScreen from "../components/common/LoadingScreen.jsx";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, LifeBuoy, Plus } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
+import { WorkspaceFrame } from "../components/product/Workspace.jsx";
 import { EmptyState, ErrorNotice, Modal } from "../components/product/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { orderNumber, statusLabel, useRemote } from "../lib/product.js";
@@ -40,6 +41,28 @@ export default function SupportPage() {
       </main>
     );
   return <SupportWorkspace key={params.get("view") || "mine"} />;
+}
+
+function SupportLayout({ teamView, children }) {
+  if (teamView)
+    return (
+      <WorkspaceFrame
+        type="admin"
+        title="Support inbox"
+        description="Review customer conversations, order issues and resolution history."
+        className="admin-support-workspace"
+      >
+        {children}
+      </WorkspaceFrame>
+    );
+  return (
+    <>
+      <Navbar />
+      <main className="customer-main">
+        <div className="container">{children}</div>
+      </main>
+    </>
+  );
 }
 
 function SupportWorkspace() {
@@ -179,9 +202,8 @@ function SupportWorkspace() {
     ].includes(form.category);
   return (
     <>
-      <Navbar />
-      <main className="customer-main">
-        <div className="container">
+      <SupportLayout teamView={teamView}>
+        {!teamView && (
           <div className="page-heading">
             <p className="eyebrow">HELP & SUPPORT</p>
             <div className="section-title">
@@ -204,156 +226,155 @@ function SupportWorkspace() {
               )}
             </div>
           </div>
-          {role === "admin" && (
-            <nav className="support-view-tabs" aria-label="Support workspace">
-              <Link
-                className={!teamView ? "active" : ""}
-                to="/support?view=mine"
-              >
-                My order help
-              </Link>
-              {hasAdminScope(user, "support") && (
-                <Link
-                  className={teamView ? "active" : ""}
-                  to="/support?view=team"
-                >
-                  Customer support inbox
-                </Link>
-              )}
-            </nav>
-          )}
-          <ErrorNotice error={linkedOrder.error} onRetry={linkedOrder.reload} />
-          {linkedOrder.data && (
-            <Link to={`/tracking/${orderId}`} className="support-order-context">
-              <div>
-                <strong>{linkedOrder.data.restaurant_detail?.name}</strong>
-                <span>
-                  Order #{orderNumber(linkedOrder.data)} ·{" "}
-                  {statusLabel(linkedOrder.data.status)}
-                </span>
-              </div>
-              <ArrowRight size={18} />
+        )}
+        {role === "admin" && (
+          <nav className="support-view-tabs" aria-label="Support workspace">
+            <Link className={!teamView ? "active" : ""} to="/support?view=mine">
+              My order help
             </Link>
-          )}
-          {issueChat ? (
-            <OrderIssueChat
-              key={`${orderId}:${form.category}`}
-              order={linkedOrder.data}
-              category={form.category}
-              busy={busy}
-              error={error}
-              onClose={closeComposer}
-              onSubmit={(body) => mutate("/support/", body, created)}
-            />
-          ) : (
-            !teamView &&
-            linkedOrder.data?.customer === user?.id && (
-              <OrderHelp
-                order={linkedOrder.data}
-                onChoose={(category, subject) => {
-                  setForm({ category, subject, message: "", order: orderId });
-                  setError("");
-                  setCreating(true);
-                }}
-              />
-            )
-          )}
-          {!teamView && !issueChat && !ticket && !linkedId && (
-            <FoodAssistant support orderId={orderId} />
-          )}
-          {!isAuthenticated ? (
-            <section className="panel">
-              <LifeBuoy size={30} color="#7e9467" />
-              <h2 className="mt-5">Your support, in one place.</h2>
-              <p className="muted mt-3">
-                Sign in to tell us what happened and follow the conversation.
-              </p>
-              <Link to="/login" className="btn primary mt-5">
-                Sign in for support
-                <ArrowRight size={16} />
-              </Link>
-              <Link to="/faq" className="text-link ml-5">
-                Read FAQs
-              </Link>
-              <p className="form-help mt-5">
-                Can’t sign in? Email{" "}
-                <a className="text-link" href="mailto:Support@ruchigo.online">
-                  Support@ruchigo.online
-                </a>
-                . Never include passwords or payment PINs.
-              </p>
-            </section>
-          ) : (
-            <>
-              <ErrorNotice
-                error={tickets.error || linkedTicket.error || error}
-                onRetry={tickets.error ? tickets.reload : undefined}
-              />
-              {tickets.loading && (
-                <LoadingScreen inline message="Loading your conversations…" />
-              )}
-              {list.length || linkedTicket.data ? (
-                <div className="support-layout">
-                  <aside className="ticket-list">
-                    {list.map((item) => (
-                      <button
-                        className={item.id === ticket?.id ? "active" : ""}
-                        key={item.id}
-                        onClick={() => {
-                          setSelected(item.id);
-                          const next = new URLSearchParams(params);
-                          next.set("ticket", item.id);
-                          setParams(next, { replace: true });
-                          setError("");
-                        }}
-                      >
-                        <h3>{item.subject}</h3>
-                        <span className="tiny muted">
-                          #{item.id} · {item.status.replaceAll("_", " ")}
-                        </span>
-                      </button>
-                    ))}
-                  </aside>
-                  {ticket && <SupportThread key={ticket.id} ticket={ticket} />}
-                </div>
-              ) : (
-                !tickets.loading &&
-                !tickets.error && (
-                  <EmptyState
-                    title="No open conversations"
-                    description={
-                      teamView
-                        ? "Customer requests will appear here when submitted."
-                        : "Need a hand? Create a ticket for order help and follow replies here."
-                    }
-                  />
-                )
-              )}
-            </>
-          )}
-          {tickets.data && (tickets.data.next || tickets.data.previous) && (
-            <div className="pagination">
-              <button
-                className="btn secondary"
-                disabled={!tickets.data.previous}
-                onClick={() => {
-                  setPage(page - 1);
-                }}
+            {hasAdminScope(user, "support") && (
+              <Link
+                className={teamView ? "active" : ""}
+                to="/support?view=team"
               >
-                Previous tickets
-              </button>
-              <span>Page {page}</span>
-              <button
-                className="btn secondary"
-                disabled={!tickets.data.next}
-                onClick={() => {
-                  setPage(page + 1);
-                }}
-              >
-                Next tickets
-              </button>
+                Customer support inbox
+              </Link>
+            )}
+          </nav>
+        )}
+        <ErrorNotice error={linkedOrder.error} onRetry={linkedOrder.reload} />
+        {linkedOrder.data && (
+          <Link to={`/tracking/${orderId}`} className="support-order-context">
+            <div>
+              <strong>{linkedOrder.data.restaurant_detail?.name}</strong>
+              <span>
+                Order #{orderNumber(linkedOrder.data)} ·{" "}
+                {statusLabel(linkedOrder.data.status)}
+              </span>
             </div>
-          )}
+            <ArrowRight size={18} />
+          </Link>
+        )}
+        {issueChat ? (
+          <OrderIssueChat
+            key={`${orderId}:${form.category}`}
+            order={linkedOrder.data}
+            category={form.category}
+            busy={busy}
+            error={error}
+            onClose={closeComposer}
+            onSubmit={(body) => mutate("/support/", body, created)}
+          />
+        ) : (
+          !teamView &&
+          linkedOrder.data?.customer === user?.id && (
+            <OrderHelp
+              order={linkedOrder.data}
+              onChoose={(category, subject) => {
+                setForm({ category, subject, message: "", order: orderId });
+                setError("");
+                setCreating(true);
+              }}
+            />
+          )
+        )}
+        {!teamView && !issueChat && !ticket && !linkedId && (
+          <FoodAssistant support orderId={orderId} />
+        )}
+        {!isAuthenticated ? (
+          <section className="panel">
+            <LifeBuoy size={30} color="#7e9467" />
+            <h2 className="mt-5">Your support, in one place.</h2>
+            <p className="muted mt-3">
+              Sign in to tell us what happened and follow the conversation.
+            </p>
+            <Link to="/login" className="btn primary mt-5">
+              Sign in for support
+              <ArrowRight size={16} />
+            </Link>
+            <Link to="/faq" className="text-link ml-5">
+              Read FAQs
+            </Link>
+            <p className="form-help mt-5">
+              Can’t sign in? Email{" "}
+              <a className="text-link" href="mailto:Support@ruchigo.online">
+                Support@ruchigo.online
+              </a>
+              . Never include passwords or payment PINs.
+            </p>
+          </section>
+        ) : (
+          <>
+            <ErrorNotice
+              error={tickets.error || linkedTicket.error || error}
+              onRetry={tickets.error ? tickets.reload : undefined}
+            />
+            {tickets.loading && (
+              <LoadingScreen inline message="Loading your conversations…" />
+            )}
+            {list.length || linkedTicket.data ? (
+              <div className="support-layout">
+                <aside className="ticket-list">
+                  {list.map((item) => (
+                    <button
+                      className={item.id === ticket?.id ? "active" : ""}
+                      key={item.id}
+                      onClick={() => {
+                        setSelected(item.id);
+                        const next = new URLSearchParams(params);
+                        next.set("ticket", item.id);
+                        setParams(next, { replace: true });
+                        setError("");
+                      }}
+                    >
+                      <h3>{item.subject}</h3>
+                      <span className="tiny muted">
+                        #{item.id} · {item.status.replaceAll("_", " ")}
+                      </span>
+                    </button>
+                  ))}
+                </aside>
+                {ticket && <SupportThread key={ticket.id} ticket={ticket} />}
+              </div>
+            ) : (
+              !tickets.loading &&
+              !tickets.error && (
+                <EmptyState
+                  title="No open conversations"
+                  description={
+                    teamView
+                      ? "Customer requests will appear here when submitted."
+                      : "Need a hand? Create a ticket for order help and follow replies here."
+                  }
+                />
+              )
+            )}
+          </>
+        )}
+        {tickets.data && (tickets.data.next || tickets.data.previous) && (
+          <div className="pagination">
+            <button
+              className="btn secondary"
+              disabled={!tickets.data.previous}
+              onClick={() => {
+                setPage(page - 1);
+              }}
+            >
+              Previous tickets
+            </button>
+            <span>Page {page}</span>
+            <button
+              className="btn secondary"
+              disabled={!tickets.data.next}
+              onClick={() => {
+                setPage(page + 1);
+              }}
+            >
+              Next tickets
+            </button>
+          </div>
+        )}
+        {!teamView && (
           <section className="discovery-section">
             <h2>Quick answers</h2>
             {[
@@ -376,8 +397,8 @@ function SupportWorkspace() {
               </details>
             ))}
           </section>
-        </div>
-      </main>
+        )}
+      </SupportLayout>
       {creating && isAuthenticated && !issueChat && (
         <Modal title="Tell us what happened" onClose={closeComposer}>
           <form

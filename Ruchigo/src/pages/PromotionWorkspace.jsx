@@ -1,8 +1,20 @@
 import { useState } from "react";
-import { Edit3, Plus } from "lucide-react";
+import {
+  Edit3,
+  Plus,
+  Tag,
+  TicketPercent,
+  Utensils,
+  CalendarDays,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import { WorkspaceFrame } from "../components/product/Workspace.jsx";
-import { EmptyState, ErrorNotice, Modal } from "../components/product/UI.jsx";
+import {
+  EmptyState,
+  ErrorNotice,
+  Modal,
+  Skeleton,
+} from "../components/product/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
 import { dateTime, money, useRemote } from "../lib/product.js";
@@ -139,11 +151,16 @@ export default function PromotionWorkspace({ initialTab = "offers" }) {
   return (
     <WorkspaceFrame
       type={role}
+      className={
+        admin
+          ? `admin-promotion-workspace${tab === "categories" ? " admin-category-workspace" : ""}`
+          : ""
+      }
       title={
         admin
           ? tab === "categories"
             ? "Food categories"
-            : "Give people a reason to return."
+            : "Offers & coupons"
           : "Make your next offer count."
       }
       description={
@@ -189,9 +206,36 @@ export default function PromotionWorkspace({ initialTab = "offers" }) {
         </div>
       )}
       <ErrorNotice error={remote.error} onRetry={remote.reload} />
+      {remote.loading && <Skeleton count={3} />}
+      {admin && remote.data && (
+        <div className="admin-collection-summary">
+          <strong>
+            {tab === "categories"
+              ? "Category directory"
+              : tab === "coupons"
+                ? "Coupon library"
+                : "Campaign library"}
+          </strong>
+          <span>
+            {remote.data.count} total · {remote.data.results.length} on this
+            page
+          </span>
+        </div>
+      )}
       <div className="kitchen-grid">
         {remote.data?.results.map((item) => (
           <article key={item.id} className="panel">
+            {admin && (
+              <span className="admin-campaign-icon">
+                {tab === "categories" ? (
+                  <Utensils size={22} />
+                ) : tab === "coupons" ? (
+                  <TicketPercent size={22} />
+                ) : (
+                  <Tag size={22} />
+                )}
+              </span>
+            )}
             <div className="flex-row between">
               <h2>{item.title || item.code || item.name}</h2>
               <span
@@ -217,7 +261,10 @@ export default function PromotionWorkspace({ initialTab = "offers" }) {
               <p className="saving-line">Redeem with {item.coupon_code}</p>
             )}
             {item.ends_at && (
-              <p className="form-help">Ends {dateTime(item.ends_at)}</p>
+              <p className="form-help admin-campaign-date">
+                {admin && <CalendarDays size={14} />} Ends{" "}
+                {dateTime(item.ends_at)}
+              </p>
             )}
             <button className="text-link mt-5" onClick={() => open(item)}>
               <Edit3 size={14} />

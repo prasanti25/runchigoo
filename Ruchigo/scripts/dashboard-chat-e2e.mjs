@@ -175,7 +175,13 @@ try {
     await actor.page
       .getByRole("button", { name: "7 days", exact: true })
       .click();
-    await expect(actor.page.locator(".report-bars > div")).toHaveCount(7);
+    await expect(
+      actor.page.locator(
+        actor === admin
+          ? ".overview-chart [role=button]"
+          : ".report-bars > div",
+      ),
+    ).toHaveCount(7);
     const downloaded = actor.page.waitForEvent("download");
     await actor.page
       .getByRole("button", { name: "Export daily CSV", exact: true })

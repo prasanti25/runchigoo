@@ -9,6 +9,7 @@ import { money, useRemote } from "../../lib/product.js";
 import DeliveryPricing, {
   ServiceCities,
 } from "../../components/product/DeliveryPricing.jsx";
+import WorkspaceTabs from "../../components/product/WorkspaceTabs.jsx";
 
 const blank = {
   name: "",
@@ -46,6 +47,7 @@ const fields = [
 
 export default function DeliveryZones() {
   const { token } = useAuth();
+  const [section, setSection] = useState("zones");
   const [page, setPage] = useState(1);
   const zones = useRemote(`/delivery-zones/?page=${page}`, token);
   const policy = useRemote("/delivery-policy/", token);
@@ -116,132 +118,148 @@ export default function DeliveryZones() {
         </button>
       }
     >
-      <ErrorNotice
-        error={zones.error || policy.error}
-        onRetry={() => {
-          zones.reload();
-          policy.reload();
-        }}
-      />
-      <section className="panel zone-policy-panel">
+      <WorkspaceTabs
+        label="Delivery settings sections"
+        tabs={[
+          ["zones", "Delivery zones"],
+          ["cities", "Service cities"],
+          ["pricing", "Pricing rules"],
+        ]}
+        value={section}
+        onChange={setSection}
+      >
         <div>
-          <span className="eyebrow">CHECKOUT POLICY</span>
-          <h2>
-            {policy.data?.enabled
-              ? "Configured zones are enforced"
-              : "Standard same-city delivery"}
-          </h2>
-          <p className="muted">
-            {policy.data?.enabled
-              ? "Only active zones can receive orders. Overlapping zones use the lowest eligible delivery fee."
-              : "Current fee: ₹40 below ₹500 food subtotal, otherwise free. Cross-city orders are blocked. Your draft zones do not change checkout until enabled."}
-          </p>
-        </div>
-        <button
-          className="btn secondary"
-          disabled={!policy.data}
-          onClick={() => {
-            setError("");
-            setConfirming(true);
-          }}
-        >
-          <Settings2 size={16} />
-          {policy.data?.enabled ? "Use standard policy" : "Enable zone policy"}
-        </button>
-      </section>
-      <p className="form-help">
-        Distances use straight-line measurements, not road routes. Customers
-        need an address pin when zones are enabled. New rates affect new
-        checkout quotes only; existing orders keep their original bill.
-      </p>
-      {zones.loading ? (
-        <Skeleton count={2} />
-      ) : (
-        <div className="zone-grid">
-          {zones.data?.results.map((zone) => (
-            <article className="panel zone-card" key={zone.id}>
-              <div className="flex-row between">
-                <MapPin size={22} />
-                <span
-                  className={`status-pill ${zone.is_active ? "" : "cancelled"}`}
-                >
-                  {zone.is_active ? "Active" : "Draft / disabled"}
-                </span>
-              </div>
-              <h2>{zone.name}</h2>
+          <ErrorNotice
+            error={zones.error || policy.error}
+            onRetry={() => {
+              zones.reload();
+              policy.reload();
+            }}
+          />
+          <section className="panel zone-policy-panel">
+            <div>
+              <span className="eyebrow">CHECKOUT POLICY</span>
+              <h2>
+                {policy.data?.enabled
+                  ? "Configured zones are enforced"
+                  : "Standard same-city delivery"}
+              </h2>
               <p className="muted">
-                {zone.city} · {zone.radius_km} km coverage radius
+                {policy.data?.enabled
+                  ? "Only active zones can receive orders. Overlapping zones use the lowest eligible delivery fee."
+                  : "Current fee: ₹40 below ₹500 food subtotal, otherwise free. Cross-city orders are blocked. Your draft zones do not change checkout until enabled."}
               </p>
-              <dl>
-                <div>
-                  <dt>Base delivery</dt>
-                  <dd>{money(zone.base_fee)}</dd>
-                </div>
-                <div>
-                  <dt>Additional distance</dt>
-                  <dd>
-                    {money(zone.per_km_fee)} / km after {zone.included_km} km
-                  </dd>
-                </div>
-                <div>
-                  <dt>Maximum trip</dt>
-                  <dd>{zone.max_delivery_km} km</dd>
-                </div>
-                <div>
-                  <dt>Free delivery</dt>
-                  <dd>
-                    {zone.free_delivery_above === null
-                      ? "Not configured"
-                      : `From ${money(zone.free_delivery_above)}`}
-                  </dd>
-                </div>
-              </dl>
-              <button
-                className="btn secondary w-full"
-                onClick={() => {
-                  setError("");
-                  setEditing({
-                    ...zone,
-                    free_delivery_above: zone.free_delivery_above ?? "",
-                  });
-                }}
-              >
-                Edit zone
-              </button>
-            </article>
-          ))}
-        </div>
-      )}
-      {!zones.loading && zones.data?.count === 0 && (
-        <section className="panel">
-          <h2>No delivery zones yet</h2>
-          <p className="muted">
-            Add your approved service areas, review their prices, then enable
-            the policy when ready.
+            </div>
+            <button
+              className="btn secondary"
+              disabled={!policy.data}
+              onClick={() => {
+                setError("");
+                setConfirming(true);
+              }}
+            >
+              <Settings2 size={16} />
+              {policy.data?.enabled
+                ? "Use standard policy"
+                : "Enable zone policy"}
+            </button>
+          </section>
+          <p className="form-help">
+            Distances use straight-line measurements, not road routes. Customers
+            need an address pin when zones are enabled. New rates affect new
+            checkout quotes only; existing orders keep their original bill.
           </p>
-        </section>
-      )}
-      {zones.data?.count > 20 && (
-        <div className="pagination">
-          <button
-            className="btn secondary"
-            disabled={!zones.data.previous}
-            onClick={() => setPage(page - 1)}
-          >
-            Previous
-          </button>
-          <span>Page {page}</span>
-          <button
-            className="btn secondary"
-            disabled={!zones.data.next}
-            onClick={() => setPage(page + 1)}
-          >
-            Next
-          </button>
+          {zones.loading ? (
+            <Skeleton count={2} />
+          ) : (
+            <div className="zone-grid">
+              {zones.data?.results.map((zone) => (
+                <article className="panel zone-card" key={zone.id}>
+                  <div className="flex-row between">
+                    <MapPin size={22} />
+                    <span
+                      className={`status-pill ${zone.is_active ? "" : "cancelled"}`}
+                    >
+                      {zone.is_active ? "Active" : "Draft / disabled"}
+                    </span>
+                  </div>
+                  <h2>{zone.name}</h2>
+                  <p className="muted">
+                    {zone.city} · {zone.radius_km} km coverage radius
+                  </p>
+                  <dl>
+                    <div>
+                      <dt>Base delivery</dt>
+                      <dd>{money(zone.base_fee)}</dd>
+                    </div>
+                    <div>
+                      <dt>Additional distance</dt>
+                      <dd>
+                        {money(zone.per_km_fee)} / km after {zone.included_km}{" "}
+                        km
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Maximum trip</dt>
+                      <dd>{zone.max_delivery_km} km</dd>
+                    </div>
+                    <div>
+                      <dt>Free delivery</dt>
+                      <dd>
+                        {zone.free_delivery_above === null
+                          ? "Not configured"
+                          : `From ${money(zone.free_delivery_above)}`}
+                      </dd>
+                    </div>
+                  </dl>
+                  <button
+                    className="btn secondary w-full"
+                    onClick={() => {
+                      setError("");
+                      setEditing({
+                        ...zone,
+                        free_delivery_above: zone.free_delivery_above ?? "",
+                      });
+                    }}
+                  >
+                    Edit zone
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+          {!zones.loading && zones.data?.count === 0 && (
+            <section className="panel">
+              <h2>No delivery zones yet</h2>
+              <p className="muted">
+                Add your approved service areas, review their prices, then
+                enable the policy when ready.
+              </p>
+            </section>
+          )}
+          {zones.data?.count > 20 && (
+            <div className="pagination">
+              <button
+                className="btn secondary"
+                disabled={!zones.data.previous}
+                onClick={() => setPage(page - 1)}
+              >
+                Previous
+              </button>
+              <span>Page {page}</span>
+              <button
+                className="btn secondary"
+                disabled={!zones.data.next}
+                onClick={() => setPage(page + 1)}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
-      )}
-      <ServiceCities token={token} />
-      <DeliveryPricing token={token} />
+        <ServiceCities token={token} />
+        <DeliveryPricing token={token} />
+      </WorkspaceTabs>
       {editing && (
         <Modal
           title={editing.id ? "Edit delivery zone" : "Add delivery zone"}

@@ -8,6 +8,7 @@ import { useRemote } from "../../lib/product.js";
 import { WorkspaceFrame } from "../../components/product/Workspace.jsx";
 import { ErrorNotice, Modal } from "../../components/product/UI.jsx";
 import "../../components/product/Operations.css";
+import UserAvatar from "../../components/common/UserAvatar.jsx";
 
 export default function TeamAccess() {
   const { token } = useAuth();
@@ -46,15 +47,17 @@ export default function TeamAccess() {
       title="Team access"
       description="Give each administrator only the workspaces their role needs."
     >
-      <section className="panel">
+      <section className="panel admin-access-notice">
         <ShieldCheck size={25} />
-        <h2>Permissions apply at the API</h2>
-        <p className="muted">
-          Only superusers can delegate access. New administrators start without
-          operational permissions. Existing administrators keep their previous
-          access until reviewed. Changes affect subsequent API requests;
-          navigation refreshes on the next session refresh.
-        </p>
+        <div>
+          <h2>Controlled access across your team</h2>
+          <p className="muted">
+            Only superusers can delegate access. New administrators start
+            without operational permissions. Existing administrators keep their
+            previous access until reviewed. Changes are enforced on the next
+            request; navigation updates when the session refreshes.
+          </p>
+        </div>
       </section>
       <ErrorNotice error={remote.error} onRetry={remote.reload} />
       {remote.loading && (
@@ -63,8 +66,19 @@ export default function TeamAccess() {
       <div className="access-grid">
         {remote.data?.administrators.map((person) => (
           <section className="panel" key={person.id}>
-            <h3>{person.name || "Administrator"}</h3>
-            <p className="muted">{person.email}</p>
+            <div className="admin-access-person">
+              <UserAvatar
+                user={{
+                  first_name: person.name || "Administrator",
+                  email: person.email,
+                }}
+                className="workspace-avatar"
+              />
+              <div>
+                <h3>{person.name || "Administrator"}</h3>
+                <p className="muted">{person.email}</p>
+              </div>
+            </div>
             <span className="status-pill">
               {person.is_superuser
                 ? "Superuser"

@@ -617,7 +617,14 @@ export function CartDock() {
   );
 }
 
-export function Modal({ title, onClose, children, className = "" }) {
+export function Modal({
+  title,
+  onClose,
+  children,
+  className = "",
+  backdropClassName = "",
+  closeIcon,
+}) {
   const ref = useRef(null);
   const closeRef = useRef(onClose);
   useEffect(() => {
@@ -659,7 +666,7 @@ export function Modal({ title, onClose, children, className = "" }) {
   }, []);
   return (
     <div
-      className="modal-backdrop"
+      className={`modal-backdrop ${backdropClassName}`}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -679,7 +686,7 @@ export function Modal({ title, onClose, children, className = "" }) {
             onClick={onClose}
             aria-label="Close dialog"
           >
-            <X size={21} />
+            {closeIcon || <X size={21} />}
           </button>
         </div>
         {children}

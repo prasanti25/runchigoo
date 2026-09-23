@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   ArrowRight,
@@ -32,6 +32,8 @@ import UserAvatar from "./common/UserAvatar.jsx";
 import NotificationBell from "./common/NotificationBell.jsx";
 import { canOpenAdminRoute } from "../lib/adminAccess.js";
 import { workspaceMenus } from "../lib/workspaceNavigation.js";
+import MobileNavigation from "./MobileNavigation.jsx";
+import AnimatedMenuIcon from "./common/AnimatedMenuIcon.jsx";
 import "./WorkspaceMobileNav.css";
 
 const AddressLocationPicker = lazy(
@@ -44,7 +46,7 @@ export default function Navbar() {
   const { cartItems } = useCart();
   const location = useDeliveryLocation();
   const route = useLocation();
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [mobileMenuRoute, setMobileMenuRoute] = useState(null);
   const [locationOpen, setLocationOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [addressDraft, setAddressDraft] = useState(null);
@@ -64,12 +66,30 @@ export default function Navbar() {
     (role !== "admin" ||
       route.pathname.startsWith("/admin-") ||
       route.pathname === "/settings" ||
+      route.pathname === "/notifications" ||
       (route.pathname === "/support" &&
         new URLSearchParams(route.search).get("view") === "team"));
   const workspaceLinks = (workspaceMenus[role] || []).filter(
     ([path]) => role !== "admin" || canOpenAdminRoute(user, `/admin-${path}`),
   );
+  const adminWorkspace = workspaceMode && role === "admin";
   const dashboard = partner ? `/${role}-dashboard` : "/profile";
+  const mobileMenuOpen = mobileMenuRoute === route.key;
+  const closeMobileMenu = () => setMobileMenuRoute(null);
+  const openMobileMenu = () => {
+    setAccountOpen(false);
+    setMobileMenuRoute(route.key);
+  };
+  useEffect(() => {
+    // A menu opened on a phone must not leave the desktop page scroll-locked
+    // after rotating/resizing past the workspace breakpoint.
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeOnDesktop = (event) => {
+      if (event.matches) setMobileMenuRoute(null);
+    };
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, []);
   const selectCity = (name) => {
     saveDeliveryLocation({ city: name, label: name || "Explore all cities" });
     setLocationOpen(false);
@@ -80,42 +100,55 @@ export default function Navbar() {
   };
   return (
     <>
-      <header className="app-header">
+      <header
+        className={`app-header${adminWorkspace ? " admin-workspace-header" : ""}`}
+      >
         <div className="header-inner">
           <Link to="/" className="brand" aria-label="RuchiGo home">
             <BrandLogo />
           </Link>
-          <button
-            className="location-trigger"
-            title={
-              location.formatted_address ||
-              location.label ||
-              "Choose delivery location"
-            }
-            aria-label={`Delivery location: ${location.label || location.city || "Choose your location"}`}
-            onClick={() => setLocationOpen(true)}
-          >
-            <MapPin size={17} />
-            <span>
-              <small>
-                {location.city && !location.confirmed
-                  ? "EXPLORING"
-                  : "DELIVERING TO"}
-              </small>
-              <strong>
-                {location.locality ||
-                  location.label ||
-                  location.city ||
-                  "Choose your location"}
-              </strong>
-              {location.formatted_address && (
-                <span className="location-address-detail">
-                  {location.formatted_address}
-                </span>
-              )}
-            </span>
-            <ChevronDown size={14} />
-          </button>
+          {adminWorkspace ? (
+            <Link
+              to="/admin-dashboard"
+              className="admin-mobile-context"
+              aria-label="Admin workspace overview"
+            >
+              <span>RuchiGo</span>
+              <strong>Admin workspace</strong>
+            </Link>
+          ) : (
+            <button
+              className="location-trigger"
+              title={
+                location.formatted_address ||
+                location.label ||
+                "Choose delivery location"
+              }
+              aria-label={`Delivery location: ${location.label || location.city || "Choose your location"}`}
+              onClick={() => setLocationOpen(true)}
+            >
+              <MapPin size={17} />
+              <span>
+                <small>
+                  {location.city && !location.confirmed
+                    ? "EXPLORING"
+                    : "DELIVERING TO"}
+                </small>
+                <strong>
+                  {location.locality ||
+                    location.label ||
+                    location.city ||
+                    "Choose your location"}
+                </strong>
+                {location.formatted_address && (
+                  <span className="location-address-detail">
+                    {location.formatted_address}
+                  </span>
+                )}
+              </span>
+              <ChevronDown size={14} />
+            </button>
+          )}
           <nav className="desktop-nav" aria-label="Main navigation">
             <NavLink to="/for-you">
               <AssistantIcon size={21} />
@@ -136,7 +169,7 @@ export default function Navbar() {
           </nav>
           <div className="header-actions">
             <NotificationBell />
-            {(!partner || role === "admin") && (
+            {(!partner || (role === "admin" && !adminWorkspace)) && (
               <Link
                 to="/cart"
                 className="header-cart"
@@ -162,6 +195,19 @@ export default function Navbar() {
                 {isAuthenticated ? user?.first_name || "Account" : "Sign in"}
               </span>
               <ChevronDown size={13} />
+            </button>
+            <button
+              type="button"
+              className="mobile-menu-trigger"
+              aria-label={
+                workspaceMode ? "Open workspace menu" : "Open navigation menu"
+              }
+              aria-haspopup="dialog"
+              aria-expanded={mobileMenuOpen}
+              aria-controls={mobileMenuOpen ? "mobile-navigation" : undefined}
+              onClick={openMobileMenu}
+            >
+              <AnimatedMenuIcon open={mobileMenuOpen} />
             </button>
           </div>
         </div>
@@ -257,7 +303,13 @@ export default function Navbar() {
               <span>{label}</span>
             </NavLink>
           ))}
-          <button onClick={() => setAccountOpen(!accountOpen)}>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={mobileMenuOpen}
+            aria-controls={mobileMenuOpen ? "mobile-navigation" : undefined}
+            onClick={openMobileMenu}
+          >
             <User size={21} />
             <span>Account</span>
           </button>
@@ -281,39 +333,24 @@ export default function Navbar() {
               </NavLink>
             ))}
           <button
+            type="button"
             aria-haspopup="dialog"
-            aria-expanded={workspaceOpen}
-            onClick={() => setWorkspaceOpen(true)}
+            aria-expanded={mobileMenuOpen}
+            aria-controls={mobileMenuOpen ? "mobile-navigation" : undefined}
+            onClick={openMobileMenu}
           >
             <Menu size={21} />
             <span>More</span>
           </button>
         </nav>
       )}
-      {workspaceOpen && (
-        <Modal title="Your workspace" onClose={() => setWorkspaceOpen(false)}>
-          <nav className="workspace-mobile-menu" aria-label="All workspaces">
-            {workspaceLinks.map(([path, label, Icon]) => (
-              <NavLink
-                key={path}
-                to={`/${role}-${path}`}
-                onClick={() => setWorkspaceOpen(false)}
-              >
-                <Icon size={20} />
-                <span>{label}</span>
-              </NavLink>
-            ))}
-            {(role !== "admin" || canOpenAdminRoute(user, "/support")) && (
-              <Link
-                to={role === "admin" ? "/support?view=team" : "/support"}
-                onClick={() => setWorkspaceOpen(false)}
-              >
-                <HelpCircle size={20} />
-                <span>Support inbox</span>
-              </Link>
-            )}
-          </nav>
-        </Modal>
+      {mobileMenuOpen && (
+        <MobileNavigation
+          workspaceMode={workspaceMode}
+          workspaceLinks={workspaceLinks}
+          dashboard={dashboard}
+          onClose={closeMobileMenu}
+        />
       )}
       {locationOpen && (
         <Modal
