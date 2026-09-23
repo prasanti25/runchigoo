@@ -2,8 +2,9 @@
 
 ## Live application
 
-Local increment note (23 September): migrations 0023–0027 are **not applied to
-production**. They add restaurant schedule settings, order preparation time/cash
+Source release note (23 September): runtime `a2ffa26` is pushed to main, but
+migrations 0023–0027 are **not applied to production**. No production deployment
+was performed with this push. They add restaurant schedule settings, order preparation time/cash
 tip, optional tip-policy fields, coupon benefit/campaign rules and a redeemable
 coupon link on offers. Orders keep the applied coupon rule/version in their
 delivery quote snapshot. Existing totals and discount codes are preserved by
@@ -103,8 +104,10 @@ Production environments currently share some Neon integration variables with
 Preview/Development. Do not run destructive tests or seeds against those URLs;
 use an isolated database/branch for previews that need to write data.
 
-At this release check the Git remote is `prasanti25/runchigoo`, while the Vercel
-project is linked to `shxvaayy/runchigoo`. Therefore a push to this remote is not
+The Git remote is `prasanti25/runchigoo`; the last verified Vercel Git integration
+was `shxvaayy/runchigoo`. Project/alias metadata requests at the 23 September
+source push returned HTTP 403, so that configuration and the live revision could
+not be freshly verified. Therefore a push to this remote is not
 proof of deployment. Deploy from this app directory to the existing linked
 Vercel project and verify its production alias. Git-triggered deployment needs
 an explicit repository/root-directory alignment; this release does not silently

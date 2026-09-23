@@ -1,9 +1,27 @@
 # Product verification — 23 September 2026
 
+## Main-branch push checkpoint — production rollout pending
+
+- Runtime `a2ffa26` was successfully pushed to `prasanti25/runchigoo` main.
+  It contains the verified commerce, rewards, finance and responsive-dashboard
+  increment below. No production database migration or deployment was performed.
+- Before pushing: fetched origin, confirmed no branch divergence, checked staged
+  whitespace, and scanned all 114 staged paths against 13 configured private
+  values and credential/file patterns. No private values or private files were
+  included. The tracked database URL example uses placeholder credentials.
+- Read-only Vercel project and production-alias requests both returned HTTP 403
+  with available local authentication. No live revision is claimed from this
+  check. The last recorded repository mismatch and pending migrations 0023–0027
+  remain release considerations; see DATA_STORAGE.md.
+- The following local verification notes describe the pre-push checkpoint.
+  Their test results are not evidence of production migration or deployment.
+
 ## Commerce, location and analytics increment — verified locally, not deployed
 
-This working-tree increment follows `94b08fb`. It has **not been pushed or
-deployed**. Production still runs the earlier contextual-support release below.
+At this pre-push checkpoint, the working-tree increment followed `94b08fb` and
+had **not been pushed or deployed**. The last verified production release was
+the earlier contextual-support release below. See the push checkpoint above for
+the current source-control status.
 `IMPLEMENTATION_TODOS.md` tracks all 117 entries in the latest scoped request:
 93 implemented, 20 partial, 4 missing. These are scoped feature counts, not
 commercial launch approval or a zero-bug guarantee.

@@ -10,7 +10,15 @@ historical checkpoints, not evidence of the current Vercel alias.
 
 ## Outcome
 
-### Current local increment — 23 September, not pushed/deployed
+### Current increment — 23 September, pushed; production rollout pending
+
+Runtime commit `a2ffa26` is pushed to `prasanti25/runchigoo` main. This was a
+source-only release: no production migration, deployment or policy activation
+was performed. Vercel project/alias metadata checks returned HTTP 403 using the
+available local authentication, so the live version could not be reconfirmed.
+The last recorded Git integration points to `shxvaayy/runchigoo`; do not assume
+this push deployed automatically. Migrations 0023–0027 still require the release
+procedure in [DATA_STORAGE.md](DATA_STORAGE.md).
 
 The latest 117-feature request is tracked individually in
 [IMPLEMENTATION_TODOS.md](IMPLEMENTATION_TODOS.md): **93 implemented, 20 partial,
@@ -41,9 +49,9 @@ Verification: **416 PostgreSQL tests including actual concurrent checkouts**,
 real local customer/merchant/admin/rider browser regressions, 1440/390/320px,
 actual configured Google geocoding/maps, lint/build, credential scan and an
 isolated 0022→0024 migration rehearsal. See [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md).
-This batch changes schema and is local/uncommitted; existing production is
-unchanged. Database/source changes are not automatically deployed by a successful
-local build.
+This batch changes schema and is now committed/pushed; its production rollout
+remains pending. Database/source changes are not automatically deployed by a
+successful local build.
 
 Follow-up: real promotional points/credit ledger, capped cashback, levels,
 referrals, signed redemption and confirmed-refund/cancellation reconciliation
